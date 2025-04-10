@@ -82,7 +82,9 @@ async def report_status_to_host(update_data: TaskStatusUpdate):
         # Use a slightly longer timeout for potentially busy host
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{RunnerConfig.HOST_URL}/update", json=update_data.model_dump(mode="json"), timeout=15.0
+                f"{RunnerConfig.HOST_URL}/update",
+                json=update_data.model_dump(mode="json"),
+                timeout=15.0,
             )
             response.raise_for_status()
         logger.debug(f"Host acknowledged status update for {update_data.task_id}")
@@ -112,7 +114,11 @@ async def run_task_background(task_info: TaskInfo):
     # Prepare command
     core_list = ",".join(map(str, range(task_info.required_cores)))
     if RunnerConfig.NUMACTL_PATH is not None:
-        numa_cmd_prefix = [RunnerConfig.NUMACTL_PATH, f"--physcpubind={core_list}", "-l"]
+        numa_cmd_prefix = [
+            RunnerConfig.NUMACTL_PATH,
+            f"--physcpubind={core_list}",
+            "-l",
+        ]
     else:
         numa_cmd_prefix = []
     command_list = numa_cmd_prefix + [task_info.command] + task_info.arguments
@@ -146,9 +152,10 @@ async def run_task_background(task_info: TaskInfo):
             logger.error(f"Failed to create output directory for task {task_id}: {e}")
             raise  # Re-raise exception to trigger failure reporting
 
-        with open(task_info.stdout_path, "wb") as f_out, open(
-            task_info.stderr_path, "wb"
-        ) as f_err:
+        with (
+            open(task_info.stdout_path, "wb") as f_out,
+            open(task_info.stderr_path, "wb") as f_err,
+        ):
             process = await asyncio.create_subprocess_exec(
                 *command_list,
                 stdout=f_out,
@@ -247,7 +254,8 @@ async def send_heartbeat():
             )
         except httpx.HTTPStatusError as e:
             logger.warning(
-                f"Host {RunnerConfig.HOST_URL} rejected heartbeat: {e.response.status_code} - {e.response.text}"
+                f"Host {RunnerConfig.HOST_URL} rejected "
+                f"heartbeat: {e.response.status_code} - {e.response.text}"
             )
             if e.response.status_code == 404:
                 logger.warning("Node seems unregistered, attempting to re-register...")
@@ -263,7 +271,9 @@ async def register_with_host():
         "runner_url": runner_url,
     }
     logger.info(
-        f"Attempting to register with host {RunnerConfig.HOST_URL} as {RunnerConfig.RUNNER_HOSTNAME} ({register_data['total_cores']} cores) at {runner_url}"
+        f"Attempting to register with host {RunnerConfig.HOST_URL} "
+        f"as {RunnerConfig.RUNNER_HOSTNAME} "
+        f"({register_data['total_cores']} cores) at {runner_url}"
     )
     try:
         async with httpx.AsyncClient() as client:
@@ -277,7 +287,8 @@ async def register_with_host():
         logger.error(f"Failed to register with host {RunnerConfig.HOST_URL}: {e}")
     except httpx.HTTPStatusError as e:
         logger.error(
-            f"Host {RunnerConfig.HOST_URL} rejected registration: {e.response.status_code} - {e.response.text}"
+            f"Host {RunnerConfig.HOST_URL} rejected registration: "
+            f"{e.response.status_code} - {e.response.text}"
         )
     except Exception as e:
         logger.exception(f"Unexpected error during registration: {e}")
@@ -303,7 +314,8 @@ async def accept_task(task_info: TaskInfo, background_tasks: BackgroundTasks):
     # Basic check for local temp dir existence
     if not os.path.isdir(RunnerConfig.LOCAL_TEMP_DIR):
         logger.error(
-            f"Local temp directory '{RunnerConfig.LOCAL_TEMP_DIR}' not found or not a directory. Rejecting task {task_id}."
+            f"Local temp directory '{RunnerConfig.LOCAL_TEMP_DIR}' "
+            f"not found or not a directory. Rejecting task {task_id}."
         )
         # Report failure back? Or just reject? Reject is simpler.
         raise HTTPException(
@@ -387,7 +399,8 @@ async def kill_task_endpoint(
 
         else:
             logger.warning(
-                f"Kill request for task {task_id}, but process already exited with code {process.returncode}."
+                f"Kill request for task {task_id}, "
+                f"but process already exited with code {process.returncode}."
             )
             kill_message = f"Kill requested, but process already exited (code {process.returncode})."
             exit_code = process.returncode  # Report actual exit code
@@ -429,7 +442,8 @@ async def kill_task_endpoint(
 
 async def startup_event():
     logger.info(
-        f"Runner starting up on {RunnerConfig.RUNNER_HOSTNAME} ({runner_ip}:{RunnerConfig.RUNNER_PORT})"
+        f"Runner starting up on {RunnerConfig.RUNNER_HOSTNAME} "
+        f"({runner_ip}:{RunnerConfig.RUNNER_PORT})"
     )
     registered = False
     for attempt in range(5):  # Retry registration a few times with longer delay
@@ -444,7 +458,8 @@ async def startup_event():
 
     if not registered:
         logger.error(
-            "Failed to register with host after multiple attempts. Runner will not receive tasks and may not function correctly."
+            "Failed to register with host after multiple attempts. "
+            "Runner will not receive tasks and may not function correctly."
         )
         # Consider exiting? For now, continue but log error.
         # sys.exit(1)

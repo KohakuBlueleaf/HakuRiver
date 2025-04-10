@@ -245,7 +245,9 @@ async def submit_task(req: TaskRequest):
         task.set_env_vars(req.env_vars)
         task.save()
         logger.info(
-            f"Task {task_id} created, requires {req.required_cores} cores. Assigning to {node.hostname}."
+            f"Task {task_id} created, "
+            f"requires {req.required_cores} cores. "
+            f"Assigning to {node.hostname}."
         )
     except Exception as e:
         logger.exception(f"Failed to create task record in database: {e}")
@@ -281,7 +283,8 @@ async def update_task_status(update: TaskStatusUpdate):
     final_states = ["completed", "failed", "killed", "lost"]
     if task.status in final_states and update.status not in final_states:
         logger.warning(
-            f"Ignoring status update '{update.status}' for task {update.task_id} which is already in final state '{task.status}'."
+            f"Ignoring status update '{update.status}' "
+            f"for task {update.task_id} which is already in final state '{task.status}'."
         )
         return {"message": "Task already in a final state"}
 
@@ -368,7 +371,8 @@ async def send_kill_to_runner(runner_url: str, task_id: str):
             task.save()
     except httpx.HTTPStatusError as e:
         logger.error(
-            f"Runner {runner_url} failed kill for task {task_id}: {e.response.status_code} - {e.response.text}"
+            f"Runner {runner_url} failed kill for "
+            f"task {task_id}: {e.response.status_code} - {e.response.text}"
         )
 
         task = Task.get_or_none(Task.task_id == task_id)
@@ -418,12 +422,14 @@ async def request_kill_task(task_id: str):
     ):
         runner_url = task.assigned_node.url
         logger.info(
-            f"Requesting kill confirmation from runner {task.assigned_node.hostname} for task {task_id}"
+            f"Requesting kill confirmation from runner "
+            f"{task.assigned_node.hostname} for task {task_id}"
         )
         asyncio.create_task(send_kill_to_runner(runner_url, str(task_id)))
     else:
         logger.info(
-            f"No kill signal sent to runner for task {task_id} (was not running or node offline/unknown)."
+            "No kill signal sent to runner for task "
+            f"{task_id} (was not running or node offline/unknown)."
         )
 
     return {"message": f"Kill requested for task {task_id}. Task marked as killed."}
@@ -484,7 +490,6 @@ async def get_nodes_status():
 async def check_dead_runners():
     while True:
         await asyncio.sleep(HostConfig.CLEANUP_CHECK_INTERVAL_SECONDS)
-        logger.info("Running check for dead runners...")
         # Calculate timeout threshold based on current time
         timeout_threshold = datetime.datetime.now() - datetime.timedelta(
             seconds=HostConfig.HEARTBEAT_INTERVAL_SECONDS
@@ -499,12 +504,12 @@ async def check_dead_runners():
         dead_nodes: list[Node] = list(dead_nodes_query)
 
         if not dead_nodes:
-            logger.info("No dead runners found.")
             continue
 
         for node in dead_nodes:
             logger.warning(
-                f"Runner {node.hostname} missed heartbeat threshold (last seen: {node.last_heartbeat}). Marking as offline."
+                f"Runner {node.hostname} missed heartbeat threshold "
+                f"(last seen: {node.last_heartbeat}). Marking as offline."
             )
             node.status = "offline"
             node.save()
@@ -516,7 +521,8 @@ async def check_dead_runners():
             )
             for task in tasks_to_fail:
                 logger.warning(
-                    f"Marking task {task.task_id} as 'lost' because node {node.hostname} went offline."
+                    f"Marking task {task.task_id} as 'lost' "
+                    f"because node {node.hostname} went offline."
                 )
                 task.status = "lost"
                 task.error_message = (
