@@ -1,0 +1,39 @@
+# config.toml - Shared configuration for Cluster Manager
+
+[network]
+# IP address the Host server binds to (0.0.0.0 usually fine for listening on all interfaces)
+host_bind_ip = "0.0.0.0"
+host_port = 8000
+
+# The address clients and runners use to reach the Host server.
+# IMPORTANT: Change this to the actual reachable IP or hostname of the manager node in a real deployment.
+host_reachable_address = "127.0.0.1"
+
+# Port the Runner server listens on
+runner_port = 8001
+
+[paths]
+# Shared storage accessible by all nodes at the same path
+shared_dir = "test/shared"
+
+# Local fast temporary storage on each compute node
+local_temp_dir = "test/temp"
+
+# Path to the numactl executable
+numactl_path = ""
+
+# Optional: Define specific log file paths, leave empty to log to console
+host_log_file = "host.log"
+runner_log_file = "runner.log" # Runner will append its hostname automatically
+
+[database]
+# Path to the SQLite database file (relative to host_app.py location or absolute)
+db_file = "test/cluster_management.db"
+
+[timing]
+# Intervals in seconds
+heartbeat_interval = 5
+# Runner is marked offline if no heartbeat for interval * timeout_factor seconds
+heartbeat_timeout_factor = 6
+# How often the host checks for dead runners
+cleanup_check_interval = 10
