@@ -108,3 +108,6 @@ HakuRiver is a self-hosted cluster manager ideal for small research clusters, de
    # Use a custom config for the client
    hakuriver.client --config client.toml --list-nodes
    ```
+
+## Acknowledgement
+* Gemini 2.5 pro: basic implementation and this README
