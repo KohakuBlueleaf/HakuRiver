@@ -115,6 +115,7 @@ def main():
     parser.add_argument(
         "--cores",
         type=int,
+        default=1,
         help="Number of CPU cores required (Required for submit action).",
     )
     parser.add_argument(
