@@ -133,7 +133,7 @@ def main():
     parser.add_argument(
         "--poll-interval",
         type=int,
-        default=5,
+        default=1,
         metavar="SEC",
         help="Seconds between status checks when waiting (Default: 5).",
     )
