@@ -7,6 +7,21 @@ A simple, multi-node resource management tool designed for distributing tasks ac
 
 HakuRiver is a self-hosted cluster manager ideal for small research clusters, development environments, or internal batch processing systems where full-featured HPC schedulers like Slurm might be overkill. It allows users to submit arbitrary commands, manage their execution based on available CPU cores, and monitor their status.
 
+### HakuRiver is for:
+
+*   Managing command-line tasks/scripts across a small cluster (e.g., < 10 nodes).
+*   Development, testing, or small research environments needing a simpler alternative to full HPC schedulers.
+*   Running primarily CPU-bound applications where core isolation is beneficial.
+*   Internal tools where basic job submission, status checking, and termination are sufficient.
+
+### HakuRiver is NOT for:
+
+*   Replacing feature-rich HPC schedulers (like Slurm, PBS) on large-scale clusters.
+*   Complex resource management beyond CPU cores (e.g., detailed memory limits, GPU scheduling, license tracking).
+*   Sophisticated task dependency management or workflow orchestration (use tools like Airflow, Snakemake, Nextflow).
+*   Advanced scheduling policies (e.g., fair-share, preemption, complex priorities).
+*   High-security, multi-tenant environments requiring robust authentication and authorization built-in.
+
 ## ✨ Features
 
 *   **Dedicated Host Coordination:** A central host server orchestrates the cluster, tracking compute nodes, available resources, and managing the lifecycle of submitted tasks. It can run on a dedicated machine, not requiring resources from compute nodes.
