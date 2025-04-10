@@ -1,4 +1,3 @@
-# config_loader.py
 import toml
 import os
 import sys

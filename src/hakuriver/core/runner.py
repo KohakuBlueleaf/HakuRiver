@@ -1,4 +1,3 @@
-# runner_app.py
 import os
 import httpx
 import socket
@@ -6,7 +5,6 @@ import asyncio
 import datetime
 import shlex
 
-import uvicorn
 from fastapi import FastAPI, HTTPException, Body, BackgroundTasks
 from pydantic import BaseModel, Field
 

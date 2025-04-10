@@ -1,21 +1,9 @@
-#!/usr/bin/env python
-# cli/client.py
-
-# --- Standard Library Imports ---
 import argparse
-import json
 import os
-import shlex  # Keep for potential future use, though not needed with REMAINDER
 import sys
 import time
 
-# --- Third Party Imports ---
 import toml
-
-# httpx is used by the core client functions
-
-# --- Local Imports ---
-# Delay core import until after --config is processed
 
 
 def update_config(config_instance, custom_config_data):

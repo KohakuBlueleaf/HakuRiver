@@ -1,17 +1,9 @@
-#!/usr/bin/env python
-# cli/host.py
-
-# --- Standard Library Imports ---
 import argparse
 import os
 import sys
 
-# --- Third Party Imports ---
 import toml
-import uvicorn  # Import uvicorn here
-
-# --- Local Imports ---
-# Delay core import until after config is potentially loaded
+import uvicorn
 
 
 def update_config(config_instance, custom_config_data):

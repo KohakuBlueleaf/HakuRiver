@@ -1,17 +1,9 @@
-#!/usr/bin/env python
-# cli/runner.py
-
-# --- Standard Library Imports ---
 import argparse
 import os
 import sys
 
-# --- Third Party Imports ---
 import toml
-import uvicorn  # Import uvicorn here
-
-# --- Local Imports ---
-# Delay core import
+import uvicorn 
 
 
 def update_config(config_instance, custom_config_data):

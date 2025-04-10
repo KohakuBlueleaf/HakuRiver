@@ -1,36 +1,7 @@
-# user_client.py
-
-# --- Standard Library Imports ---
-import argparse
 import json
-import os
 import sys
-import time
-
-# --- Third Party Imports ---
 import httpx
-
-# --- Local Imports ---
-try:
-    # Attempt to import settings from the local config loader
-    from hakuriver.utils.config_loader import settings
-except ImportError:
-    print(
-        "Error: Could not import 'hakuriver.utils.config_loader'. "
-        "Make sure it's in the Python path.",
-        file=sys.stderr,
-    )
-    print(
-        "Exiting. Configuration is required.",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-except Exception as e:
-    print(f"Error loading configuration: {e}", file=sys.stderr)
-    print("Exiting.", file=sys.stderr)
-    sys.exit(1)
-
-# --- Configuration Class ---
+from hakuriver.utils.config_loader import settings
 
 
 class ClientConfig:

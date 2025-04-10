@@ -1,6 +1,3 @@
-# host_app.py
-from ast import arguments
-import json
 import uuid
 import asyncio
 import datetime
@@ -8,7 +5,6 @@ import os
 from collections import defaultdict
 
 import peewee
-import uvicorn
 import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
