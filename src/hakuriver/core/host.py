@@ -219,14 +219,20 @@ async def submit_task(req: TaskRequest):
     task_id = uuid.uuid4()
     # Ensure the base output directory exists (best done via deployment/Ansible)
     output_dir = os.path.join(HostConfig.SHARED_DIR, "task_outputs")
+    errors_dir = os.path.join(HostConfig.SHARED_DIR, "task_errors")
     try:
         os.makedirs(output_dir, exist_ok=True)
     except OSError as e:
         logger.warning(f"Could not ensure output directory {output_dir} exists: {e}")
         # Continue anyway, runner might create it or fail task later
 
+    try:
+        os.makedirs(errors_dir, exist_ok=True)
+    except OSError as e:
+        logger.warning(f"Could not ensure error directory {errors_dir} exists: {e}")
+
     stdout_path = os.path.join(output_dir, f"{task_id}.out")
-    stderr_path = os.path.join(output_dir, f"{task_id}.err")
+    stderr_path = os.path.join(errors_dir, f"{task_id}.err")
 
     try:
         task: Task = Task.create(
