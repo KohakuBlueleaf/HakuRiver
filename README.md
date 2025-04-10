@@ -1,4 +1,6 @@
-# HakuRiver - Lightweight CPU Cluster Manager
+# [WIP]HakuRiver - Lightweight CPU Cluster Manager
+
+***THIS PROJECT IS WIP, USE AT YOUR OWN RISK***
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 <!-- 你可以未來加入 CI/CD 或版本徽章 -->
