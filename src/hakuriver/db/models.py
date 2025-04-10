@@ -19,7 +19,7 @@ class Node(BaseModel):
 
 
 class Task(BaseModel):
-    task_id = peewee.UUIDField(primary_key=True)
+    task_id = peewee.IntegerField(primary_key=True)
     command = peewee.TextField()
     arguments = peewee.TextField()  # Store as JSON string
     env_vars = peewee.TextField()  # Store as JSON string

@@ -1,4 +1,3 @@
-import uuid
 import asyncio
 import datetime
 import os
@@ -9,6 +8,7 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from hakuriver.utils.snowflake import Snowflake
 from hakuriver.utils.logger import logger
 from hakuriver.utils.config_loader import settings
 from hakuriver.db.models import db, Node, Task, initialize_database
@@ -30,6 +30,7 @@ class HostConfig:
 
 
 HostConfig = HostConfig()  # Create an instance of the dataclass
+snowflake = Snowflake()
 
 
 # --- Pydantic Models (remain the same) ---
@@ -47,7 +48,7 @@ class TaskRequest(BaseModel):
 
 
 class TaskInfoForRunner(BaseModel):
-    task_id: str
+    task_id: int
     command: str
     arguments: list[str]
     env_vars: dict[str, str]
@@ -57,7 +58,7 @@ class TaskInfoForRunner(BaseModel):
 
 
 class TaskStatusUpdate(BaseModel):
-    task_id: str
+    task_id: int
     status: str
     exit_code: int | None = None
     message: str | None = None
@@ -212,7 +213,7 @@ async def submit_task(req: TaskRequest):
             detail="Insufficient resources or no suitable node available.",
         )
 
-    task_id = uuid.uuid4()
+    task_id = snowflake()
     # Ensure the base output directory exists (best done via deployment/Ansible)
     output_dir = os.path.join(HostConfig.SHARED_DIR, "task_outputs")
     errors_dir = os.path.join(HostConfig.SHARED_DIR, "task_errors")
@@ -256,7 +257,7 @@ async def submit_task(req: TaskRequest):
         raise HTTPException(status_code=500, detail="Failed to save task state.")
 
     task_info_for_runner = TaskInfoForRunner(
-        task_id=str(task_id),
+        task_id=task_id,
         command=req.command,
         arguments=req.arguments,
         env_vars=req.env_vars,
@@ -267,7 +268,7 @@ async def submit_task(req: TaskRequest):
 
     asyncio.create_task(send_task_to_runner(node.url, task_info_for_runner))
 
-    return {"message": "Task accepted for processing.", "task_id": str(task_id)}
+    return {"message": "Task accepted for processing.", "task_id": task_id}
 
 
 @app.post("/update")
@@ -309,9 +310,9 @@ async def update_task_status(update: TaskStatusUpdate):
 
 
 @app.get("/status/{task_id}")
-async def get_task_status(task_id: str):
+async def get_task_status(task_id: int):
     try:
-        task_uuid = uuid.UUID(task_id)
+        task_uuid = int(task_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid Task ID format.")
 
@@ -328,7 +329,7 @@ async def get_task_status(task_id: str):
     task = query  # query is the Task object here due to Peewee's select behavior
 
     response = {
-        "task_id": str(task.task_id),
+        "task_id": task.task_id,
         "command": task.command,
         "arguments": task.get_arguments(),
         "env_vars": task.get_env_vars(),
@@ -350,7 +351,7 @@ async def get_task_status(task_id: str):
 
 
 # Kill endpoint and helper (logic same, use logger)
-async def send_kill_to_runner(runner_url: str, task_id: str):
+async def send_kill_to_runner(runner_url: str, task_id: int):
     logger.info(f"Sending kill request for task {task_id} to runner {runner_url}")
     try:
         async with httpx.AsyncClient() as client:
@@ -390,9 +391,9 @@ async def send_kill_to_runner(runner_url: str, task_id: str):
 
 
 @app.post("/kill/{task_id}", status_code=202)
-async def request_kill_task(task_id: str):
+async def request_kill_task(task_id: int):
     try:
-        task_uuid = uuid.UUID(task_id)
+        task_uuid = int(task_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid Task ID format.")
 
@@ -427,7 +428,7 @@ async def request_kill_task(task_id: str):
             f"Requesting kill confirmation from runner "
             f"{task.assigned_node.hostname} for task {task_id}"
         )
-        asyncio.create_task(send_kill_to_runner(runner_url, str(task_id)))
+        asyncio.create_task(send_kill_to_runner(runner_url, task_id))
     else:
         logger.info(
             "No kill signal sent to runner for task "

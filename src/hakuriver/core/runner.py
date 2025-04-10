@@ -36,7 +36,7 @@ RunnerConfig = RunnerConfig()
 
 # --- Pydantic Models (remain the same) ---
 class TaskInfo(BaseModel):
-    task_id: str
+    task_id: int
     command: str
     arguments: list[str] = Field(default_factory=list)
     env_vars: dict[str, str] = Field(default_factory=dict)
@@ -46,7 +46,7 @@ class TaskInfo(BaseModel):
 
 
 class TaskStatusUpdate(BaseModel):
-    task_id: str
+    task_id: int
     status: str
     exit_code: int | None = None
     message: str | None = None
@@ -124,7 +124,7 @@ async def run_task_background(task_info: TaskInfo):
     # Prepare environment
     process_env = os.environ.copy()
     process_env.update(task_info.env_vars)
-    process_env["RunnerConfig.CLUSTER_TASK_ID"] = task_id
+    process_env["RunnerConfig.CLUSTER_TASK_ID"] = str(task_id)
     process_env["RunnerConfig.LOCAL_TEMP_DIR"] = RunnerConfig.LOCAL_TEMP_DIR
     process_env["RunnerConfig.SHARED_DIR"] = (
         RunnerConfig.SHARED_DIR
