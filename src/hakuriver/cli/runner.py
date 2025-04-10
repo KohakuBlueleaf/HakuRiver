@@ -3,7 +3,7 @@ import os
 import sys
 
 import toml
-import uvicorn 
+import uvicorn
 
 
 def update_config(config_instance, custom_config_data):
