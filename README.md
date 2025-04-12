@@ -160,7 +160,7 @@ hakurun --parallel python ./demo_hakurun.py "span:{1..2}" "fixed_arg" "span:[inp
    hakuriver.client --cores 1 --wait -- python -V
 
    # Submit a task with arguments and environment variables
-   hakuriver.client --cores 4 --env MY_VAR=ABC --env OTHER_VAR=123 -- /path/to/shared/scripts/my_job.sh --input /path/to/shared/data.txt
+   hakuriver.client --cores 4 --env MY_VAR=ABC --env OTHER_VAR=123 -- my_job.sh --input data.txt
 
    # Check task status
    hakuriver.client --status <task_id_uuid>
