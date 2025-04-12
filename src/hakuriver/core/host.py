@@ -204,6 +204,63 @@ async def receive_heartbeat(hostname: str):
         raise HTTPException(status_code=404, detail="Node not registered")
 
 
+@app.get("/tasks")
+async def get_tasks():
+    """
+    Retrieves a list of tasks from the database.
+    Currently retrieves all tasks, ordered by submission time descending.
+    TODO: Implement pagination and filtering in the future.
+    """
+    logger.debug("Received request to fetch tasks list.")
+    try:
+        # Query to select tasks and join with Node to get hostname
+        # Order by most recently submitted first
+        query: list[Task] = (
+            Task.select(Task, Node.hostname)  # Select Task fields + Node.hostname
+            .join(
+                Node, peewee.JOIN.LEFT_OUTER, on=(Task.assigned_node == Node.hostname)
+            )  # LEFT JOIN on hostname PK
+            .order_by(Task.submitted_at.desc())
+        )
+
+        tasks_data = []
+        # Execute the query and iterate through results
+        for task in query:
+            # Access joined node hostname directly if node exists
+            node_hostname = (
+                task.assigned_node.hostname if task.assigned_node else None
+            )  # task.node holds the joined Node object or None
+
+            tasks_data.append(
+                {
+                    "task_id": task.task_id,
+                    "command": task.command,
+                    "arguments": task.get_arguments(),  # Use existing method to parse JSON
+                    "env_vars": task.get_env_vars(),  # Use existing method to parse JSON
+                    "required_cores": task.required_cores,
+                    "status": task.status,
+                    "assigned_node": node_hostname,  # Use the fetched hostname
+                    "stdout_path": task.stdout_path,
+                    "stderr_path": task.stderr_path,
+                    "exit_code": task.exit_code,
+                    "error_message": task.error_message,
+                    # FastAPI usually automatically converts datetime to ISO strings in JSON responses
+                    "submitted_at": task.submitted_at,
+                    "started_at": task.started_at,
+                    "completed_at": task.completed_at,
+                }
+            )
+        logger.info(f"Returning list of {len(tasks_data)} tasks.")
+        return tasks_data
+
+    except peewee.PeeweeException as e:
+        logger.error(f"Database error fetching tasks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Database error fetching tasks.")
+    except Exception as e:
+        logger.error(f"Unexpected error fetching tasks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Unexpected error fetching tasks.")
+
+
 @app.post("/submit", status_code=202)
 async def submit_task(req: TaskRequest):
     node = find_suitable_node(req.required_cores)
