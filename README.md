@@ -184,14 +184,9 @@ hakurun hakuriver.client --cores 1 -- python -c "span:[print(1), print(2), print
 
 ### Usage - Frontend Web UI (Experimental)
 
-<div style="display:flex;">
-    <span style="width:66%; height:100%">
-        <img width="100%" height="auto" src="image/README/1744479249596.png" />
-        <img width="100%" height="auto" src="image/README/1744479260958.png" />
-        <img width="100%" height="auto" src="image/README/1744479580795.png" />
-    </span>
-    <img width="33.8%" height="100%" src="image/README/1744479294254.png"/>
-</div>
+|Preview of Manager UI|Submit Task from Manager UI|
+|-|-|
+|![](image/README/1744479249596.png) ![](image/README/1744479260958.png) ![](image/README/1744479580795.png)|![](image/README/1744479964991.png)|
 
 HakuRiver includes an optional web-based dashboard built with Vue.js and Element Plus for visual monitoring and management.
 
