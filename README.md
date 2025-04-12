@@ -170,6 +170,12 @@ hakurun --parallel python ./demo_hakurun.py "span:{1..2}" "fixed_arg" "span:[inp
 
    # Use a custom config for the client
    hakuriver.client --config client.toml --list-nodes
+
+   # Combine multiple command into one job
+   hakuriver.client --cores 4 -- hakurun python -c "span:[print(1), print(2), print(3), print(4)]"
+
+   # Submit multiple command as multiple job
+   hakurun hakuriver.client --cores 1 -- python -c "span:[print(1), print(2), print(3), print(4)]"
 ```
 
 ## Acknowledgement
