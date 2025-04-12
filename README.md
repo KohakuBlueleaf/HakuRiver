@@ -3,6 +3,7 @@
 ***THIS PROJECT IS WIP, USE AT YOUR OWN RISK***
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 <!-- 你可以未來加入 CI/CD 或版本徽章 -->
 
 A simple, multi-node resource management tool designed for distributing tasks across compute nodes, focusing on CPU core allocation.
@@ -11,84 +12,147 @@ HakuRiver is a self-hosted cluster manager ideal for small research clusters, de
 
 ### HakuRiver is for:
 
-*   Managing command-line tasks/scripts across a small cluster (e.g., < 10 nodes).
-*   Development, testing, or small research environments needing a simpler alternative to full HPC schedulers.
-*   Running primarily CPU-bound applications where core isolation is beneficial.
-*   Internal tools where basic job submission, status checking, and termination are sufficient.
+* Managing command-line tasks/scripts across a small cluster (e.g., < 10 nodes).
+* Development, testing, or small research environments needing a simpler alternative to full HPC schedulers.
+* Running primarily CPU-bound applications where core isolation is beneficial.
+* Internal tools where basic job submission, status checking, and termination are sufficient.
 
 ### HakuRiver is NOT for:
 
-*   Replacing feature-rich HPC schedulers (like Slurm, PBS) on large-scale clusters.
-*   Complex resource management beyond CPU cores (e.g., detailed memory limits, GPU scheduling, license tracking).
-*   Sophisticated task dependency management or workflow orchestration (use tools like Airflow, Snakemake, Nextflow).
-*   Advanced scheduling policies (e.g., fair-share, preemption, complex priorities).
-*   High-security, multi-tenant environments requiring robust authentication and authorization built-in.
+* Replacing feature-rich HPC schedulers (like Slurm, PBS) on large-scale clusters.
+* Complex resource management beyond CPU cores (e.g., detailed memory limits, GPU scheduling, license tracking).
+* Sophisticated task dependency management or workflow orchestration (use tools like Airflow, Snakemake, Nextflow).
+* Advanced scheduling policies (e.g., fair-share, preemption, complex priorities).
+* High-security, multi-tenant environments requiring robust authentication and authorization built-in.
 
 ## ✨ Features
 
-*   **Dedicated Host Coordination:** A central host server orchestrates the cluster, tracking compute nodes, available resources, and managing the lifecycle of submitted tasks. It can run on a dedicated machine, not requiring resources from compute nodes.
-*   **CPU-Focused Resource Allocation:** Designed primarily for CPU-bound tasks, allowing jobs to request exclusive access to a specific number of CPU cores on a compute node. Core pinning via `numactl` is supported for enhanced performance and isolation (if `numactl` is available and configured).
-*   **Persistent Task and Node Records:** The host maintains a persistent record of compute nodes and submitted tasks, including their status, assigned node, and output locations, facilitating tracking even after client disconnection.
-*   **Node Health Awareness:** Includes a basic heartbeat mechanism allowing the host to detect unresponsive runner nodes and appropriately mark tasks that were assigned to them.
-*   **Built for Shared Environments:** Operates effectively within environments using a shared storage (`shared_dir`) / local temporary storage (`local_temp_dir`) topology, ensuring scripts and data are accessible while providing fast local disk for computation.
+* **Dedicated Host Coordination:** A central host server orchestrates the cluster, tracking compute nodes, available resources, and managing the lifecycle of submitted tasks. It can run on a dedicated machine, not requiring resources from compute nodes.
+* **CPU-Focused Resource Allocation:** Designed primarily for CPU-bound tasks, allowing jobs to request exclusive access to a specific number of CPU cores on a compute node. Core pinning via `numactl` is supported for enhanced performance and isolation (if `numactl` is available and configured).
+* **Persistent Task and Node Records:** The host maintains a persistent record of compute nodes and submitted tasks, including their status, assigned node, and output locations, facilitating tracking even after client disconnection.
+* **Node Health Awareness:** Includes a basic heartbeat mechanism allowing the host to detect unresponsive runner nodes and appropriately mark tasks that were assigned to them.
+* **Built for Shared Environments:** Operates effectively within environments using a shared storage (`shared_dir`) / local temporary storage (`local_temp_dir`) topology, ensuring scripts and data are accessible while providing fast local disk for computation.
 
 ## 🏗️ Architecture Overview
 
-*   **Host (`hakuriver.host`):** The central brain of the cluster. It listens for connections from Runners and Clients. The Host maintains an inventory of registered compute nodes and tracks the availability of their CPU cores. When a user submits a task via the Client, the Host finds a suitable node with enough free cores, records the task details, and instructs the chosen Runner to execute it. It also receives status updates (like 'running', 'completed', 'failed') and heartbeats from Runners.
-*   **Runner (`hakuriver.runner`):** An agent running on each compute node intended to execute tasks. Upon starting, it registers itself and its total core count with the Host. It periodically sends heartbeats to signal its availability. When instructed by the Host, the Runner launches the requested command as a separate process, potentially using system tools like `numactl` to bind the process to specific CPU cores. It monitors the process, redirects its output (stdout/stderr) to files on the shared storage, and reports the final status (success/failure, exit code) back to the Host.
-*   **Client (`hakuriver.client`):** The user's tool for interacting with the cluster. It communicates with the Host server to submit new tasks (specifying the command, arguments, environment variables, and required cores), query the status of previously submitted tasks using their unique ID, request the termination of a running task, or get an overview of the registered compute nodes and their current state.
-*   **Storage:** HakuRiver assumes two types of storage are accessible to the cluster nodes:
-    *   **Shared Storage (`shared_dir`):** Accessible by the Host and all Runners at the *same path*. Used for scripts, common input data, and crucially, for storing the standard output and error logs generated by tasks.
-    *   **Local Temporary Storage (`local_temp_dir`):** Fast, node-specific storage available on each Runner. Tasks can use this for intermediate files or scratch space during execution. Data here is generally considered temporary.
+* **Host (`hakuriver.host`):** The central brain of the cluster. It listens for connections from Runners and Clients. The Host maintains an inventory of registered compute nodes and tracks the availability of their CPU cores. When a user submits a task via the Client, the Host finds a suitable node with enough free cores, records the task details, and instructs the chosen Runner to execute it. It also receives status updates (like 'running', 'completed', 'failed') and heartbeats from Runners.
+* **Runner (`hakuriver.runner`):** An agent running on each compute node intended to execute tasks. Upon starting, it registers itself and its total core count with the Host. It periodically sends heartbeats to signal its availability. When instructed by the Host, the Runner launches the requested command as a separate process, potentially using system tools like `numactl` to bind the process to specific CPU cores. It monitors the process, redirects its output (stdout/stderr) to files on the shared storage, and reports the final status (success/failure, exit code) back to the Host.
+* **Client (`hakuriver.client`):** The user's tool for interacting with the cluster. It communicates with the Host server to submit new tasks (specifying the command, arguments, environment variables, and required cores), query the status of previously submitted tasks using their unique ID, request the termination of a running task, or get an overview of the registered compute nodes and their current state.
+* **Storage:** HakuRiver assumes two types of storage are accessible to the cluster nodes:
+  * **Shared Storage (`shared_dir`):** Accessible by the Host and all Runners at the *same path*. Used for scripts, common input data, and crucially, for storing the standard output and error logs generated by tasks.
+  * **Local Temporary Storage (`local_temp_dir`):** Fast, node-specific storage available on each Runner. Tasks can use this for intermediate files or scratch space during execution. Data here is generally considered temporary.
 
 ## 🚀 Getting Started
 
 ### Installation
 
-1.  Clone the repository:
+1. Clone the repository:
     ```bash
     git clone https://github.com/KohakuBlueleaf/HakuRiver.git
     cd HakuRiver
     ```
-2.  Install the package (preferably in a virtual environment):
+2. Install the package (preferably in a virtual environment):
     ```bash
     # Installs hakuriver and its dependencies specified in pyproject.toml
     pip install .
     ```
     This will make the `hakuriver.host`, `hakuriver.runner`, and `hakuriver.client` commands available in your environment.
 
-### Configuration
+### Usage - Hakurun
 
-*   A default configuration file is located at `src/hakuriver/utils/default_config.toml`.
-*   **Crucially, review and potentially edit these settings in your default or a custom config file:**
-    *   `[network] host_reachable_address`: Must be the IP or hostname of the Host server reachable by Runners and Clients.
-    *   `[paths] shared_dir`: Absolute path to shared storage (must exist and be accessible on all nodes).
-    *   `[paths] local_temp_dir`: Absolute path to local temp storage (must exist and be writable on runner nodes).
-    *   `[paths] numactl_path`: Path to `numactl` executable (leave empty if `numactl` is not available or not needed).
-    *   `[database] db_file`: Path for the host's SQLite database file. Ensure the directory exists.
-*   You can override the default configuration by providing a custom TOML file using the `--config` flag when running any `hakuriver.*` command.
+`hakurun` is a utility script included with HakuRiver designed for launching multiple variations of a command or Python script by automatically expanding specified arguments. This is particularly useful for running simple parameter sweeps or executing the same task with different inputs locally *before* submitting potentially many individual jobs to the HakuRiver cluster.
 
-### Usage
+**Key Features:**
+
+*   **Argument Spanning:** Define ranges or lists for arguments, and `hakurun` will generate the Cartesian product of all combinations.
+    *   **Integer Range:** `span:{start..end}` expands to all integers from `start` to `end` (inclusive). Example: `span:{1..3}` becomes `1`, `2`, `3`.
+    *   **List:** `span:[item1, item2, ...]` expands to the provided list items. Example: `span:[alpha,beta]` becomes `"alpha"`, `"beta"`.
+*   **Parallel Execution:** Use the `--parallel` flag to run the generated task combinations concurrently as separate subprocesses.
+*   **Target Flexibility:** Can run Python modules (`my_module`), specific functions within modules (`my_module:my_function`), or general executable scripts/commands.
+
+**Example:**
+
+Consider the `demo_hakurun.py` script provided:
+
+```python
+# demo_hakurun.py
+import sys
+import time
+import random
+
+time.sleep(random.random() * 0.1)
+print(sys.argv)
+```
+
+You can run this script with multiple combinations of arguments using `hakurun` with two differnet method
+
+module import:
+```bash
+# Command (runs 2 * 1 * 2 = 4 tasks in parallel)
+hakurun --parallel demo_hakurun "span:{1..2}" "fixed_arg" "span:[input_a, input_b]"
+```
+
+general script/executable(with python):
+```bash
+hakurun --parallel python ./demo_hakurun.py "span:{1..2}" "fixed_arg" "span:[input_a, input_b]"
+```
+
+**Example Output (order may vary with `--parallel`):**
+
+```
+[HakuRun]-|xx:xx:xx|-INFO: Running 4 tasks in parallel via subprocess...
+[HakuRun]-|xx:xx:xx|-INFO:   Task 1/4: python /path/to/demo_hakurun.py 1 fixed_arg input_a
+[HakuRun]-|xx:xx:xx|-INFO:   Task 2/4: python /path/to/demo_hakurun.py 1 fixed_arg input_b
+[HakuRun]-|xx:xx:xx|-INFO:   Task 3/4: python /path/to/demo_hakurun.py 2 fixed_arg input_a
+[HakuRun]-|xx:xx:xx|-INFO:   Task 4/4: python /path/to/demo_hakurun.py 2 fixed_arg input_b
+[HakuRun]-|xx:xx:xx|-INFO: Waiting for parallel tasks to complete...
+['/path/to/demo_hakurun.py', '1', 'fixed_arg', 'input_a']
+['/path/to/demo_hakurun.py', '2', 'fixed_arg', 'input_a']
+['/path/to/demo_hakurun.py', '1', 'fixed_arg', 'input_b']
+['/path/to/demo_hakurun.py', '2', 'fixed_arg', 'input_b']
+[HakuRun]-|xx:xx:xx|-INFO: All parallel tasks finished successfully.
+```
+
+**Note:** `hakurun` executes these tasks locally on the machine where it's invoked. It does **not** interact with the HakuRiver host or runners and does not submit jobs to the cluster. It's a standalone helper utility for generating and running command variations.
+```
+
+You can insert this block into your `README.md` under the `## 🚀 Getting Started` section, perhaps after the existing "Usage" subsection explaining `hakuriver.client`, `hakuriver.host`, etc.
+
+### Configuration - Hakuriver
+
+* A default configuration file is located at `src/hakuriver/utils/default_config.toml`.
+* **Crucially, review and potentially edit these settings in your default or a custom config file:**
+  * `[network] host_reachable_address`: Must be the IP or hostname of the Host server reachable by Runners and Clients.
+  * `[paths] shared_dir`: Absolute path to shared storage (must exist and be accessible on all nodes).
+  * `[paths] local_temp_dir`: Absolute path to local temp storage (must exist and be writable on runner nodes).
+  * `[paths] numactl_path`: Path to `numactl` executable (leave empty if `numactl` is not available or not needed).
+  * `[database] db_file`: Path for the host's SQLite database file. Ensure the directory exists.
+* You can override the default configuration by providing a custom TOML file using the `--config` flag when running any `hakuriver.*` command.
+
+### Usage - HakuRiver
 
 **1. Initialize Database (Run once on the Host machine):**
    The Host server attempts to initialize the database on startup. Ensure the directory specified in `database.db_file` exists and is writable by the user running the host.
 
 **2. Start the Host Server (on the manager node):**
-   ```bash
+
+```bash
    hakuriver.host
    # Or with a custom config:
    # hakuriver.host --config /path/to/host_config.toml
-   ```
+```
 
 **3. Start the Runner Agent (on each compute node):**
-   ```bash
+
+```bash
    hakuriver.runner
    # Or with a custom config:
    # hakuriver.runner --config /path/to/runner_config.toml
-   ```
+```
 
 **4. Use the Client:**
-   ```bash
+
+```bash
    # List nodes
    hakuriver.client --list-nodes
 
@@ -107,7 +171,8 @@ HakuRiver is a self-hosted cluster manager ideal for small research clusters, de
 
    # Use a custom config for the client
    hakuriver.client --config client.toml --list-nodes
-   ```
+```
 
 ## Acknowledgement
+
 * Gemini 2.5 pro: basic implementation and this README
