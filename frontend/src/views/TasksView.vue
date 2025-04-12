@@ -60,9 +60,9 @@ OTHER_VAR=123"
     <!-- Task List -->
     <el-divider />
     <h2>Task List</h2>
-    <el-button @click="fetchTasks" :loading="isLoadingTasks" text size="small" style="margin-bottom: 10px"
-      >Refresh List</el-button
-    >
+    <el-button @click="fetchTasks" :loading="isLoadingTasks" text size="small" style="margin-bottom: 10px">
+      Refresh List
+    </el-button>
     <el-alert v-if="taskError" :title="taskError" type="error" show-icon :closable="false" style="margin-bottom: 10px" />
     <el-alert
       v-if="!backendHasGetTasks"
@@ -75,17 +75,20 @@ OTHER_VAR=123"
       The backend currently lacks an endpoint to list all tasks. Task list functionality is limited.
     </el-alert>
 
+    <!-- Task Table with row click handler -->
     <el-table
       :data="tasks"
       style="width: 100%"
       v-loading="isLoadingTasks"
       empty-text="No tasks found or backend endpoint missing"
+      @row-click="handleRowClick"
+      highlight-current-row
+      class="task-table"
     >
-      <el-table-column prop="task_id" label="Task ID" width="180" sortable />
-      <el-table-column prop="command" label="Command" />
-      <el-table-column prop="arguments" label="Arguments" width="200">
+      <el-table-column prop="task_id" label="Task ID" sortable />
+      <el-table-column prop="command" label="Command" show-overflow-tooltip />
+      <el-table-column prop="arguments" label="Arguments">
         <template #default="scope">
-          <!-- Display limited arguments, maybe tooltip for full list -->
           <el-tooltip
             :content="formatArgsTooltip(scope.row.arguments)"
             placement="top"
@@ -95,40 +98,164 @@ OTHER_VAR=123"
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column prop="required_cores" label="Cores" width="80" sortable />
-      <el-table-column prop="status" label="Status" width="120" sortable>
+      <el-table-column prop="required_cores" label="Cores" sortable />
+      <el-table-column prop="status" label="Status" sortable>
         <template #default="scope">
           <el-tag :type="getTaskStatusType(scope.row.status)">
             {{ scope.row.status }}
+            <span v-if="scope.row.assignment_suspicion_count > 0" style="margin-left: 4px">(?)</span>
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="assigned_node" label="Assigned Node" width="150" sortable />
-      <el-table-column prop="submitted_at" label="Submitted" width="170" sortable>
+      <el-table-column prop="assigned_node" label="Assigned Node" sortable />
+      <el-table-column prop="submitted_at" label="Submitted" sortable>
         <template #default="scope">{{ formatDateTime(scope.row.submitted_at) }}</template>
       </el-table-column>
-      <el-table-column prop="started_at" label="Started" width="170" sortable>
-        <template #default="scope">{{ formatDateTime(scope.row.started_at) }}</template>
-      </el-table-column>
-      <el-table-column prop="completed_at" label="Completed" width="170" sortable>
-        <template #default="scope">{{ formatDateTime(scope.row.completed_at) }}</template>
-      </el-table-column>
-      <el-table-column label="Actions" width="100" fixed="right">
+      <!-- Removed Started/Completed from main table for brevity -->
+      <el-table-column label="Actions" fixed="right">
         <template #default="scope">
+          <!-- Stop propagation to prevent row click when clicking buttons -->
           <el-button
             link
             type="danger"
             size="small"
-            @click="handleKill(scope.row.task_id)"
+            @click.stop="handleKill(scope.row.task_id)"
             :disabled="!isKillable(scope.row.status)"
             v-loading="killingState[scope.row.task_id]"
           >
             Kill
           </el-button>
-          <!-- Add View Logs button later -->
+          <el-button link type="primary" size="small" @click.stop="handleRowClick(scope.row)"> Details </el-button>
         </template>
       </el-table-column>
     </el-table>
+
+    <!-- Task Detail Dialog -->
+    <el-dialog
+      v-model="detailDialogVisible"
+      :title="'Task Details - ID: ' + (selectedTaskDetail?.task_id ?? '')"
+      width="70%"
+      top="5vh"
+      :close-on-click-modal="false"
+      @closed="resetDetailView"
+      draggable
+    >
+      <div v-if="selectedTaskDetail">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="Task ID">{{ selectedTaskDetail.task_id }}</el-descriptions-item>
+          <el-descriptions-item label="Status">
+            <el-tag :type="getTaskStatusType(selectedTaskDetail.status)">
+              {{ selectedTaskDetail.status }}
+            </el-tag>
+            <el-tag
+              v-if="selectedTaskDetail.assignment_suspicion_count > 0"
+              type="warning"
+              size="small"
+              style="margin-left: 5px"
+            >
+              Suspect Assignment ({{ selectedTaskDetail.assignment_suspicion_count }})
+            </el-tag>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="Command" :span="2">{{ selectedTaskDetail.command }}</el-descriptions-item>
+          <el-descriptions-item label="Arguments" :span="2">
+            <pre class="code-block">{{ selectedTaskDetail.arguments?.join('\n') || 'None' }}</pre>
+          </el-descriptions-item>
+          <el-descriptions-item label="Environment Vars" :span="2">
+            <pre class="code-block">{{ formatEnvVars(selectedTaskDetail.env_vars) || 'None' }}</pre>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="Required Cores">{{ selectedTaskDetail.required_cores }}</el-descriptions-item>
+          <el-descriptions-item label="Assigned Node">{{ selectedTaskDetail.assigned_node || 'N/A' }}</el-descriptions-item>
+          <el-descriptions-item label="Exit Code">{{ selectedTaskDetail.exit_code ?? 'N/A' }}</el-descriptions-item>
+
+          <el-descriptions-item label="Submitted At">{{
+            formatDateTime(selectedTaskDetail.submitted_at)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="Stdout Path">{{ selectedTaskDetail.stdout_path || 'N/A' }}</el-descriptions-item>
+          <el-descriptions-item label="Started At">{{ formatDateTime(selectedTaskDetail.started_at) }}</el-descriptions-item>
+          <el-descriptions-item label="Stderr Path">{{ selectedTaskDetail.stderr_path || 'N/A' }}</el-descriptions-item>
+          <el-descriptions-item label="Completed At">{{
+            formatDateTime(selectedTaskDetail.completed_at)
+          }}</el-descriptions-item>
+        </el-descriptions>
+
+        <el-divider />
+        <el-row :gutter="20">
+          <!-- Stdout Column -->
+          <el-col :span="12">
+            <div class="log-column-content">
+              <h4>
+                Standard Output
+                <el-button
+                  @click="fetchStdout"
+                  :loading="isLoadingStdout"
+                  text
+                  size="small"
+                  :icon="RefreshRight"
+                  style="margin-left: 10px"
+                />
+              </h4>
+              <el-alert
+                v-if="stdoutError"
+                :title="stdoutError"
+                type="error"
+                show-icon
+                :closable="false"
+                style="margin-bottom: 5px"
+              />
+              <el-scrollbar v-loading="isLoadingStdout" class="log-scrollbar" height="250px">
+                <pre class="code-block log-content">{{ stdoutContent || 'No output fetched or available.' }}</pre>
+              </el-scrollbar>
+            </div>
+          </el-col>
+          <!-- Stderr Column -->
+          <el-col :span="12">
+            <div class="log-column-content">
+              <h4>
+                Standard Error
+                <el-button
+                  @click="fetchStderr"
+                  :loading="isLoadingStderr"
+                  text
+                  size="small"
+                  :icon="RefreshRight"
+                  style="margin-left: 10px"
+                />
+              </h4>
+              <el-alert
+                v-if="stderrError"
+                :title="stderrError"
+                type="error"
+                show-icon
+                :closable="false"
+                style="margin-bottom: 5px"
+              />
+              <!-- REMOVE height prop from el-scrollbar -->
+              <el-scrollbar v-loading="isLoadingStderr" class="log-scrollbar" height="250px">
+                <pre class="code-block log-content">{{ stderrContent || 'No error output fetched or available.' }}</pre>
+              </el-scrollbar>
+            </div>
+          </el-col>
+        </el-row>
+      </div>
+      <div v-else>
+        <p>Loading task details...</p>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="detailDialogVisible = false">Close</el-button>
+          <el-button
+            type="danger"
+            @click="handleKill(selectedTaskDetail?.task_id)"
+            :disabled="!selectedTaskDetail || !isKillable(selectedTaskDetail.status)"
+            :loading="killingState[selectedTaskDetail?.task_id]"
+          >
+            Kill Task
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -136,6 +263,7 @@ OTHER_VAR=123"
 import { ref, reactive, onMounted, onUnmounted } from 'vue';
 import api from '@/services/api';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { RefreshRight } from '@element-plus/icons-vue'; // Import icon
 
 // --- State ---
 const tasks = ref([]);
@@ -158,20 +286,27 @@ const taskForm = reactive({
 const taskFormRules = reactive({
   command: [{ required: true, message: 'Command is required', trigger: 'blur' }],
   required_cores: [{ required: true, message: 'Number of cores is required', trigger: 'blur' }],
-  // Arguments and env vars are optional
 });
 
 const killingState = reactive({}); // Track loading state for individual kill buttons
 
+// --- State (Task Detail Modal) ---
+const detailDialogVisible = ref(false);
+const selectedTaskDetail = ref(null); // Holds the full task object for the modal
+const stdoutContent = ref('');
+const stderrContent = ref('');
+const isLoadingStdout = ref(false);
+const isLoadingStderr = ref(false);
+const stdoutError = ref(null);
+const stderrError = ref(null);
+
 // --- API Functions ---
 
-// *** IMPORTANT: Assumes api.getTasks() exists and calls a backend endpoint like GET /tasks ***
 const fetchTasks = async () => {
   if (!backendHasGetTasks.value) {
     taskError.value = "Backend API '/tasks' endpoint not implemented.";
     isLoadingTasks.value = false;
     tasks.value = [];
-    // Stop polling if the endpoint doesn't exist
     if (taskPollingInterval) clearInterval(taskPollingInterval);
     return;
   }
@@ -180,9 +315,8 @@ const fetchTasks = async () => {
   isLoadingTasks.value = true;
   taskError.value = null;
   try {
-    // This is the assumed function call
-    const response = await api.getTasks(); // Assumes this returns an array of tasks
-    tasks.value = response.data; // Update local task list
+    const response = await api.getTasks();
+    tasks.value = response.data;
   } catch (err) {
     console.error('Error fetching tasks:', err);
     taskError.value = 'Failed to fetch task list.';
@@ -195,23 +329,20 @@ const fetchTasks = async () => {
 const submitTaskApi = async (formData) => {
   isSubmitting.value = true;
   try {
-    // 1. Parse arguments and env vars from textareas
     const argsList = formData.arguments_text
       .split('\n')
       .map((line) => line.trim())
-      .filter((line) => line !== ''); // Remove empty lines
-
+      .filter((line) => line !== '');
     const envDict = formData.env_vars_text
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line !== '' && line.includes('='))
       .reduce((acc, line) => {
         const [key, ...valueParts] = line.split('=');
-        acc[key.trim()] = valueParts.join('=').trim(); // Handle values with '='
+        acc[key.trim()] = valueParts.join('=').trim();
         return acc;
       }, {});
 
-    // 2. Prepare payload for the API
     const payload = {
       command: formData.command,
       arguments: argsList,
@@ -219,50 +350,79 @@ const submitTaskApi = async (formData) => {
       required_cores: formData.required_cores,
     };
 
-    // 3. Call API
     const response = await api.submitTask(payload);
-    ElMessage({
-      message: `Task submitted successfully! ID: ${response.data.task_id}`,
-      type: 'success',
-    });
+    ElMessage({ message: `Task submitted successfully! ID: ${response.data.task_id}`, type: 'success' });
     submitDialogVisible.value = false;
-    fetchTasks(); // Refresh the task list after submission
+    fetchTasks(); // Refresh list
   } catch (error) {
     console.error('Error submitting task:', error);
     const errorDetail = error.response?.data?.detail || error.message || 'Unknown error';
-    ElMessage({
-      message: `Failed to submit task: ${errorDetail}`,
-      type: 'error',
-    });
+    ElMessage({ message: `Failed to submit task: ${errorDetail}`, type: 'error' });
   } finally {
     isSubmitting.value = false;
   }
 };
 
 const killTaskApi = async (taskId) => {
-  killingState[taskId] = true; // Set loading for specific button
+  if (!taskId) return;
+  killingState[taskId] = true;
   try {
     await api.killTask(taskId);
-    ElMessage({
-      message: `Kill request sent for task ${taskId}.`,
-      type: 'info', // Use info as it might take time
-    });
-    // Optimistic UI update or wait for poll
-    const task = tasks.value.find((t) => t.task_id === taskId);
-    if (task) {
-      task.status = 'killed'; // Or 'killing' if backend confirms later
+    ElMessage({ message: `Kill request sent for task ${taskId}.`, type: 'info' });
+
+    // Optimistic UI update
+    const taskInList = tasks.value.find((t) => t.task_id === taskId);
+    if (taskInList) taskInList.status = 'killed';
+
+    // Update detail view if this task is selected
+    if (selectedTaskDetail.value && selectedTaskDetail.value.task_id === taskId) {
+      selectedTaskDetail.value.status = 'killed';
+      // Optionally disable log fetching or show killed status prominently
     }
-    // Alternatively, trigger fetchTasks() immediately after a short delay
-    // setTimeout(fetchTasks, 1000);
+    // Optionally close detail modal?
+    // detailDialogVisible.value = false;
   } catch (error) {
     console.error(`Error killing task ${taskId}:`, error);
-    const errorDetail = error.response?.data?.detail || error.message || 'Unknown error';
-    ElMessage({
-      message: `Failed to kill task ${taskId}: ${errorDetail}`,
-      type: 'error',
-    });
+    const errorDetail = error.response?.data?.detail || error.response?.data || error.message || 'Unknown error';
+    ElMessage({ message: `Failed to kill task ${taskId}: ${errorDetail}`, type: 'error' });
   } finally {
-    killingState[taskId] = false; // Reset loading state
+    killingState[taskId] = false;
+  }
+};
+
+// --- Log Fetching API Functions ---
+const fetchStdout = async () => {
+  if (!selectedTaskDetail.value?.task_id) return;
+  isLoadingStdout.value = true;
+  stdoutError.value = null;
+  stdoutContent.value = ''; // Clear previous
+  try {
+    const response = await api.getTaskStdout(selectedTaskDetail.value.task_id);
+    stdoutContent.value = response.data || '(Empty)'; // Axios text response puts data in .data
+  } catch (error) {
+    console.error('Error fetching stdout:', error);
+    // Use response.data for error message if available (FastAPI error detail)
+    stdoutError.value = error.response?.data || error.message || 'Failed to fetch stdout.';
+    stdoutContent.value = `Error loading log: ${stdoutError.value}`;
+  } finally {
+    isLoadingStdout.value = false;
+  }
+};
+
+const fetchStderr = async () => {
+  if (!selectedTaskDetail.value?.task_id) return;
+  isLoadingStderr.value = true;
+  stderrError.value = null;
+  stderrContent.value = ''; // Clear previous
+  try {
+    const response = await api.getTaskStderr(selectedTaskDetail.value.task_id);
+    stderrContent.value = response.data || '(Empty)';
+  } catch (error) {
+    console.error('Error fetching stderr:', error);
+    stderrError.value = error.response?.data || error.message || 'Failed to fetch stderr.';
+    stderrContent.value = `Error loading log: ${stderrError.value}`;
+  } finally {
+    isLoadingStderr.value = false;
   }
 };
 
@@ -275,7 +435,6 @@ const resetForm = () => {
   if (taskFormRef.value) {
     taskFormRef.value.resetFields();
   }
-  // Also manually reset textarea content if resetFields doesn't cover it
   taskForm.arguments_text = '';
   taskForm.env_vars_text = '';
 };
@@ -284,7 +443,7 @@ const handleTaskSubmit = async () => {
   if (!taskFormRef.value) return;
   await taskFormRef.value.validate((valid, fields) => {
     if (valid) {
-      submitTaskApi(taskForm); // Call the API submission function
+      submitTaskApi(taskForm);
     } else {
       console.log('Form validation failed:', fields);
       ElMessage({ message: 'Please fill in all required fields correctly.', type: 'warning' });
@@ -292,8 +451,30 @@ const handleTaskSubmit = async () => {
   });
 };
 
+// --- Detail Dialog Handling ---
+const handleRowClick = (row) => {
+  // Assuming the /tasks endpoint now provides enough detail
+  // Alternatively, fetch fresh details: api.getTaskStatus(row.task_id).then(...)
+  selectedTaskDetail.value = { ...row }; // Make a copy
+  resetDetailView(); // Clear logs from previous view
+  detailDialogVisible.value = true;
+  fetchStdout(); // Fetch logs when opening
+  fetchStderr();
+};
+
+const resetDetailView = () => {
+  // Called when modal is closed or before opening a new one
+  stdoutContent.value = '';
+  stderrContent.value = '';
+  isLoadingStdout.value = false;
+  isLoadingStderr.value = false;
+  stdoutError.value = null;
+  stderrError.value = null;
+};
+
 // --- Kill Handling ---
 const handleKill = (taskId) => {
+  if (!taskId) return;
   ElMessageBox.confirm(`Are you sure you want to kill task ${taskId}? This cannot be undone.`, 'Confirm Kill', {
     confirmButtonText: 'Kill Task',
     cancelButtonText: 'Cancel',
@@ -304,7 +485,6 @@ const handleKill = (taskId) => {
       killTaskApi(taskId);
     })
     .catch(() => {
-      // Action cancelled
       ElMessage({ type: 'info', message: 'Kill action cancelled.' });
     });
 };
@@ -313,7 +493,6 @@ const handleKill = (taskId) => {
 onMounted(() => {
   fetchTasks(); // Initial fetch
   if (backendHasGetTasks.value) {
-    // Only poll if endpoint exists
     taskPollingInterval = setInterval(fetchTasks, TASK_POLLING_RATE_MS);
   }
 });
@@ -328,9 +507,14 @@ onUnmounted(() => {
 const formatDateTime = (isoString) => {
   if (!isoString) return '-';
   try {
-    return new Date(isoString).toLocaleString();
+    // Directly use the datetime object if backend returns it, else parse ISO string
+    const date = isoString instanceof Date ? isoString : new Date(isoString);
+    if (isNaN(date.getTime())) {
+      return 'Invalid Date';
+    }
+    return date.toLocaleString();
   } catch (e) {
-    return 'Invalid Date';
+    return 'Invalid Date Format';
   }
 };
 
@@ -350,7 +534,8 @@ const isKillable = (status) => {
 
 const formatArgsPreview = (args) => {
   if (!args || args.length === 0) return '-';
-  return args.join(' ').substring(0, 50) + (args.join(' ').length > 50 ? '...' : '');
+  const joined = args.join(' ');
+  return joined.substring(0, 50) + (joined.length > 50 ? '...' : '');
 };
 
 const formatArgsTooltip = (args) => {
@@ -358,7 +543,14 @@ const formatArgsTooltip = (args) => {
   return args.join(' ');
 };
 
-// Placeholder for max cores hint (could be fetched from nodes)
+const formatEnvVars = (envVars) => {
+  if (!envVars || Object.keys(envVars).length === 0) return 'None';
+  return Object.entries(envVars)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+};
+
+// Placeholder for max cores hint
 const maxCoresHint = ref(32); // Default value
 </script>
 
@@ -366,6 +558,11 @@ const maxCoresHint = ref(32); // Default value
 .el-table {
   margin-top: 20px;
 }
+/* Make table rows clickable */
+.task-table :deep(.el-table__row) {
+  cursor: pointer;
+}
+
 .el-alert {
   margin-bottom: 15px;
 }
@@ -379,5 +576,45 @@ const maxCoresHint = ref(32); // Default value
   display: inline-block; /* Required for text-overflow */
   max-width: 100%; /* Ensure it doesn't overflow cell */
   vertical-align: bottom; /* Align with potential tooltip icon */
+}
+
+/* Styles for Detail Modal */
+.el-descriptions {
+  margin-top: 10px;
+}
+/* Consistent code block styling */
+.code-block {
+  background-color: var(--el-fill-color-lighter);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 0.9em;
+  color: var(--el-text-color-regular);
+}
+/* Specific styling for args/env block */
+.el-descriptions .code-block {
+  max-height: 150px; /* Limit height */
+  overflow-y: auto;
+}
+
+.log-scrollbar {
+  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+  margin-top: 5px;
+}
+/* Specific styling for log content block */
+.log-content {
+  min-height: 250px;
+  margin: 0;
+  padding: 10px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85em;
+  color: var(--el-text-color-primary); /* Ensure readability */
+  background-color: var(--el-bg-color-overlay); /* Match dialog bg */
+  /* Remove max-height here, scrollbar handles it */
 }
 </style>

@@ -6,6 +6,7 @@ from collections import defaultdict
 import peewee
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from hakuriver.utils.snowflake import Snowflake
@@ -164,6 +165,47 @@ async def send_task_to_runner(runner_url: str, task_info: TaskInfoForRunner):
             task.save()
 
 
+def get_secure_log_path(task: Task, log_type: str) -> str | None:
+    """
+    Validates the log path stored in the DB and returns the full, secure path.
+    Returns None if the path is invalid or outside the expected directory.
+    """
+    if log_type == "stdout":
+        base_dir = os.path.join(HostConfig.SHARED_DIR, "task_outputs")
+        db_path = task.stdout_path
+    elif log_type == "stderr":
+        base_dir = os.path.join(HostConfig.SHARED_DIR, "task_errors")
+        db_path = task.stderr_path
+    else:
+        return None
+
+    if not db_path:
+        logger.warning(f"Task {task.task_id} has no {log_type} path in DB.")
+        return None
+
+    # Basic check: ensure the stored path is just a filename
+    filename = os.path.basename(db_path)
+    if not filename or filename != db_path.split(os.sep)[-1]:
+        logger.error(
+            f"Invalid log path format in DB for task {task.task_id} {log_type}: {db_path}"
+        )
+        return None
+
+    # Construct full path
+    full_path = os.path.abspath(os.path.join(base_dir, filename))
+
+    # Security Check: Ensure the resolved path is still within the intended base directory
+    if os.path.commonpath([full_path, os.path.abspath(base_dir)]) != os.path.abspath(
+        base_dir
+    ):
+        logger.error(
+            f"Path traversal attempt detected for task {task.task_id} {log_type}: {full_path}"
+        )
+        return None
+
+    return full_path
+
+
 # --- API Endpoints (Logic remains the same, use logger) ---
 
 
@@ -279,6 +321,100 @@ async def receive_heartbeat(
     }
 
 
+@app.get("/task/{task_id}/stdout", response_class=PlainTextResponse)
+async def get_task_stdout(task_id: int):
+    """Retrieves the standard output log file content for a given task."""
+    logger.debug(f"Request received for stdout of task {task_id}")
+    task = Task.get_or_none(Task.task_id == task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    log_path = get_secure_log_path(task, "stdout")
+    if not log_path:
+        raise HTTPException(
+            status_code=404,
+            detail="Standard output path not found or invalid for this task.",
+        )
+
+    try:
+        if not os.path.exists(log_path):
+            logger.warning(f"Stdout file not found for task {task_id} at {log_path}")
+            raise HTTPException(
+                status_code=404,
+                detail="Standard output file not found (might not be generated yet).",
+            )
+
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+        logger.debug(f"Successfully read stdout for task {task_id}")
+        return PlainTextResponse(content=content)
+
+    except FileNotFoundError:
+        logger.warning(
+            f"Stdout file not found race condition for task {task_id} at {log_path}"
+        )
+        raise HTTPException(status_code=404, detail="Standard output file not found.")
+    except IOError as e:
+        logger.error(f"IOError reading stdout for task {task_id} from {log_path}: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error reading standard output file: {e}"
+        )
+    except Exception as e:
+        logger.exception(
+            f"Unexpected error reading stdout for task {task_id} from {log_path}: {e}"
+        )
+        raise HTTPException(
+            status_code=500, detail="Unexpected error reading standard output file."
+        )
+
+
+@app.get("/task/{task_id}/stderr", response_class=PlainTextResponse)
+async def get_task_stderr(task_id: int):
+    """Retrieves the standard error log file content for a given task."""
+    logger.debug(f"Request received for stderr of task {task_id}")
+    task = Task.get_or_none(Task.task_id == task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    log_path = get_secure_log_path(task, "stderr")
+    if not log_path:
+        raise HTTPException(
+            status_code=404,
+            detail="Standard error path not found or invalid for this task.",
+        )
+
+    try:
+        if not os.path.exists(log_path):
+            logger.warning(f"Stderr file not found for task {task_id} at {log_path}")
+            raise HTTPException(
+                status_code=404,
+                detail="Standard error file not found (might not be generated yet).",
+            )
+
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+        logger.debug(f"Successfully read stderr for task {task_id}")
+        return PlainTextResponse(content=content)
+
+    except FileNotFoundError:
+        logger.warning(
+            f"Stderr file not found race condition for task {task_id} at {log_path}"
+        )
+        raise HTTPException(status_code=404, detail="Standard error file not found.")
+    except IOError as e:
+        logger.error(f"IOError reading stderr for task {task_id} from {log_path}: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error reading standard error file: {e}"
+        )
+    except Exception as e:
+        logger.exception(
+            f"Unexpected error reading stderr for task {task_id} from {log_path}: {e}"
+        )
+        raise HTTPException(
+            status_code=500, detail="Unexpected error reading standard error file."
+        )
+
+
 @app.get("/tasks")
 async def get_tasks():
     """
@@ -308,7 +444,7 @@ async def get_tasks():
 
             tasks_data.append(
                 {
-                    "task_id": task.task_id,
+                    "task_id": str(task.task_id),
                     "command": task.command,
                     "arguments": task.get_arguments(),  # Use existing method to parse JSON
                     "env_vars": task.get_env_vars(),  # Use existing method to parse JSON
