@@ -250,7 +250,6 @@ async def get_tasks():
                     "completed_at": task.completed_at,
                 }
             )
-        logger.info(f"Returning list of {len(tasks_data)} tasks.")
         return tasks_data
 
     except peewee.PeeweeException as e:
