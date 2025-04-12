@@ -114,9 +114,8 @@ hakurun --parallel python ./demo_hakurun.py "span:{1..2}" "fixed_arg" "span:[inp
 ```
 
 **Note:** `hakurun` executes these tasks locally on the machine where it's invoked. It does **not** interact with the HakuRiver host or runners and does not submit jobs to the cluster. It's a standalone helper utility for generating and running command variations.
-```
 
-You can insert this block into your `README.md` under the `## 🚀 Getting Started` section, perhaps after the existing "Usage" subsection explaining `hakuriver.client`, `hakuriver.host`, etc.
+**Hint:** When you want to submitting multiple similar command into HakuRiver, it is recommended to combine them into single job with `hakurun` utility. Which means you can treat a bunch of command as a single job. This is especially useful for crawler or dataset preprocess tasks.
 
 ### Configuration - Hakuriver
 
