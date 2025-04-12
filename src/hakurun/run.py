@@ -194,7 +194,7 @@ def runner():
             logger.info(f"  Task {i+1}/{num_tasks}: {shlex.join(cmd)}")
 
             try:
-                p = Popen(cmd, cwd=os.getcwd(), stdout=None, stderr=None)
+                p = Popen(cmd, cwd=os.getcwd(), env=os.environ)
             except OSError as e:
                 logger.error(
                     f"Error starting subprocess for task {i+1}: {e}",
@@ -242,6 +242,7 @@ def runner():
                 p = Popen(
                     [func] + list(single_arg_combination),
                     cwd=os.getcwd(),
+                    env=os.environ,
                 )
                 p.wait()
             elif func is not None:
