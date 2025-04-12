@@ -66,6 +66,11 @@ class TaskStatusUpdate(BaseModel):
     completed_at: datetime.datetime | None = None
 
 
+class HeartbeatData(BaseModel):
+    running_tasks: list[int] = Field(default_factory=list)
+    completed_tasks: list[int] = Field(default_factory=list)
+
+
 # --- FastAPI App ---
 app = FastAPI(title="HakuRiver Cluster Manager")
 
@@ -189,19 +194,89 @@ async def register_runner(info: RunnerInfo):
 
 
 @app.put("/heartbeat/{hostname}")
-async def receive_heartbeat(hostname: str):
+async def receive_heartbeat(
+    hostname: str, data: HeartbeatData
+):  # Accept new data model
     node: Node = Node.get_or_none(Node.hostname == hostname)
-    if node:
-        node.last_heartbeat = datetime.datetime.now()
-        if node.status != "online":
-            logger.info(f"Runner {hostname} came back online.")
-            node.status = "online"
-        node.save()
-        # logger.debug(f"Heartbeat received from {hostname}") # Use debug level
-        return {"message": "Heartbeat received"}
-    else:
+    if not node:
         logger.warning(f"Heartbeat received from unknown hostname: {hostname}")
         raise HTTPException(status_code=404, detail="Node not registered")
+
+    now = datetime.datetime.now()
+    node.last_heartbeat = now
+    if node.status != "online":
+        logger.info(f"Runner {hostname} came back online.")
+        node.status = "online"
+    node.save()
+
+    # --- 1. Process Completed Tasks reported by Runner ---
+    if data.completed_tasks:
+        logger.debug(
+            f"Heartbeat from {hostname} reported completed tasks: {data.completed_tasks}"
+        )
+        completed_tasks_in_db: list[Task] = list(
+            Task.select().where(
+                (Task.task_id << data.completed_tasks) & (Task.assigned_node == node)
+            )
+        )
+        for task in completed_tasks_in_db:
+            task.assignment_suspicion_count = 0
+            task.save()
+
+    # --- 2. Reconcile 'assigning' Tasks ---
+    assigning_tasks_on_node: list[Task] = list(
+        Task.select().where((Task.assigned_node == node) & (Task.status == "assigning"))
+    )
+
+    if assigning_tasks_on_node:
+        runner_running_set = set(data.running_tasks)
+        logger.debug(
+            f"Reconciling {len(assigning_tasks_on_node)} assigning tasks on "
+            f"{hostname}. Runner reports running: {runner_running_set}"
+        )
+
+        for task in assigning_tasks_on_node:
+            if task.task_id not in runner_running_set:
+                # Task is 'assigning' in DB, but runner doesn't report it running
+                if task.assignment_suspicion_count == 0:
+                    task.assignment_suspicion_count = 1
+                    logger.warning(
+                        f"Task {task.task_id} (on {hostname}) is 'assigning' "
+                        "but not reported running by runner. Marked as suspect (1)."
+                    )
+                elif task.assignment_suspicion_count == 1:
+                    task.assignment_suspicion_count = 2
+                    task.status = "failed"  # Or "lost"? "failed" seems appropriate
+                    task.error_message = (
+                        f"Task assignment failed. Runner {hostname} "
+                        "did not confirm start after multiple checks."
+                    )
+                    task.completed_at = now
+                    task.exit_code = -1  # Indicate abnormal termination
+                    logger.error(
+                        f"Task {task.task_id} (on {hostname}) failed assignment. "
+                        "Runner did not confirm start. Marked as failed (suspect 2)."
+                    )
+            else:
+                task.assignment_suspicion_count = 0
+            task.save()
+
+    # --- 3. Clear suspicion for tasks that transitioned out of 'assigning' ---
+    # (Could be handled by /update endpoint calls too, but double-check here)
+    suspicious_tasks_on_node: list[Task] = list(
+        Task.select().where(
+            (Task.assigned_node == node)
+            & (Task.status != "assigning")  # No longer assigning
+            & (Task.assignment_suspicion_count > 0)
+        )
+    )
+    for task in suspicious_tasks_on_node:
+        task.assignment_suspicion_count = 0
+        task.save()
+
+    return {
+        "message": "Heartbeat received",
+    }
 
 
 @app.get("/tasks")
@@ -359,6 +434,13 @@ async def update_task_status(update: TaskStatusUpdate):
     elif update.status in final_states and not task.completed_at:
         task.completed_at = datetime.datetime.now()
 
+    if task.assignment_suspicion_count > 0:
+        logger.info(
+            f"Clearing assignment suspicion for task {task.task_id} "
+            f"due to status update '{update.status}'."
+        )
+        task.assignment_suspicion_count = 0
+
     task.save()
     logger.info(f"Task {update.task_id} status updated to {update.status} in DB.")
 
@@ -402,6 +484,7 @@ async def get_task_status(task_id: int):
         "submitted_at": (task.submitted_at.isoformat() if task.submitted_at else None),
         "started_at": task.started_at.isoformat() if task.started_at else None,
         "completed_at": (task.completed_at.isoformat() if task.completed_at else None),
+        "assignment_suspicion_count": task.assignment_suspicion_count,
     }
     return response
 

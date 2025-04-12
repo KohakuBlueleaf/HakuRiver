@@ -35,6 +35,7 @@ class Task(BaseModel):
     submitted_at = peewee.DateTimeField(default=datetime.datetime.now)
     started_at = peewee.DateTimeField(null=True)
     completed_at = peewee.DateTimeField(null=True)
+    assignment_suspicion_count = peewee.IntegerField(default=0)
 
     def get_arguments(self):
         try:

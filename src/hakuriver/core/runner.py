@@ -16,8 +16,6 @@ from hakuriver.utils.config_loader import settings
 class RunnerConfig:
     # This needs to happen before setting up logging if log filename includes hostname
     RUNNER_HOSTNAME = socket.gethostname()
-
-    # --- Configuration from settings ---
     # Network
     HOST_ADDRESS = settings["network"]["host_reachable_address"]
     HOST_PORT = settings["network"]["host_port"]
@@ -34,7 +32,6 @@ class RunnerConfig:
 RunnerConfig = RunnerConfig()
 
 
-# --- Pydantic Models (remain the same) ---
 class TaskInfo(BaseModel):
     task_id: int
     command: str
@@ -54,7 +51,13 @@ class TaskStatusUpdate(BaseModel):
     completed_at: datetime.datetime | None = None
 
 
+class HeartbeatData(BaseModel):
+    running_tasks: list[int]
+    completed_tasks: list[int]
+
+
 # --- Global State ---
+just_completed_tasks = set()
 running_processes = {}  # task_id -> asyncio.subprocess.Process
 try:
     runner_ip = socket.gethostbyname(RunnerConfig.RUNNER_HOSTNAME)
@@ -169,8 +172,9 @@ async def run_task_background(task_info: TaskInfo):
             exit_code = await process.wait()
             completion_time = datetime.datetime.now()
 
-            if task_id in running_processes:  # Should normally be true here
+            if task_id in running_processes:
                 del running_processes[task_id]
+                just_completed_tasks.add(task_id)  # Add to set for next heartbeat
 
         if exit_code == 0:
             status = "completed"
@@ -237,11 +241,22 @@ async def run_task_background(task_info: TaskInfo):
 async def send_heartbeat():
     while True:
         await asyncio.sleep(RunnerConfig.HEARTBEAT_INTERVAL_SECONDS)
+        current_running_ids = list(running_processes.keys())
+        completed_ids_to_send = []
+        # Copy the set and clear the original atomically
+        if just_completed_tasks:
+            completed_ids_to_send = list(just_completed_tasks)
+            just_completed_tasks.clear()
+
+        heartbeat_payload = HeartbeatData(
+            running_tasks=current_running_ids, completed_tasks=completed_ids_to_send
+        )
         # logger.debug(f"Sending heartbeat to {RunnerConfig.HOST_URL}") # Too verbose for INFO level
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.put(
                     f"{RunnerConfig.HOST_URL}/heartbeat/{RunnerConfig.RUNNER_HOSTNAME}",
+                    json=heartbeat_payload.model_dump(mode="json"),
                     timeout=10.0,
                 )
                 response.raise_for_status()
@@ -250,16 +265,34 @@ async def send_heartbeat():
             logger.warning(
                 f"Failed to send heartbeat to host {RunnerConfig.HOST_URL}: {e}"
             )
+            # --- If heartbeat fails, put completed tasks back ---
+            if completed_ids_to_send:
+                just_completed_tasks.update(completed_ids_to_send)
+                logger.warning(
+                    f"Re-added {len(completed_ids_to_send)} completed task IDs to report on next successful heartbeat."
+                )
+            # ---------------------------------------------------
         except httpx.HTTPStatusError as e:
             logger.warning(
-                f"Host {RunnerConfig.HOST_URL} rejected "
-                f"heartbeat: {e.response.status_code} - {e.response.text}"
+                f"Host {RunnerConfig.HOST_URL} rejected heartbeat: {e.response.status_code} - {e.response.text}"
             )
             if e.response.status_code == 404:
                 logger.warning("Node seems unregistered, attempting to re-register...")
                 await register_with_host()
+            # Re-add completed tasks on host error too
+            if completed_ids_to_send:
+                just_completed_tasks.update(completed_ids_to_send)
+                logger.warning(
+                    f"Re-added {len(completed_ids_to_send)} completed task IDs to report on next successful heartbeat."
+                )
         except Exception as e:
             logger.exception(f"Unexpected error sending heartbeat: {e}")
+            # Re-add completed tasks on unexpected error too
+            if completed_ids_to_send:
+                just_completed_tasks.update(completed_ids_to_send)
+                logger.warning(
+                    f"Re-added {len(completed_ids_to_send)} completed task IDs to report on next successful heartbeat."
+                )
 
 
 async def register_with_host():
@@ -345,6 +378,7 @@ async def kill_task_endpoint(
         logger.warning(
             f"Kill request for task {task_id}, but process not found (maybe already finished?)."
         )
+        just_completed_tasks.add(task_id)
         # Report 'killed' status to host anyway, as requested
         await report_status_to_host(
             TaskStatusUpdate(
@@ -407,6 +441,7 @@ async def kill_task_endpoint(
         # Remove from running list only after handling kill/termination
         if task_id in running_processes:
             del running_processes[task_id]
+        just_completed_tasks.add(task_id)
 
     except ProcessLookupError:
         logger.warning(
