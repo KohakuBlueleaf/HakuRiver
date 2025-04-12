@@ -4,8 +4,6 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-<!-- 你可以未來加入 CI/CD 或版本徽章 -->
-
 A simple, multi-node resource management tool designed for distributing tasks across compute nodes, focusing on CPU core allocation.
 
 HakuRiver is a self-hosted cluster manager ideal for small research clusters, development environments, or internal batch processing systems where full-featured HPC schedulers like Slurm might be overkill. It allows users to submit arbitrary commands, manage their execution based on available CPU cores, and monitor their status.
@@ -27,11 +25,9 @@ HakuRiver is a self-hosted cluster manager ideal for small research clusters, de
 
 ## ✨ Features
 
-* **Dedicated Host Coordination:** A central host server orchestrates the cluster, tracking compute nodes, available resources, and managing the lifecycle of submitted tasks. It can run on a dedicated machine, not requiring resources from compute nodes.
 * **CPU-Focused Resource Allocation:** Designed primarily for CPU-bound tasks, allowing jobs to request exclusive access to a specific number of CPU cores on a compute node. Core pinning via `numactl` is supported for enhanced performance and isolation (if `numactl` is available and configured).
 * **Persistent Task and Node Records:** The host maintains a persistent record of compute nodes and submitted tasks, including their status, assigned node, and output locations, facilitating tracking even after client disconnection.
 * **Node Health Awareness:** Includes a basic heartbeat mechanism allowing the host to detect unresponsive runner nodes and appropriately mark tasks that were assigned to them.
-* **Built for Shared Environments:** Operates effectively within environments using a shared storage (`shared_dir`) / local temporary storage (`local_temp_dir`) topology, ensuring scripts and data are accessible while providing fast local disk for computation.
 * **Standalone Argument Spanning Utility (`hakurun`):** Includes a convenient command-line utility, `hakurun`, for locally generating and running multiple variations of a command or Python script. It supports expanding arguments using range (`span:{start..end}`) or list (`span:[a,b]`) syntax, creating the Cartesian product of all combinations. Tasks can be executed sequentially or in parallel (`--parallel`) via subprocesses. This is ideal for simple parameter sweeps or testing variations before submitting larger workloads to the HakuRiver cluster.
   * **Benefit for Python Multiprocessing:** When `hakurun` is used to invoke a Python module or function (e.g., `hakurun my_module:my_func ...` or `hakurun my_module ...`), the child processes spawned (either by `hakurun` itself with `--parallel` or by the target script using `multiprocessing` or `ProcessPoolExecutor`) inherit `hakurun.run` as their entry point. This avoids common pitfalls associated with the `if __name__ == "__main__":` guard in the *target* script, preventing redundant module imports or re-initialization of global variables in spawned processes, leading to cleaner and more robust parallel Python execution.
 
@@ -61,7 +57,7 @@ HakuRiver is a self-hosted cluster manager ideal for small research clusters, de
    pip install .
    ```
 
-   This will make the `hakuriver.host`, `hakuriver.runner`, and `hakuriver.client` commands available in your environment.
+   This will make the `hakurun`, `hakuriver.host`, `hakuriver.runner `, and `hakuriver.client` commands available in your environment.
 
 ### Usage - Hakurun
 
@@ -143,46 +139,46 @@ hakurun --parallel python ./demo_hakurun.py "span:{1..2}" "fixed_arg" "span:[inp
 **2. Start the Host Server (on the manager node):**
 
 ```bash
-   hakuriver.host
-   # Or with a custom config:
-   # hakuriver.host --config /path/to/host_config.toml
+hakuriver.host
+# Or with a custom config:
+# hakuriver.host --config /path/to/host_config.toml
 ```
 
 **3. Start the Runner Agent (on each compute node):**
 
 ```bash
-   hakuriver.runner
-   # Or with a custom config:
-   # hakuriver.runner --config /path/to/runner_config.toml
+hakuriver.runner
+# Or with a custom config:
+# hakuriver.runner --config /path/to/runner_config.toml
 ```
 
 **4. Use the Client:**
 
 ```bash
-   # List nodes
-   hakuriver.client --list-nodes
+# List nodes
+hakuriver.client --list-nodes
 
-   # Submit a simple task requesting 1 core and wait
-   # Note the use of '--' to separate client options from the command if needed
-   hakuriver.client --cores 1 --wait -- python -V
+# Submit a simple task requesting 1 core and wait
+# Note the use of '--' to separate client options from the command if needed
+hakuriver.client --cores 1 --wait -- python -V
 
-   # Submit a task with arguments and environment variables
-   hakuriver.client --cores 4 --env MY_VAR=ABC --env OTHER_VAR=123 -- my_job.sh --input data.txt
+# Submit a task with arguments and environment variables
+hakuriver.client --cores 4 --env MY_VAR=ABC --env OTHER_VAR=123 -- my_job.sh --input data.txt
 
-   # Check task status
-   hakuriver.client --status <task_id_uuid>
+# Check task status
+hakuriver.client --status <task_id>
 
-   # Kill a task
-   hakuriver.client --kill <task_id_uuid>
+# Kill a task
+hakuriver.client --kill <task_id>
 
-   # Use a custom config for the client
-   hakuriver.client --config client.toml --list-nodes
+# Use a custom config for the client
+hakuriver.client --config client.toml --list-nodes
 
-   # Combine multiple command into one job
-   hakuriver.client --cores 4 -- hakurun python -c "span:[print(1), print(2), print(3), print(4)]"
+# Combine multiple command into one job
+hakuriver.client --cores 4 -- hakurun python -c "span:[print(1), print(2), print(3), print(4)]"
 
-   # Submit multiple command as multiple job
-   hakurun hakuriver.client --cores 1 -- python -c "span:[print(1), print(2), print(3), print(4)]"
+# Submit multiple command as multiple job
+hakurun hakuriver.client --cores 1 -- python -c "span:[print(1), print(2), print(3), print(4)]"
 ```
 
 ## Acknowledgement
