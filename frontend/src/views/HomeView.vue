@@ -1,16 +1,16 @@
 <template>
   <div>
-    <!-- Title can be moved to a header if desired, or keep it here -->
     <h1 class="page-title">Cluster Overview</h1>
 
     <el-row :gutter="20">
-      <!-- Nodes Summary Card -->
-      <el-col :xs="24" :sm="12" :md="8">
-        <el-card shadow="hover" class="info-card">
+      <!-- Column 1: Stacked Summary Cards -->
+      <el-col :xs="24" :sm="24" :md="12">
+        <!-- Nodes Summary Card -->
+        <el-card shadow="hover" class="info-card" style="margin-bottom: 20px">
           <template #header>
             <div class="card-header">
               <span>Nodes</span>
-              <el-button @click="fetchNodes" :loading="isLoadingNodes" text size="small">Refresh</el-button>
+              <el-button @click="fetchNodes" :loading="isLoadingNodes" text size="small" :icon="RefreshRight" />
             </div>
           </template>
           <div v-loading="isLoadingNodes">
@@ -38,15 +38,13 @@
             </el-row>
           </div>
         </el-card>
-      </el-col>
 
-      <!-- Cores Summary Card -->
-      <el-col :xs="24" :sm="12" :md="8">
-        <el-card shadow="hover" class="info-card">
+        <!-- Cores Summary Card -->
+        <el-card shadow="hover" class="info-card" style="margin-bottom: 20px">
           <template #header>
             <div class="card-header">
               <span>CPU Cores (Online Nodes)</span>
-              <el-button @click="fetchNodes" :loading="isLoadingNodes" text size="small">Refresh</el-button>
+              <el-button @click="fetchNodes" :loading="isLoadingNodes" text size="small" :icon="RefreshRight" />
             </div>
           </template>
           <div v-loading="isLoadingNodes">
@@ -68,15 +66,13 @@
             </el-row>
           </div>
         </el-card>
-      </el-col>
 
-      <!-- Tasks Summary Card -->
-      <el-col :xs="24" :sm="12" :md="8">
-        <el-card shadow="hover" class="info-card">
+        <!-- Tasks Summary Card -->
+        <el-card shadow="hover" class="info-card" style="margin-bottom: 20px">
           <template #header>
             <div class="card-header">
               <span>Tasks Overview</span>
-              <el-button @click="fetchTasks" :loading="isLoadingTasks" text size="small">Refresh</el-button>
+              <el-button @click="fetchTasks" :loading="isLoadingTasks" text size="small" :icon="RefreshRight" />
             </div>
           </template>
           <div v-loading="isLoadingTasks">
@@ -110,12 +106,40 @@
           </div>
         </el-card>
       </el-col>
+
+      <!-- Column 2: About Card -->
+      <el-col :xs="24" :sm="24" :md="12">
+        <el-card shadow="hover" class="info-card about-card">
+          <template #header>
+            <div class="card-header">
+              <span>About HakuRiver</span>
+            </div>
+          </template>
+          <div>
+            <p>
+              HakuRiver is a lightweight, self-hosted CPU cluster manager designed for distributing and managing command-line
+              tasks across multiple compute nodes.
+            </p>
+            <p>
+              It focuses on simple CPU core allocation and basic job lifecycle management, suitable for small clusters or
+              development environments.
+            </p>
+            <el-divider />
+            <el-link type="primary" href="https://github.com/KohakuBlueleaf/HakuRiver" target="_blank" :icon="LinkIcon">
+              <!-- Using el-link for better styling -->
+              GitHub Repository
+            </el-link>
+          </div>
+        </el-card>
+      </el-col>
     </el-row>
 
-    <!-- Welcome Message Card -->
+    <!-- Welcome Message Card REMOVED -->
+    <!--
     <el-card shadow="never" style="margin-top: 20px">
       <p>Welcome to the HakuRiver dashboard. Use the sidebar navigation to manage compute nodes and tasks.</p>
     </el-card>
+    -->
   </div>
 </template>
 
@@ -123,21 +147,21 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import api from '@/services/api';
 // Ensure necessary icons are imported
-import { Warning, CircleClose } from '@element-plus/icons-vue';
+import { Warning, CircleClose, RefreshRight, Link as LinkIcon } from '@element-plus/icons-vue'; // Added RefreshRight and Link
 
 // --- State for Nodes ---
 const nodes = ref([]);
 const isLoadingNodes = ref(false);
 const nodeError = ref(null);
 let nodePollingInterval = null;
-const NODE_POLLING_RATE_MS = 8000; // Poll node status less frequently perhaps
+const NODE_POLLING_RATE_MS = 8000;
 
 // --- State for Tasks ---
 const tasks = ref([]);
 const isLoadingTasks = ref(false);
 const taskError = ref(null);
 let taskPollingInterval = null;
-const TASK_POLLING_RATE_MS = 5000; // Poll tasks more frequently?
+const TASK_POLLING_RATE_MS = 5000;
 const backendHasGetTasks = ref(typeof api.getTasks === 'function');
 
 // --- Fetch Nodes Function ---
@@ -225,7 +249,7 @@ onUnmounted(() => {
 
 <style scoped>
 .page-title {
-  margin-bottom: 25px; /* Add space below title */
+  margin-bottom: 25px;
   color: var(--el-text-color-primary);
   font-weight: 500;
 }
@@ -234,15 +258,21 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-weight: 500; /* Slightly bolder header */
+  font-weight: 500;
+}
+/* Ensure refresh icon button doesn't take too much space */
+.info-card .card-header .el-button {
+  padding: 0; /* Remove padding for icon-only button */
+  min-height: unset; /* Override default min height */
+  margin-left: 10px; /* Add some space */
 }
 
 .info-card .el-statistic .el-statistic__head {
-  color: var(--el-text-color-secondary); /* Lighter color for statistic title in dark mode */
-  font-size: 0.9em; /* Slightly smaller title */
+  color: var(--el-text-color-secondary);
+  font-size: 0.9em;
 }
 .info-card .el-statistic .el-statistic__content {
-  font-size: 1.8em; /* Larger number */
+  font-size: 1.8em;
   font-weight: 600;
 }
 
@@ -251,11 +281,31 @@ onUnmounted(() => {
 }
 
 .stats-row {
-  text-align: center; /* Center statistics within their columns */
+  text-align: center;
 }
 
+/* Ensure spacing for stacked cards on smaller screens */
 .info-card {
-  margin-bottom: 20px; /* Ensure spacing on smaller screens */
+  margin-bottom: 20px;
+}
+/* Override margin for last card in a column on small screens if needed */
+@media (max-width: 991px) {
+  /* Adjust breakpoint for md if necessary */
+  .info-card:last-child {
+    margin-bottom: 0;
+  }
+}
+
+/* Style the About card */
+.about-card p {
+  margin-top: 0;
+  margin-bottom: 1em;
+  line-height: 1.6;
+  font-size: 0.95em;
+  color: var(--el-text-color-regular);
+}
+.about-card .el-divider {
+  margin: 16px 0;
 }
 
 /* Adjust suffix icon alignment */
