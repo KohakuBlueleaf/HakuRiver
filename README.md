@@ -32,6 +32,8 @@ HakuRiver is a self-hosted cluster manager ideal for small research clusters, de
 * **Persistent Task and Node Records:** The host maintains a persistent record of compute nodes and submitted tasks, including their status, assigned node, and output locations, facilitating tracking even after client disconnection.
 * **Node Health Awareness:** Includes a basic heartbeat mechanism allowing the host to detect unresponsive runner nodes and appropriately mark tasks that were assigned to them.
 * **Built for Shared Environments:** Operates effectively within environments using a shared storage (`shared_dir`) / local temporary storage (`local_temp_dir`) topology, ensuring scripts and data are accessible while providing fast local disk for computation.
+* **Standalone Argument Spanning Utility (`hakurun`):** Includes a convenient command-line utility, `hakurun`, for locally generating and running multiple variations of a command or Python script. It supports expanding arguments using range (`span:{start..end}`) or list (`span:[a,b]`) syntax, creating the Cartesian product of all combinations. Tasks can be executed sequentially or in parallel (`--parallel`) via subprocesses. This is ideal for simple parameter sweeps or testing variations before submitting larger workloads to the HakuRiver cluster.
+  * **Benefit for Python Multiprocessing:** When `hakurun` is used to invoke a Python module or function (e.g., `hakurun my_module:my_func ...` or `hakurun my_module ...`), the child processes spawned (either by `hakurun` itself with `--parallel` or by the target script using `multiprocessing` or `ProcessPoolExecutor`) inherit `hakurun.run` as their entry point. This avoids common pitfalls associated with the `if __name__ == "__main__":` guard in the *target* script, preventing redundant module imports or re-initialization of global variables in spawned processes, leading to cleaner and more robust parallel Python execution.
 
 ## 🏗️ Architecture Overview
 
@@ -47,16 +49,19 @@ HakuRiver is a self-hosted cluster manager ideal for small research clusters, de
 ### Installation
 
 1. Clone the repository:
-    ```bash
-    git clone https://github.com/KohakuBlueleaf/HakuRiver.git
-    cd HakuRiver
-    ```
+
+   ```bash
+   git clone https://github.com/KohakuBlueleaf/HakuRiver.git
+   cd HakuRiver
+   ```
 2. Install the package (preferably in a virtual environment):
-    ```bash
-    # Installs hakuriver and its dependencies specified in pyproject.toml
-    pip install .
-    ```
-    This will make the `hakuriver.host`, `hakuriver.runner`, and `hakuriver.client` commands available in your environment.
+
+   ```bash
+   # Installs hakuriver and its dependencies specified in pyproject.toml
+   pip install .
+   ```
+
+   This will make the `hakuriver.host`, `hakuriver.runner`, and `hakuriver.client` commands available in your environment.
 
 ### Usage - Hakurun
 
@@ -64,11 +69,11 @@ HakuRiver is a self-hosted cluster manager ideal for small research clusters, de
 
 **Key Features:**
 
-*   **Argument Spanning:** Define ranges or lists for arguments, and `hakurun` will generate the Cartesian product of all combinations.
-    *   **Integer Range:** `span:{start..end}` expands to all integers from `start` to `end` (inclusive). Example: `span:{1..3}` becomes `1`, `2`, `3`.
-    *   **List:** `span:[item1, item2, ...]` expands to the provided list items. Example: `span:[alpha,beta]` becomes `"alpha"`, `"beta"`.
-*   **Parallel Execution:** Use the `--parallel` flag to run the generated task combinations concurrently as separate subprocesses.
-*   **Target Flexibility:** Can run Python modules (`my_module`), specific functions within modules (`my_module:my_function`), or general executable scripts/commands.
+* **Argument Spanning:** Define ranges or lists for arguments, and `hakurun` will generate the Cartesian product of all combinations.
+  * **Integer Range:** `span:{start..end}` expands to all integers from `start` to `end` (inclusive). Example: `span:{1..3}` becomes `1`, `2`, `3`.
+  * **List:** `span:[item1, item2, ...]` expands to the provided list items. Example: `span:[alpha,beta]` becomes `"alpha"`, `"beta"`.
+* **Parallel Execution:** Use the `--parallel` flag to run the generated task combinations concurrently as separate subprocesses.
+* **Target Flexibility:** Can run Python modules (`my_module`), specific functions within modules (`my_module:my_function`), or general executable scripts/commands.
 
 **Example:**
 
@@ -87,12 +92,14 @@ print(sys.argv)
 You can run this script with multiple combinations of arguments using `hakurun` with two differnet method
 
 module import:
+
 ```bash
 # Command (runs 2 * 1 * 2 = 4 tasks in parallel)
 hakurun --parallel demo_hakurun "span:{1..2}" "fixed_arg" "span:[input_a, input_b]"
 ```
 
 general script/executable(with python):
+
 ```bash
 hakurun --parallel python ./demo_hakurun.py "span:{1..2}" "fixed_arg" "span:[input_a, input_b]"
 ```
