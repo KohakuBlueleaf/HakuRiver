@@ -27,6 +27,7 @@ Repository = "https://github.com/KohakuBlueleaf/HakuRiver"
 "hakuriver.client" = "hakuriver.cli.client:main"
 "hakuriver.runner" = "hakuriver.cli.runner:main"
 "hakuriver.init" = "hakuriver.cli.init:main"
+"hakurun" = "hakurun.run:runner"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
