@@ -237,7 +237,14 @@ def runner():
 
         try:
             func = import_function(args.app)
-            if func is not None:
+            if isinstance(func, str):
+                # general script calling
+                p = Popen(
+                    [func] + list(single_arg_combination),
+                    cwd=os.getcwd(),
+                )
+                p.wait()
+            elif func is not None:
                 logger.debug(
                     f"Calling function {func.__name__} with args: {single_arg_combination!r}"
                 )
