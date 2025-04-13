@@ -1,0 +1,206 @@
+<svg viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="mainRiverGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color: #0c4a6e; stop-opacity: 1" />
+      <stop offset="50%" style="stop-color: #0ea5e9; stop-opacity: 1" />
+      <stop offset="100%" style="stop-color: #0d9488; stop-opacity: 1" />
+    </linearGradient>
+    
+    <linearGradient id="tributary1Gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color: #1e40af; stop-opacity: 1" />
+      <stop offset="100%" style="stop-color: #0369a1; stop-opacity: 1" />
+    </linearGradient>
+    
+    <linearGradient id="tributary2Gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color: #1e3a8a; stop-opacity: 1" />
+      <stop offset="100%" style="stop-color: #0284c7; stop-opacity: 1" />
+    </linearGradient>
+    
+    <linearGradient id="tributary3Gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color: #0f766e; stop-opacity: 1" />
+      <stop offset="100%" style="stop-color: #0e7490; stop-opacity: 1" />
+    </linearGradient>
+    
+    <linearGradient id="nodeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color: #ffffff; stop-opacity: 1" />
+      <stop offset="100%" style="stop-color: #f0f9ff; stop-opacity: 1" />
+    </linearGradient>
+    
+    <!-- Filters -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    
+    <filter id="textShadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="1" dy="1" stdDeviation="0.8" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+    
+    <filter id="dropShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
+      <feOffset dx="1" dy="2" />
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3" />
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    
+    <filter id="smallGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  
+  <!-- Background Shape -->
+  <rect x="20" y="20" width="560" height="180" rx="15" fill="#f8fafc" filter="url(#dropShadow)" />
+  
+  <!-- Main Logo Group -->
+  <g transform="translate(40, 70)">
+    <!-- Tributary Rivers (coming in from different directions) with CURVES -->
+    <!-- Tributary 1 - Top left -->
+    <path d="M 25 -15 
+             C 40 10, 85 0, 70 35" 
+          fill="none" 
+          stroke="url(#tributary1Gradient)" 
+          stroke-width="5" 
+          stroke-linecap="round"
+          filter="url(#smallGlow)" />
+          
+    <!-- Tributary 2 - Bottom left -->
+    <path d="M 40 95 
+             C 50 75, 0 50, 70 35" 
+          fill="none" 
+          stroke="url(#tributary2Gradient)" 
+          stroke-width="5" 
+          stroke-linecap="round"
+          filter="url(#smallGlow)" />
+    
+    <!-- Tributary 3 - Middle top, moved right to avoid overlap -->
+    <path d="M 190 0 
+             C 175 15, 215 25, 160 35" 
+          fill="none" 
+          stroke="url(#tributary3Gradient)" 
+          stroke-width="5" 
+          stroke-linecap="round"
+          filter="url(#smallGlow)" />
+    
+    <!-- The main "River" flow after merger points -->
+    <path d="M 70 35 
+             C 70 25, 90 70, 100 45 
+             S 100 20, 160 35 
+             S 220 50, 230 40" 
+          fill="none" 
+          stroke="url(#mainRiverGradient)" 
+          stroke-width="8" 
+          stroke-linecap="round"
+          filter="url(#glow)" />
+    
+    <!-- Data flow particles on tributary 1 -->
+    <circle class="particle" cx="30" cy="5" r="2" fill="#38bdf8" opacity="0.8">
+      <animate attributeName="cx" from="25" to="70" dur="1.5s" repeatCount="indefinite" />
+      <animate attributeName="cy" from="0" to="35" dur="1.5s" repeatCount="indefinite" />
+    </circle>
+    
+    <!-- Data flow particles on tributary 2 -->
+    <circle class="particle" cx="45" cy="85" r="2" fill="#38bdf8" opacity="0.8">
+      <animate attributeName="cx" from="40" to="70" dur="1.8s" repeatCount="indefinite" />
+      <animate attributeName="cy" from="95" to="35" dur="1.8s" repeatCount="indefinite" />
+    </circle>
+    
+    <!-- Data flow particles on tributary 3 -->
+    <circle class="particle" cx="195" cy="5" r="2" fill="#38bdf8" opacity="0.8">
+      <animate attributeName="cx" from="190" to="170" dur="1.2s" repeatCount="indefinite" />
+      <animate attributeName="cy" from="0" to="35" dur="1.2s" repeatCount="indefinite" />
+    </circle>
+    
+    <!-- Data flow particles on main river -->
+    <circle class="particle" cx="90" cy="30" r="3" fill="#38bdf8" opacity="0.9">
+      <animate attributeName="cx" from="70" to="230" dur="4s" repeatCount="indefinite" />
+      <animate attributeName="cy" 
+               values="35;25;50;40" 
+               dur="4s" 
+               repeatCount="indefinite" 
+               calcMode="spline"
+               keySplines="0.5 0 0.5 1; 0.5 0 0.5 1; 0.5 0 0.5 1" />
+    </circle>
+    
+    <circle class="particle" cx="120" cy="40" r="2.5" fill="#7dd3fc" opacity="0.8">
+      <animate attributeName="cx" from="70" to="230" dur="4.5s" begin="0.2s" repeatCount="indefinite" />
+      <animate attributeName="cy" 
+               values="35;60;40" 
+               dur="4.5s" 
+               begin="0.2s"
+               repeatCount="indefinite" 
+               calcMode="spline"
+               keySplines="0.5 0 0.5 1; 0.5 0 0.5 1" />
+    </circle>
+    
+    <circle class="particle" cx="160" cy="35" r="2" fill="#a5f3fc" opacity="0.7">
+      <animate attributeName="cx" from="190" to="230" dur="2s" begin="0.5s" repeatCount="indefinite" />
+      <animate attributeName="cy" 
+               values="35;38;40" 
+               dur="2s" 
+               begin="0.5s"
+               repeatCount="indefinite" 
+               calcMode="spline"
+               keySplines="0.5 0 0.5 1; 0.5 0 0.5 1" />
+    </circle>
+    
+    <!-- Node Clusters -->
+    <!-- Node at the first tributary merger point -->
+    <g class="node" transform="translate(70, 35)">
+      <circle cx="0" cy="0" r="12" fill="url(#nodeGradient)" stroke="#0c4a6e" stroke-width="2.5" />
+      <circle cx="-3" cy="-3" r="3" fill="#0ea5e9" opacity="0.8" />
+      <circle cx="3" cy="3" r="3" fill="#0ea5e9" opacity="0.8" />
+    </g>
+    
+    <!-- Node at the second tributary merger point, moved right -->
+    <g class="node" transform="translate(160, 35)">
+      <circle cx="0" cy="0" r="12" fill="url(#nodeGradient)" stroke="#0891b2" stroke-width="2.5" />
+      <circle cx="-4" cy="-4" r="3" fill="#06b6d4" opacity="0.8" />
+      <circle cx="4" cy="4" r="3" fill="#06b6d4" opacity="0.8" />
+      <circle cx="4" cy="-4" r="3" fill="#06b6d4" opacity="0.8" />
+      <circle cx="-4" cy="4" r="3" fill="#06b6d4" opacity="0.8" />
+    </g>
+    
+    <!-- Final node (last one in the flow, removed redundant node) -->
+    <g class="node" transform="translate(230, 40)">
+      <circle cx="0" cy="0" r="12" fill="url(#nodeGradient)" stroke="#0f766e" stroke-width="2.5" />
+      <circle cx="-3" cy="-3" r="2.5" fill="#14b8a6" opacity="0.8" />
+      <circle cx="3" cy="3" r="2.5" fill="#14b8a6" opacity="0.8" />
+      <circle cx="3" cy="-3" r="2.5" fill="#14b8a6" opacity="0.8" />
+      <circle cx="-3" cy="3" r="2.5" fill="#14b8a6" opacity="0.8" />
+      <circle cx="0" cy="0" r="2" fill="#14b8a6" opacity="0.8" />
+    </g>
+    
+    <!-- Source nodes on the tributaries -->
+    <g class="node" transform="translate(25, -15)">
+      <circle cx="0" cy="0" r="8" fill="url(#nodeGradient)" stroke="#1e40af" stroke-width="2" />
+      <circle cx="0" cy="0" r="2.5" fill="#3b82f6" opacity="0.8" />
+    </g>
+    
+    <g class="node" transform="translate(40, 95)">
+      <circle cx="0" cy="0" r="8" fill="url(#nodeGradient)" stroke="#1e3a8a" stroke-width="2" />
+      <circle cx="0" cy="0" r="2.5" fill="#60a5fa" opacity="0.8" />
+    </g>
+    
+    <g class="node" transform="translate(190, 0)">
+      <circle cx="0" cy="0" r="8" fill="url(#nodeGradient)" stroke="#0f766e" stroke-width="2" />
+      <circle cx="0" cy="0" r="2.5" fill="#2dd4bf" opacity="0.8" />
+    </g>
+  </g>
+  
+  <!-- Project Name and Tagline, moved left to align properly -->
+  <g transform="translate(320, 100)">
+    <text font-family="'Segoe UI', Tahoma, sans-serif" font-size="42" font-weight="700" fill="#0c4a6e" filter="url(#textShadow)">
+      HakuRiver
+    </text>
+    <text y="30" font-family="'Segoe UI', Tahoma, sans-serif" font-size="16" font-weight="400" fill="#334155">
+      Mini Resource Orchestrator
+    </text>
+  </g>
+</svg>
