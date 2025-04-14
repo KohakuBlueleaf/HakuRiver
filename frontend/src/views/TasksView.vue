@@ -12,6 +12,8 @@
       width="600px"
       :close-on-click-modal="false"
       @closed="resetForm"
+      top="5vh"
+      draggable
     >
       <el-form
         ref="taskFormRef"
@@ -43,11 +45,46 @@ OTHER_VAR=123"
           />
           <el-text size="small" type="info">Variables are split by newline, format KEY=VALUE.</el-text>
         </el-form-item>
-        <el-form-item label="Required CPU Cores" prop="required_cores">
-          <el-input-number v-model="taskForm.required_cores" :min="1" :max="maxCoresHint" controls-position="right" />
-          <!-- Optional: Show max available cores hint -->
-          <!-- <el-text size="small" type="info"> Max hint: {{ maxCoresHint }} </el-text> -->
-        </el-form-item>
+
+        <!-- Resource Requirements Row -->
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="Required CPU Cores" prop="required_cores">
+              <el-input-number v-model="taskForm.required_cores" :min="1" controls-position="right" style="width: 100%;" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <!-- MODIFIED: Added Memory Limit Input -->
+            <el-form-item label="Memory Limit (Optional)" prop="memory_limit_str">
+               <el-input v-model="taskForm.memory_limit_str" placeholder="e.g., 512M, 4G" clearable>
+                  <template #append>MB/GB</template>
+               </el-input>
+               <el-text size="small" type="info">Examples: 512M, 4G, 2048K. No suffix means bytes.</el-text>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- MODIFIED: Added Sandboxing Options -->
+         <el-card shadow="never" style="margin-top: 10px; background-color: var(--el-fill-color-lighter);">
+             <template #header>
+                <div class="card-header" style="font-weight: normal; font-size: 0.95em;">
+                    <span>Sandboxing Options (via systemd)</span>
+                </div>
+             </template>
+             <el-row :gutter="20">
+                <el-col :span="12">
+                    <el-tooltip content="Uses systemd PrivateNetwork=yes. Task cannot access network." placement="top">
+                      <el-checkbox v-model="taskForm.use_private_network" label="Isolate Network" size="large" border />
+                    </el-tooltip>
+                </el-col>
+                 <el-col :span="12">
+                     <el-tooltip content="Uses systemd PrivatePID=yes. Task cannot see other processes." placement="top">
+                       <el-checkbox v-model="taskForm.use_private_pid" label="Isolate Processes (PID)" size="large" border />
+                    </el-tooltip>
+                </el-col>
+             </el-row>
+         </el-card>
+
       </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -276,16 +313,37 @@ const backendHasGetTasks = ref(typeof api.getTasks === 'function'); // Check if 
 const submitDialogVisible = ref(false);
 const taskFormRef = ref(null); // Reference to the ElForm component
 const isSubmitting = ref(false);
+// MODIFIED: Update taskForm
 const taskForm = reactive({
   command: '',
-  arguments_text: '', // Use textareas for multi-line input
+  arguments_text: '',
   env_vars_text: '',
   required_cores: 1,
+  memory_limit_str: '', // Input as string (e.g., "512M")
+  use_private_network: false,
+  use_private_pid: false,
 });
-// Simple validation rules
+
+// MODIFIED: Add custom validator for memory string
+const validateMemoryString = (rule, value, callback) => {
+    if (!value) {
+        callback(); // Optional field
+        return;
+    }
+    // Basic regex for format like 123, 123K, 123M, 123G (case-insensitive)
+    const memRegex = /^\d+([kmg]?)$/i;
+    if (!memRegex.test(value.trim())) {
+        callback(new Error('Invalid format. Use numbers with optional K, M, G suffix (e.g., 512M, 4G)'));
+    } else {
+        callback();
+    }
+};
+
 const taskFormRules = reactive({
   command: [{ required: true, message: 'Command is required', trigger: 'blur' }],
   required_cores: [{ required: true, message: 'Number of cores is required', trigger: 'blur' }],
+  // MODIFIED: Add rule for memory string format
+  memory_limit_str: [{ validator: validateMemoryString, trigger: 'blur' }]
 });
 
 const killingState = reactive({}); // Track loading state for individual kill buttons
@@ -299,6 +357,33 @@ const isLoadingStdout = ref(false);
 const isLoadingStderr = ref(false);
 const stdoutError = ref(null);
 const stderrError = ref(null);
+
+// --- Helper Functions ---
+// MODIFIED: Helper to parse memory string from form to bytes
+const parseMemoryToBytes = (memStr) => {
+    if (!memStr) return null;
+    const str = memStr.trim().toUpperCase();
+    const match = str.match(/^(\d+)([KMG]?)$/);
+    if (!match) return null; // Invalid format already handled by validator, but double check
+
+    const val = parseInt(match[1], 10);
+    const unit = match[2];
+
+    if (unit === 'G') return val * 1024 * 1024 * 1024;
+    if (unit === 'M') return val * 1024 * 1024;
+    if (unit === 'K') return val * 1024;
+    return val; // Bytes
+};
+
+// MODIFIED: Helper to format bytes nicely for table/details
+const formatBytesForTable = (bytes) => {
+    if (bytes === null || bytes === undefined) return 'N/A';
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+};
 
 // --- API Functions ---
 
@@ -316,7 +401,13 @@ const fetchTasks = async () => {
   taskError.value = null;
   try {
     const response = await api.getTasks();
-    tasks.value = response.data;
+    tasks.value = response.data.map(task => ({
+        ...task,
+        required_memory_bytes: task.required_memory_bytes ?? null,
+        use_private_network: task.use_private_network ?? false,
+        use_private_pid: task.use_private_pid ?? false,
+        systemd_unit_name: task.systemd_unit_name ?? null,
+    }));
   } catch (err) {
     console.error('Error fetching tasks:', err);
     taskError.value = 'Failed to fetch task list.';
@@ -342,12 +433,16 @@ const submitTaskApi = async (formData) => {
         acc[key.trim()] = valueParts.join('=').trim();
         return acc;
       }, {});
+    const memoryBytes = parseMemoryToBytes(formData.memory_limit_str);
 
     const payload = {
       command: formData.command,
       arguments: argsList,
       env_vars: envDict,
       required_cores: formData.required_cores,
+      required_memory_bytes: memoryBytes, // Send parsed bytes
+      use_private_network: formData.use_private_network,
+      use_private_pid: formData.use_private_pid,
     };
 
     const response = await api.submitTask(payload);
