@@ -16,6 +16,10 @@ dependencies = [
     "peewee",
     "fastapi",
     "httpx",
+    "psutil",
+    "toml",
+    "uvicorn",
+    "snowflake-id"
 ]
 
 [project.urls]
