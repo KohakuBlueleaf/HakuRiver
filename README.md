@@ -205,9 +205,9 @@ hakurun hakuriver.client --cores 1 --memory 256M -- python -c "import sys; print
 
 ### Usage - Frontend Web UI (Experimental)
 
-| Preview of Manager UI                                                                                 | Submit Task from Manager UI (Shows new options) |
-| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| ![](image/README/1744479249596.png) ![](image/README/1744479260958.png) ![](image/README/1744479580795.png) | ![](image/README/1744479964991.png)               |
+| Overview | Node list and Task list | Submit Task from Manager UI |
+| -|-|-|
+|![1744643963836](image/README/1744643963836.png)| ![1744643981874](image/README/1744643981874.png) ![1744643997740](image/README/1744643997740.png) | ![1744644009190](image/README/1744644009190.png)|
 
 HakuRiver includes an optional web-based dashboard built with Vue.js and Element Plus for visual monitoring and management.
 
