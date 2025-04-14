@@ -1,3 +1,4 @@
+import getpass
 import os
 import httpx
 import socket
@@ -134,7 +135,7 @@ async def run_task_background(task_info: TaskInfo):
         "--scope",  # Run as a transient scope unit
         "--collect",  # Garbage collect unit when process exits
         f"--property=User=kblueleaf",  # Run as the current user (or specify another user)
-        f"--unit={unit_name}",
+        f"--unit={getpass.getuser()}",
         # Basic description
         f"--description=HakuRiver Task {task_id}: {shlex.quote(task_info.command)}",
     ]
