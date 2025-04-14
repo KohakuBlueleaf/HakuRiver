@@ -123,7 +123,7 @@ async def report_status_to_host(update_data: TaskStatusUpdate):
 
 async def run_task_background(task_info: TaskInfo):
     task_id = task_info.task_id
-    unit_name = f"hakuriver-task-{task_id}.scope"
+    unit_name = f"hakuriver-task-{task_id}"
     start_time = datetime.datetime.now()
 
     # --- Construct systemd-run command ---
@@ -132,8 +132,8 @@ async def run_task_background(task_info: TaskInfo):
         "systemd-run",
         "--scope",  # Run as a transient scope unit
         "--collect",  # Garbage collect unit when process exits
-        f"--property=User=kblueleaf",  # Run as the current user (or specify another user)
-        f"--unit={getpass.getuser()}",
+        f"--property=User={getpass.getuser()}",  # Run as the current user (or specify another user)
+        f"--unit={unit_name}",
         # Basic description
         f"--description=HakuRiver Task {task_id}: {shlex.quote(task_info.command)}",
     ]
@@ -170,7 +170,7 @@ async def run_task_background(task_info: TaskInfo):
     if task_info.use_private_network:
         systemd_run_cmd.append("--property=PrivateNetwork=yes")
     if task_info.use_private_pid:
-        systemd_run_cmd.append("--property=PrivatePID=yes")
+        systemd_run_cmd.append("--property=PrivatePIDs=yes")
 
     # Working Directory (Optional - run in shared or temp?)
     # systemd_run_cmd.append(f'--property=WorkingDirectory={RunnerConfig.SHARED_DIR}') # Example
@@ -210,6 +210,13 @@ async def run_task_background(task_info: TaskInfo):
             stdout=asyncio.subprocess.PIPE,  # Capture systemd-run's output/errors
             stderr=asyncio.subprocess.PIPE,
         )
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="running",
+                started_at=start_time,
+            )
+        )
 
         # Store info immediately, even before systemd-run finishes
         running_processes[task_id] = {
@@ -225,17 +232,21 @@ async def run_task_background(task_info: TaskInfo):
 
         if exit_code == 0:
             logger.info(
-                f"systemd-run successfully launched unit {unit_name} for task {task_id}."
+                f"systemd-run unit {unit_name} for task {task_id} "
+                "successfully executed, task is done."
             )
-            # Task is now considered "running" from the runner's perspective
-            status = "running"
+            if task_id in running_processes:
+                del running_processes[task_id]  # Remove from tracking
             # Report running status (Host already knows it's assigning)
+            # With scope mode, systemd-run will not fork so once it's done, the task is done
             await report_status_to_host(
                 TaskStatusUpdate(
-                    task_id=task_id, status="running", started_at=start_time
+                    task_id=task_id,
+                    status="completed",
+                    exit_code=exit_code,
+                    completed_at=datetime.datetime.now(),
                 )
             )
-            # Don't report completion here; the resource check loop or heartbeat handles final states
         else:
             error_message = f"systemd-run failed with exit code {exit_code}."
             stderr_decoded = stderr.decode(errors="replace").strip()
@@ -308,91 +319,6 @@ async def run_task_background(task_info: TaskInfo):
     # Note: The run_task_background function now primarily handles LAUNCHING the task.
     # The actual completion/failure/OOM kill is detected by the check_running_tasks loop
     # and reported via heartbeat or direct status updates from that loop.
-
-
-async def check_running_tasks():
-    """Periodically checks resource usage of running tasks managed by systemd."""
-    await asyncio.sleep(RunnerConfig.TASK_CHECK_INTERVAL_SECONDS * 2)  # Initial delay
-
-    while True:
-        await asyncio.sleep(RunnerConfig.TASK_CHECK_INTERVAL_SECONDS)
-        # logger.debug("Running resource check loop...") # Can be noisy
-        tasks_to_remove = []
-
-        # Iterate over a copy of keys to allow modification during iteration
-        current_task_ids = list(running_processes.keys())
-
-        for task_id in current_task_ids:
-            if (
-                task_id not in running_processes
-            ):  # Check if killed by another mechanism between loops
-                continue
-
-            task_data = running_processes[task_id]
-            unit_name = task_data["unit"]
-            current_pid = task_data.get("pid")  # Use stored PID if available
-
-            try:
-                # --- Check if unit still exists and get PID ---
-                # Use subprocess.run for synchronous systemctl calls within the async loop
-                pid_cmd = [
-                    "sudo",
-                    "systemctl",
-                    "show",
-                    unit_name,
-                    "--property=MainPID",
-                    "--value",
-                ]
-                pid_result = subprocess.run(
-                    pid_cmd, capture_output=True, text=True, check=False
-                )
-
-                if (
-                    pid_result.returncode != 0
-                    or pid_result.stdout.strip() == "0"
-                    or pid_result.stdout.strip() == ""
-                ):
-                    # Unit likely finished or failed, MainPID is 0 or command failed
-                    logger.info(
-                        f"Systemd unit {unit_name} for task {task_id} no longer active or has no MainPID. Assuming completed/failed."
-                    )
-                    # We don't know the exact exit code here easily without parsing journald
-                    # Rely on runner seeing it gone + host marking lost if heartbeat fails.
-                    # Or assume completed if process object finished cleanly? This part is tricky without journald parsing.
-                    # Simplification: Assume it finished somehow, remove from tracking. Host will mark lost if needed.
-                    tasks_to_remove.append(task_id)
-                    continue  # Move to next task
-
-                new_pid = int(pid_result.stdout.strip())
-                if current_pid != new_pid:
-                    logger.debug(
-                        f"Updated PID for task {task_id} ({unit_name}) to {new_pid}"
-                    )
-                    task_data["pid"] = new_pid
-                    current_pid = new_pid
-
-            except Exception as e:
-                logger.exception(
-                    f"Error during resource check for task {task_id} ({unit_name}): {e}"
-                )
-                # Potentially remove task from tracking if check fails repeatedly?
-                # tasks_to_remove.append(task_id)
-
-        # Clean up tasks removed during the loop
-        if tasks_to_remove:
-            logger.debug(f"Removing tasks from tracking: {tasks_to_remove}")
-            for task_id in tasks_to_remove:
-                if task_id in running_processes:
-                    await report_status_to_host(
-                        TaskStatusUpdate(
-                            task_id=task_id,
-                            status="completed",  # since we don't know the exact exit code, "completed" means "No error on runner side"
-                            exit_code=0,  # Assume success for now
-                            message="Task completed",
-                            completed_at=datetime.datetime.now(),
-                        )
-                    )
-                    del running_processes[task_id]
 
 
 async def send_heartbeat():
@@ -659,7 +585,6 @@ async def startup_event():
     else:
         logger.info("Starting background tasks (Heartbeat, Resource Check).")
         asyncio.create_task(send_heartbeat())
-        asyncio.create_task(check_running_tasks())
 
 
 app.add_event_handler("startup", startup_event)
