@@ -21,6 +21,7 @@ class ClientConfig:
             self.status_timeout: float = 10.0
             self.kill_timeout: float = 15.0
             self.nodes_timeout: float = 10.0
+            self.health_timeout: float = 15.0
         except KeyError as e:
             print(
                 f"Error: Missing configuration key in config.toml: {e}",
@@ -93,10 +94,14 @@ def parse_key_value(items: list[str]) -> dict[str, str]:
 
 
 # --- Client API Functions ---
-
-
 def submit_task(
-    command: str, args: list[str], env: dict[str, str], cores: int
+    command: str,
+    args: list[str],
+    env: dict[str, str],
+    cores: int,
+    memory_bytes: int | None,
+    private_network: bool,
+    private_pid: bool,
 ) -> str | None:
     """Submits a task to the host."""
     url = f"{client_config.host_url}/submit"
@@ -105,13 +110,16 @@ def submit_task(
         "arguments": args,
         "env_vars": env,
         "required_cores": cores,
+        "required_memory_bytes": memory_bytes,
+        "use_private_network": private_network,
+        "use_private_pid": private_pid,
     }
     print(f"Submitting task to {url}")
     print("Payload:", json.dumps(payload, indent=2))
     try:
         with httpx.Client(timeout=client_config.default_timeout) as client:
             response = client.post(url, json=payload)
-            response.raise_for_status()  # Raise HTTPStatusError for 4xx/5xx
+            response.raise_for_status()
             print("--- Response ---")
             result = response.json()
             print_response(response)
@@ -186,6 +194,33 @@ def list_nodes():
             response = client.get(url)
             response.raise_for_status()
             print("--- Nodes Status ---")
+            print_response(response)
+    except httpx.HTTPStatusError as e:
+        print("--- Error ---")
+        print_response(e.response)
+    except httpx.RequestError as e:
+        print("--- Connection Error ---")
+        print(f"Error connecting to host at {url}: {e}")
+    except Exception as e:
+        print("--- Unexpected Error ---")
+        print(f"An unexpected error occurred: {e}")
+
+
+def get_health(hostname: str | None = None):
+    """Fetches the health status from the host's /health endpoint."""
+    url = f"{client_config.host_url}/health"
+    params = {}
+    if hostname:
+        params["hostname"] = hostname
+        print(f"Fetching health status for node {hostname} from {url}")
+    else:
+        print(f"Fetching cluster health status from {url}")
+
+    try:
+        with httpx.Client(timeout=client_config.health_timeout) as client:
+            response = client.get(url, params=params)
+            response.raise_for_status()
+            print("--- Health Status ---")
             print_response(response)
     except httpx.HTTPStatusError as e:
         print("--- Error ---")

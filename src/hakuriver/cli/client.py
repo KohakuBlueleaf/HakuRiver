@@ -2,8 +2,33 @@ import argparse
 import os
 import sys
 import time
+import re
 
 import toml
+
+
+def parse_memory_string(mem_str: str) -> int | None:
+    """Parses memory string like '4G', '512M', '2K' into bytes."""
+    if not mem_str:
+        return None
+    mem_str = mem_str.upper().strip()
+    match = re.match(r"^(\d+)([KMG]?)$", mem_str)
+    if not match:
+        raise ValueError(
+            f"Invalid memory format: '{mem_str}'. Use suffix K, M, or G (e.g., 512M, 4G)."
+        )
+
+    val = int(match.group(1))
+    unit = match.group(2)
+
+    if unit == "G":
+        return val * 1000_000_000
+    elif unit == "M":
+        return val * 1000_000
+    elif unit == "K":
+        return val * 1000
+    else:  # No unit means bytes
+        return val
 
 
 def update_config(config_instance, custom_config_data):
@@ -83,58 +108,62 @@ def main():
 
     # --- Action Flags (Mutually Exclusive) ---
     action_group = parser.add_mutually_exclusive_group()
+    action_group.add_argument("--status", metavar="TASK_ID", help="Check task status.")
+    action_group.add_argument("--kill", metavar="TASK_ID", help="Kill a running task.")
     action_group.add_argument(
-        "--status",
-        metavar="TASK_ID",
-        help="Check the status of a specific task.",
+        "--list-nodes", action="store_true", help="List node status."
     )
     action_group.add_argument(
-        "--kill",
-        metavar="TASK_ID",
-        help="Request to kill a running task.",
-    )
-    action_group.add_argument(
-        "--list-nodes",
-        action="store_true",
-        help="List status of compute nodes.",
+        "--health",
+        metavar="HOSTNAME",
+        nargs="?",
+        const=True,
+        help="Get health status for all nodes or a specific HOSTNAME.",
     )
 
     # --- Options for Submit Action ---
+    parser.add_argument("--cores", type=int, default=1, help="CPU cores required.")
     parser.add_argument(
-        "--cores",
-        type=int,
-        default=1,
-        help="Number of CPU cores required (Required for submit action).",
+        "--memory",
+        type=str,
+        default=None,
+        metavar="SIZE",
+        help="Memory limit (e.g., '512M', '4G'). No suffix means bytes.",
     )
     parser.add_argument(
         "--env",
         action="append",
         metavar="KEY=VALUE",
-        help="Environment variables for the task (repeatable).",
+        help="Environment variables (repeatable).",
         default=[],
     )
     parser.add_argument(
-        "--wait",
+        "--private-network",
         action="store_true",
-        help="Wait for the submitted task to complete.",
+        help="Run task with systemd PrivateNetwork=yes.",
     )
+    parser.add_argument(
+        "--private-pid",
+        action="store_true",
+        help="Run task with systemd PrivatePID=yes.",
+    )
+
+    parser.add_argument("--wait", action="store_true", help="Wait for submitted task.")
     parser.add_argument(
         "--poll-interval",
         type=int,
         default=1,
         metavar="SEC",
-        help="Seconds between status checks when waiting (Default: 5).",
+        help="Seconds between status checks when waiting (Default: 1).",
     )
 
-    # --- Capturing the Command and its Arguments ---
     parser.add_argument(
         "command_and_args",
         nargs=argparse.REMAINDER,
-        metavar="COMMAND ARGUMENTS...",
-        help="The command and its arguments to execute on the cluster.",
+        metavar="COMMAND ARGS...",
+        help="Command and arguments to execute.",
     )
 
-    # --- Parse ALL Arguments ---
     args = parser.parse_args()
 
     # --- Load Custom Config (if specified) ---
@@ -204,6 +233,16 @@ def main():
             client_core.kill_task(args.kill)
             action_taken = True
 
+        elif args.health:
+            if args.command_and_args:
+                parser.error("Cannot provide command arguments when using --health.")
+            target_host = args.health if isinstance(args.health, str) else None
+            print(
+                f"Fetching health status for {'node ' + target_host if target_host else 'all nodes'}..."
+            )
+            client_core.get_health(target_host)  # Call new core function
+            action_taken = True
+
         elif args.list_nodes:
             if args.command_and_args:
                 parser.error(
@@ -232,12 +271,28 @@ def main():
             if args.cores <= 0:
                 parser.error("Argument --cores must be a positive integer.")
 
+            memory_bytes = None
+            if args.memory:
+                try:
+                    memory_bytes = parse_memory_string(args.memory)
+                    if memory_bytes < 0:
+                        raise ValueError("Memory must be non-negative")
+                except ValueError as e:
+                    parser.error(f"Invalid --memory value: {e}")
+
             env_vars = parse_key_value(args.env)
             print(
                 f"Submitting command: '{command_to_run}' with args {command_arguments}"
             )
+            # MODIFIED: Call submit_task with new parameters
             task_id = client_core.submit_task(
-                command_to_run, command_arguments, env_vars, args.cores
+                command=command_to_run,
+                args=command_arguments,
+                env=env_vars,
+                cores=args.cores,
+                memory_bytes=memory_bytes,
+                private_network=args.private_network,
+                private_pid=args.private_pid,
             )
 
             if task_id and args.wait:
