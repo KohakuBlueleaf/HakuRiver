@@ -54,8 +54,6 @@ client_config = ClientConfig()
 
 
 # --- Helper Functions ---
-
-
 def print_response(response: httpx.Response):
     """Helper to print formatted JSON response or error text."""
     print(f"HTTP Status Code: {response.status_code}")

@@ -228,8 +228,6 @@ def get_secure_log_path(task: Task, log_type: str) -> str | None:
 
 
 # --- API Endpoints (Logic remains the same, use logger) ---
-
-
 @app.post("/register")
 async def register_runner(info: RunnerInfo):
     node: Node
@@ -563,7 +561,6 @@ async def submit_task(req: TaskRequest):
         logger.exception(f"Failed to create task record in database: {e}")
         raise HTTPException(status_code=500, detail="Failed to save task state.")
 
-    # MODIFIED: Pass new fields to runner
     task_info_for_runner = TaskInfoForRunner(
         task_id=task_id,
         command=req.command,
@@ -682,7 +679,6 @@ async def send_kill_to_runner(runner_url: str, task_id: int, unit_name: str | No
     )
     try:
         async with httpx.AsyncClient() as client:
-            # MODIFIED: Send unit_name to runner's kill endpoint
             response = await client.post(
                 f"{runner_url}/kill",
                 json={"task_id": task_id, "unit_name": unit_name},

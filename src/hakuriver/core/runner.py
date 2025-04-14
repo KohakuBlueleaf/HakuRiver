@@ -65,9 +65,7 @@ class HeartbeatKilledTaskInfo(BaseModel):
 
 class HeartbeatData(BaseModel):
     running_tasks: list[int]
-    # MODIFIED: Changed completed_tasks to killed_tasks with reason
     killed_tasks: list[HeartbeatKilledTaskInfo] = Field(default_factory=list)
-    # MODIFIED: Added node resource stats
     cpu_percent: float | None = None
     memory_percent: float | None = None
     memory_used_bytes: int | None = None

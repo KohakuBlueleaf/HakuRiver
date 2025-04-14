@@ -284,7 +284,6 @@ def main():
             print(
                 f"Submitting command: '{command_to_run}' with args {command_arguments}"
             )
-            # MODIFIED: Call submit_task with new parameters
             task_id = client_core.submit_task(
                 command=command_to_run,
                 args=command_arguments,
