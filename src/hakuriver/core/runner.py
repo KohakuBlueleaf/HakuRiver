@@ -474,6 +474,7 @@ async def register_with_host():
     register_data = {
         "hostname": RunnerConfig.RUNNER_HOSTNAME,
         "total_cores": total_cores,
+        "total_ram_bytes": psutil.virtual_memory().total,
         "runner_url": runner_url,
     }
     logger.info(
