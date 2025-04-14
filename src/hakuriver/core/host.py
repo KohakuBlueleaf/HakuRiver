@@ -2,12 +2,13 @@ import asyncio
 import datetime
 import os
 from collections import defaultdict
+from typing import Iterable
 
 import peewee
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from hakuriver.utils.snowflake import Snowflake
 from hakuriver.utils.logger import logger
@@ -38,6 +39,7 @@ snowflake = Snowflake()
 class RunnerInfo(BaseModel):
     hostname: str
     total_cores: int
+    total_ram_bytes: int
     runner_url: str
 
 
@@ -45,7 +47,14 @@ class TaskRequest(BaseModel):
     command: str
     arguments: list[str] = Field(default_factory=list)
     env_vars: dict[str, str] = Field(default_factory=dict)
-    required_cores: int
+    required_cores: int = Field(
+        default=1, ge=1, description="Number of CPU cores required"
+    )
+    required_memory_bytes: int | None = Field(
+        default=1000_000_000, ge=1, description="Memory limit in bytes"
+    )
+    use_private_network: bool = Field(default=False)
+    use_private_pid: bool = Field(default=False)
 
 
 class TaskInfoForRunner(BaseModel):
@@ -56,6 +65,9 @@ class TaskInfoForRunner(BaseModel):
     required_cores: int
     stdout_path: str
     stderr_path: str
+    required_memory_bytes: int | None = None
+    use_private_network: bool = False
+    use_private_pid: bool = False
 
 
 class TaskStatusUpdate(BaseModel):
@@ -67,9 +79,18 @@ class TaskStatusUpdate(BaseModel):
     completed_at: datetime.datetime | None = None
 
 
+class HeartbeatKilledTaskInfo(BaseModel):
+    task_id: int
+    reason: str  # e.g., "oom", "killed_by_host"
+
+
 class HeartbeatData(BaseModel):
     running_tasks: list[int] = Field(default_factory=list)
-    completed_tasks: list[int] = Field(default_factory=list)
+    killed_tasks: list[HeartbeatKilledTaskInfo] = Field(default_factory=list)
+    cpu_percent: float | None = None
+    memory_percent: float | None = None
+    memory_used_bytes: int | None = None
+    memory_total_bytes: int | None = None
 
 
 # --- FastAPI App ---
@@ -211,7 +232,6 @@ def get_secure_log_path(task: Task, log_type: str) -> str | None:
 
 @app.post("/register")
 async def register_runner(info: RunnerInfo):
-
     node: Node
     node, created = Node.get_or_create(
         hostname=info.hostname,
@@ -220,12 +240,14 @@ async def register_runner(info: RunnerInfo):
             "total_cores": info.total_cores,
             "last_heartbeat": datetime.datetime.now(),
             "status": "online",
+            "memory_total_bytes": info.total_ram_bytes,
         },
     )
     if not created:
         # Update info if node re-registers
         node.url = info.runner_url
         node.total_cores = info.total_cores
+        node.memory_total_bytes = info.total_ram_bytes
         node.last_heartbeat = datetime.datetime.now()
         node.status = "online"  # Mark as online on registration/re-registration
         node.save()
@@ -249,76 +271,87 @@ async def receive_heartbeat(
     if node.status != "online":
         logger.info(f"Runner {hostname} came back online.")
         node.status = "online"
+    node.cpu_percent = data.cpu_percent
+    node.memory_percent = data.memory_percent
+    node.memory_used_bytes = data.memory_used_bytes
     node.save()
 
     # --- 1. Process Completed Tasks reported by Runner ---
-    if data.completed_tasks:
-        logger.debug(
-            f"Heartbeat from {hostname} reported completed tasks: {data.completed_tasks}"
+    if data.killed_tasks:
+        logger.info(
+            f"Heartbeat from {hostname} reported killed tasks: {data.killed_tasks}"
         )
-        completed_tasks_in_db: list[Task] = list(
-            Task.select().where(
-                (Task.task_id << data.completed_tasks) & (Task.assigned_node == node)
-            )
-        )
-        for task in completed_tasks_in_db:
-            task.assignment_suspicion_count = 0
-            task.save()
+        for killed_info in data.killed_tasks:
+            task_to_update: Task = Task.get_or_none(Task.task_id == killed_info.task_id)
+            if task_to_update and task_to_update.status not in [
+                "completed",
+                "failed",
+                "killed",
+                "lost",
+                "killed_oom",
+            ]:
+                original_status = task_to_update.status
+                new_status = (
+                    "killed_oom" if killed_info.reason == "oom" else "failed"
+                )  # Or map other reasons
+                task_to_update.status = new_status
+                task_to_update.exit_code = -9  # Or specific code for OOM
+                task_to_update.error_message = f"Killed by runner: {killed_info.reason}"
+                task_to_update.completed_at = now
+                task_to_update.save()
+                logger.warning(
+                    f"Task {killed_info.task_id} on {hostname} marked as '{new_status}' (was '{original_status}') due to runner report: {killed_info.reason}"
+                )
+            elif task_to_update:
+                logger.debug(
+                    f"Runner reported killed task {killed_info.task_id}, but it was already in final state '{task_to_update.status}'."
+                )
+            else:
+                logger.warning(
+                    f"Runner reported killed task {killed_info.task_id}, but task not found in DB."
+                )
 
     # --- 2. Reconcile 'assigning' Tasks ---
     assigning_tasks_on_node: list[Task] = list(
         Task.select().where((Task.assigned_node == node) & (Task.status == "assigning"))
     )
-
     if assigning_tasks_on_node:
         runner_running_set = set(data.running_tasks)
         logger.debug(
-            f"Reconciling {len(assigning_tasks_on_node)} assigning tasks on "
-            f"{hostname}. Runner reports running: {runner_running_set}"
+            f"Reconciling {len(assigning_tasks_on_node)} assigning tasks on {hostname}. Runner reports running: {runner_running_set}"
         )
-
         for task in assigning_tasks_on_node:
+            # If runner now reports it running, the /update call should handle it.
+            # If runner DOESN'T report it running after a while, suspect assignment.
             if task.task_id not in runner_running_set:
-                # Task is 'assigning' in DB, but runner doesn't report it running
-                if task.assignment_suspicion_count == 0:
-                    task.assignment_suspicion_count = 1
-                    logger.warning(
-                        f"Task {task.task_id} (on {hostname}) is 'assigning' "
-                        "but not reported running by runner. Marked as suspect (1)."
-                    )
-                elif task.assignment_suspicion_count == 1:
-                    task.assignment_suspicion_count = 2
-                    task.status = "failed"  # Or "lost"? "failed" seems appropriate
-                    task.error_message = (
-                        f"Task assignment failed. Runner {hostname} "
-                        "did not confirm start after multiple checks."
-                    )
-                    task.completed_at = now
-                    task.exit_code = -1  # Indicate abnormal termination
-                    logger.error(
-                        f"Task {task.task_id} (on {hostname}) failed assignment. "
-                        "Runner did not confirm start. Marked as failed (suspect 2)."
-                    )
+                time_since_submit = now - task.submitted_at
+                # Increase suspicion if assigning for too long without confirmation
+                if time_since_submit > datetime.timedelta(
+                    seconds=HostConfig.HEARTBEAT_INTERVAL_SECONDS * 3
+                ):  # Example threshold
+                    if task.assignment_suspicion_count < 2:
+                        task.assignment_suspicion_count += 1
+                        logger.warning(
+                            f"Task {task.task_id} (on {hostname}) still 'assigning' and not reported running. Marked as suspect ({task.assignment_suspicion_count})."
+                        )
+                        task.save()
+                    else:
+                        # Mark as failed if suspect count is high
+                        task.status = "failed"
+                        task.error_message = f"Task assignment failed. Runner {hostname} did not confirm start after multiple checks."
+                        task.completed_at = now
+                        task.exit_code = -1
+                        logger.error(
+                            f"Task {task.task_id} (on {hostname}) failed assignment. Marked as failed (suspect {task.assignment_suspicion_count})."
+                        )
+                        task.save()
             else:
-                task.assignment_suspicion_count = 0
-            task.save()
+                # If runner reports it running while DB says assigning, clear suspicion
+                if task.assignment_suspicion_count > 0:
+                    task.assignment_suspicion_count = 0
+                    task.save()
 
-    # --- 3. Clear suspicion for tasks that transitioned out of 'assigning' ---
-    # (Could be handled by /update endpoint calls too, but double-check here)
-    suspicious_tasks_on_node: list[Task] = list(
-        Task.select().where(
-            (Task.assigned_node == node)
-            & (Task.status != "assigning")  # No longer assigning
-            & (Task.assignment_suspicion_count > 0)
-        )
-    )
-    for task in suspicious_tasks_on_node:
-        task.assignment_suspicion_count = 0
-        task.save()
-
-    return {
-        "message": "Heartbeat received",
-    }
+    return {"message": "Heartbeat received"}
 
 
 @app.get("/task/{task_id}/stdout", response_class=PlainTextResponse)
@@ -473,6 +506,7 @@ async def get_tasks():
 
 @app.post("/submit", status_code=202)
 async def submit_task(req: TaskRequest):
+    # Consider memory in scheduling? (Future enhancement - for now, find node by cores only)
     node = find_suitable_node(req.required_cores)
     if not node:
         raise HTTPException(
@@ -497,32 +531,39 @@ async def submit_task(req: TaskRequest):
 
     stdout_path = os.path.join(output_dir, f"{task_id}.out")
     stderr_path = os.path.join(errors_dir, f"{task_id}.err")
+    unit_name = f"hakuriver-task-{task_id}.scope"  # Define unit name here
 
     try:
         task: Task = Task.create(
             task_id=task_id,
-            arguments="",
-            env_vars="",
+            arguments="",  # Will be set below
+            env_vars="",  # Will be set below
             command=req.command,
             required_cores=req.required_cores,
+            required_memory_bytes=req.required_memory_bytes,  # Store memory limit
+            use_private_network=req.use_private_network,  # Store sandbox flag
+            use_private_pid=req.use_private_pid,  # Store sandbox flag
             assigned_node=node,
-            status="assigning",  # Task is assigning until runner confirms start
+            status="assigning",
             stdout_path=stdout_path,
             stderr_path=stderr_path,
             submitted_at=datetime.datetime.now(),
+            systemd_unit_name=unit_name,  # Store the expected unit name
         )
         task.set_arguments(req.arguments)
         task.set_env_vars(req.env_vars)
         task.save()
         logger.info(
             f"Task {task_id} created, "
-            f"requires {req.required_cores} cores. "
-            f"Assigning to {node.hostname}."
+            f"Req Cores: {req.required_cores}, "
+            f"Req Mem: {req.required_memory_bytes // 1e6 if req.required_memory_bytes else 'N/A'}MB. "
+            f"Assigning to {node.hostname} (Unit: {unit_name})."
         )
     except Exception as e:
         logger.exception(f"Failed to create task record in database: {e}")
         raise HTTPException(status_code=500, detail="Failed to save task state.")
 
+    # MODIFIED: Pass new fields to runner
     task_info_for_runner = TaskInfoForRunner(
         task_id=task_id,
         command=req.command,
@@ -531,6 +572,9 @@ async def submit_task(req: TaskRequest):
         required_cores=req.required_cores,
         stdout_path=stdout_path,
         stderr_path=stderr_path,
+        required_memory_bytes=req.required_memory_bytes,
+        use_private_network=req.use_private_network,
+        use_private_pid=req.use_private_pid,
     )
 
     asyncio.create_task(send_task_to_runner(node.url, task_info_for_runner))
@@ -626,12 +670,23 @@ async def get_task_status(task_id: int):
 
 
 # Kill endpoint and helper (logic same, use logger)
-async def send_kill_to_runner(runner_url: str, task_id: int):
-    logger.info(f"Sending kill request for task {task_id} to runner {runner_url}")
+async def send_kill_to_runner(runner_url: str, task_id: int, unit_name: str | None):
+    if not unit_name:
+        logger.warning(
+            f"Cannot send kill for task {task_id} to {runner_url}, systemd unit name unknown."
+        )
+        return
+
+    logger.info(
+        f"Sending kill request for task {task_id} (Unit: {unit_name}) to runner {runner_url}"
+    )
     try:
         async with httpx.AsyncClient() as client:
+            # MODIFIED: Send unit_name to runner's kill endpoint
             response = await client.post(
-                f"{runner_url}/kill", json={"task_id": task_id}, timeout=10.0
+                f"{runner_url}/kill",
+                json={"task_id": task_id, "unit_name": unit_name},
+                timeout=10.0,
             )
             response.raise_for_status()
             logger.info(
@@ -643,7 +698,7 @@ async def send_kill_to_runner(runner_url: str, task_id: int):
         )
         # Update task message in DB? Host already marked 'killed'.
 
-        task = Task.get_or_none(Task.task_id == task_id)
+        task: Task = Task.get_or_none(Task.task_id == task_id)
         if task and task.status == "killed":
             task.error_message += f" | Runner unreachable for kill confirmation: {e}"
             task.save()
@@ -673,7 +728,12 @@ async def request_kill_task(task_id: int):
         raise HTTPException(status_code=400, detail="Invalid Task ID format.")
 
     task: Task = (
-        Task.select(Task, Node).join(Node).where(Task.task_id == task_uuid).first()
+        Task.select(Task, Node)
+        .join(
+            Node, peewee.JOIN.LEFT_OUTER, on=(Task.assigned_node == Node.hostname)
+        )  # Use LEFT JOIN
+        .where(Task.task_id == task_uuid)
+        .first()
     )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
@@ -686,6 +746,8 @@ async def request_kill_task(task_id: int):
         )
 
     original_status = task.status
+    unit_name = task.systemd_unit_name  # Get the stored unit name
+
     task.status = "killed"  # Mark as killed immediately in DB
     task.error_message = "Kill requested by user."
     task.completed_at = datetime.datetime.now()  # Set completion time for killed tasks
@@ -703,7 +765,7 @@ async def request_kill_task(task_id: int):
             f"Requesting kill confirmation from runner "
             f"{task.assigned_node.hostname} for task {task_id}"
         )
-        asyncio.create_task(send_kill_to_runner(runner_url, task_id))
+        asyncio.create_task(send_kill_to_runner(runner_url, task_id, unit_name))
     else:
         logger.info(
             "No kill signal sent to runner for task "
@@ -762,6 +824,56 @@ async def get_nodes_status():
             }
         )
     return nodes_status
+
+
+@app.get("/health")
+async def get_cluster_health(
+    hostname: str | None = Query(
+        None, description="Optional: Filter by specific hostname"
+    )
+):
+    """Provides the last known health status (heartbeat data) for nodes."""
+    logger.debug(f"Received health request. Filter hostname: {hostname}")
+    try:
+        query: Iterable[Node] = Node.select()
+        if hostname:
+            query = query.where(Node.hostname == hostname)
+
+        nodes_health = []
+        for node in query:
+            nodes_health.append(
+                {
+                    "hostname": node.hostname,
+                    "status": node.status,
+                    "last_heartbeat": (
+                        node.last_heartbeat.isoformat() if node.last_heartbeat else None
+                    ),
+                    "cpu_percent": node.cpu_percent,
+                    "memory_percent": node.memory_percent,
+                    "memory_used_bytes": node.memory_used_bytes,
+                    "memory_total_bytes": node.memory_total_bytes,
+                    "total_cores": node.total_cores,  # Include for context
+                    "url": node.url,  # Include for context
+                }
+            )
+
+        if hostname and not nodes_health:
+            raise HTTPException(
+                status_code=404, detail=f"No health data found for hostname: {hostname}"
+            )
+
+        return nodes_health
+
+    except peewee.PeeweeException as e:
+        logger.error(f"Database error fetching node health: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Database error fetching node health."
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error fetching node health: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Unexpected error fetching node health."
+        )
 
 
 # --- Background Tasks (Logic same, use logger) ---
