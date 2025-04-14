@@ -16,6 +16,14 @@ class Node(BaseModel):
     total_cores = peewee.IntegerField()
     last_heartbeat = peewee.DateTimeField(default=datetime.datetime.now)
     status = peewee.CharField(default="online")  # 'online', 'offline'
+    cpu_percent = peewee.FloatField(null=True)
+    memory_percent = peewee.FloatField(null=True)
+    memory_used_bytes = peewee.BigIntegerField(
+        null=True
+    )  # Use BigIntegerField for bytes
+    memory_total_bytes = peewee.BigIntegerField(
+        null=True
+    )  # Use BigIntegerField for bytes
 
 
 class Task(BaseModel):
@@ -36,6 +44,10 @@ class Task(BaseModel):
     started_at = peewee.DateTimeField(null=True)
     completed_at = peewee.DateTimeField(null=True)
     assignment_suspicion_count = peewee.IntegerField(default=0)
+    required_memory_bytes = peewee.BigIntegerField(null=True)
+    use_private_network = peewee.BooleanField(default=False)
+    use_private_pid = peewee.BooleanField(default=False)
+    systemd_unit_name = peewee.CharField(null=True)  # Store the transient unit name
 
     def get_arguments(self):
         try:
