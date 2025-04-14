@@ -24,7 +24,19 @@ export default {
     return apiClient.get('/nodes');
   },
   submitTask(taskData) {
-    return apiClient.post('/submit', taskData);
+    // MODIFIED: Add new fields to task submission data if they exist
+    const payload = {
+      command: taskData.command,
+      arguments: taskData.arguments,
+      env_vars: taskData.env_vars,
+      required_cores: taskData.required_cores,
+      required_memory_bytes: taskData.required_memory_bytes,
+      use_private_network: taskData.use_private_network,
+      use_private_pid: taskData.use_private_pid,
+    };
+    // Filter out null/undefined optional values if necessary, although backend should handle nulls
+    Object.keys(payload).forEach((key) => payload[key] == null && delete payload[key]);
+    return apiClient.post('/submit', payload);
   },
   getTaskStatus(taskId) {
     // Note: This fetches full details now via the /status endpoint
@@ -44,5 +56,9 @@ export default {
   },
   getTaskStderr(taskId) {
     return logClient.get(`/task/${taskId}/stderr`);
+  },
+  getHealth(hostname = null) {
+    const params = hostname ? { hostname } : {};
+    return apiClient.get('/health', { params });
   },
 };
