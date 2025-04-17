@@ -1,256 +1,327 @@
-# [WIP]HakuRiver - Mini Resource Orchestrator
+# HakuRiver - Mini Resource Orchestrator
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ![HakuRiver logo svg](image/logo.svg)
 
-***THIS PROJECT IS WORK IN PROGRESS, USE AT YOUR OWN RISK***
+***THIS PROJECT IS EXPERIMENTAL, USE AT YOUR OWN RISK***
 
-A simple, multi-node resource management tool designed for distributing tasks across compute nodes, focusing on CPU core and System RAM allocation, leveraging **systemd** for execution and basic sandboxing.
+**HakuRiver** is a lightweight, self-hosted cluster manager designed for distributing command-line tasks across compute nodes. It focuses on allocating CPU cores (via **systemd CPU Quotas**) and memory limits, managing task lifecycles, and now offers **NUMA node targeting** and **multi-node task submission**.
 
-HakuRiver is a self-hosted cluster manager ideal for small research clusters, development environments, or internal batch processing systems where full-featured HPC schedulers like Slurm might be overkill. It allows users to submit arbitrary commands, manage their execution based on available CPU cores and memory, monitor their status, and apply basic process isolation.
+It leverages **systemd** for execution and basic sandboxing (`PrivateNetwork`, `PrivatePID`). HakuRiver is ideal for small research clusters, development environments, or internal batch processing systems where full-featured HPC schedulers might be overkill but some level of resource control and distribution is needed.
 
-### HakuRiver is for:
+---
 
-* Managing command-line tasks/scripts across a small cluster (e.g., < 10 nodes).
-* Development, testing, or small research environments needing a simpler alternative to full HPC schedulers.
-* Running primarily CPU/Memory-bound applications where resource limits and optional isolation are beneficial.
-* Internal tools where basic job submission, status checking, and termination are sufficient.
+## 🤔 What HakuRiver Is (and Isn't)
 
-### HakuRiver is NOT for:
+| HakuRiver IS FOR...                                                                                                                            | HakuRiver IS NOT FOR...                                                                                                                               |
+| :--------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ✅ Managing command-line tasks/scripts across a small cluster (e.g., < 10 nodes).                                                              | ❌ Replacing feature-rich HPC schedulers (Slurm, PBS, LSF) on large clusters.                                                                         |
+| ✅ Distributing tasks to specific **NUMA nodes** for performance tuning (`numactl`).                                                             | ❌ Complex resource management beyond CPU quotas, memory limits, and NUMA binding (e.g., GPU scheduling, network bandwidth, licenses).                |
+| ✅ Submitting a single command to run simultaneously on **multiple nodes or NUMA nodes**.                                                      | ❌ Sophisticated task dependency management or workflow orchestration (Use Airflow, Prefect, Snakemake, Nextflow).                                      |
+| ✅ Environments needing basic CPU/Memory limits and optional process/network isolation via **systemd**.                                          | ❌ Environments **without systemd** or where the runner user lacks **passwordless `sudo`** for `systemd-run` and `systemctl`.                           |
+| ✅ Development, testing, or small research setups needing a simpler alternative to complex schedulers.                                         | ❌ Advanced scheduling policies (fair-share, preemption, backfilling, complex priorities). HakuRiver uses direct user targeting.                     |
+| ✅ Internal tools where basic job submission, status checking, log retrieval, and termination are sufficient.                                    | ❌ High-security, multi-tenant environments requiring robust built-in authentication/authorization beyond network accessibility.                        |
+| ✅ Running primarily CPU/Memory-bound applications.                                                                                            | ❌ Automatically optimizing NUMA placement – user specifies the target.                                                                               |
+| ✅ Using the included `hakurun` utility for local parameter sweeps *before* cluster submission.                                                 | ❌ Replacing `hakurun` itself with cluster submission – they serve different purposes (local vs distributed).                                         |
 
-* Replacing feature-rich HPC schedulers (like Slurm, PBS) on large-scale clusters.
-* Environments without systemd or where tasks cannot be launched via `systemd-run` with `sudo`.
-* Complex resource management beyond CPU quotas and memory limits (e.g., GPU scheduling, license tracking).
-* Sophisticated task dependency management or workflow orchestration (use tools like Airflow, Snakemake, Nextflow).
-* Advanced scheduling policies (e.g., fair-share, preemption, complex priorities).
-* High-security, multi-tenant environments requiring robust authentication and authorization built-in.
+---
 
 ## ✨ Features
 
-* **CPU/RAM Resource Allocation via systemd:** Allows jobs to request a specific number of CPU cores (enforced as a **CPU quota percentage** via `systemd-run`) and a **memory limit** (enforced via `systemd-run`).
-* **Systemd-Based Task Execution:** Tasks are launched as transient systemd scope units (`systemd-run --scope`). This provides better resource accounting and lifecycle management compared to simple subprocesses.
-* **Optional Sandboxing:** Supports basic sandboxing features provided by systemd, including network isolation (`PrivateNetwork=yes`) and process isolation (`PrivatePIDs=yes`), configurable per task.
-* **Persistent Task and Node Records:** The host maintains a persistent record of compute nodes and submitted tasks, including their status, assigned node, resource requests, and output locations, facilitating tracking even after client disconnection.
-* **Node Health Awareness:** Includes a basic heartbeat mechanism allowing the host to detect unresponsive runner nodes and appropriately mark tasks that were assigned to them as 'lost'. Runners also report basic CPU/Memory usage.
-* **Standalone Argument Spanning Utility (`hakurun`):** Includes a convenient command-line utility, `hakurun`, for locally generating and running multiple variations of a command or Python script. It supports expanding arguments using range (`span:{start..end}`) or list (`span:[a,b]`) syntax, creating the Cartesian product of all combinations. Tasks can be executed sequentially or in parallel (`--parallel`) via subprocesses. This is ideal for simple parameter sweeps or testing variations before submitting larger workloads to the HakuRiver cluster.
-  * **Benefit for Python Multiprocessing:** When `hakurun` is used to invoke a Python module or function (e.g., `hakurun my_module:my_func ...` or `hakurun my_module ...`), the child processes spawned (either by `hakurun` itself with `--parallel` or by the target script using `multiprocessing` or `ProcessPoolExecutor`) inherit `hakurun.run` as their entry point. This avoids common pitfalls associated with the `if __name__ == "__main__":` guard in the *target* script, preventing redundant module imports or re-initialization of global variables in spawned processes, leading to cleaner and more robust parallel Python execution.
-* **Web-Based Dashboard (Experimental):** An optional Vue.js frontend provides a visual interface to monitor node status, view task lists, submit new tasks (including memory limits and sandboxing options), and kill running tasks.
+*   **CPU/RAM Resource Allocation via systemd:** Jobs request CPU cores (enforced as **CPU Quota percentage**) and a **Memory Limit**, applied via `systemd-run`.
+*   **Systemd-Based Task Execution:** Tasks run as transient systemd scope units (`systemd-run --scope`) for better lifecycle management and resource accounting.
+*   **NUMA Node Targeting:** Optionally bind tasks to specific NUMA nodes using `numactl` (requires `numactl` installed on runners and path configured).
+*   **Multi-Node/NUMA Task Submission:** Submit a single request to run the same command across multiple specified nodes or specific NUMA nodes within nodes.
+*   **Optional Sandboxing:** Basic systemd sandboxing (`PrivateNetwork=yes`, `PrivatePIDs=yes`) configurable per task batch.
+*   **Persistent Task & Node Records:** Host maintains SQLite DB of nodes (including detected NUMA topology) and tasks (status, target, resource requests, logs).
+*   **Node Health & Resource Awareness:** Basic heartbeat detects offline runners. Runners report overall CPU/Memory usage and NUMA topology.
+*   **Standalone Argument Spanning (`hakurun`):** Utility for local parameter sweeps (`span:{..}`, `span:[]`) before submitting to the cluster. Improves parallel Python execution robustness.
+*   **Web Dashboard (Experimental):** Vue.js frontend for visual monitoring, task submission (incl. multi-target), status checks, and killing tasks.
 
 ## 🏗️ Architecture Overview
 
-* **Host (`hakuriver.host`):** The central brain of the cluster. It listens for connections from Runners and Clients. The Host maintains an inventory of registered compute nodes and tracks the availability of their CPU cores and basic resource usage. When a user submits a task via the Client, the Host finds a suitable node (currently based on available cores), records the task details, and instructs the chosen Runner to execute it. It also receives status updates (like 'running', 'completed', 'failed', 'killed_oom') and heartbeats from Runners.
-* **Runner (`hakuriver.runner`):** An agent running on each compute node intended to execute tasks. Upon starting, it registers itself, its total core count, and total RAM with the Host. It periodically sends heartbeats (including current CPU/Memory usage) to signal its availability. When instructed by the Host, the Runner uses `sudo systemd-run` to launch the requested command as a transient systemd scope unit, applying the specified **CPU quota**, **memory limit**, and optional **sandboxing** properties (`PrivateNetwork`, `PrivatePID`). It redirects output (stdout/stderr) to files on the shared storage (specified by the Host) and reports the final status (success/failure, exit code, OOM kill) back to the Host. **Requires passwordless `sudo` privileges for the user running the agent.**
-* **Client (`hakuriver.client`):** The user's tool for interacting with the cluster. It communicates with the Host server to submit new tasks (specifying the command, arguments, environment variables, required cores, optional memory limit, and optional sandboxing flags), query the status of previously submitted tasks using their unique ID, request the termination of a running task, or get an overview of the registered compute nodes and their current state.
-* **Storage:** HakuRiver assumes two types of storage are accessible to the cluster nodes:
-  * **Shared Storage (`shared_dir`):** Accessible by the Host and all Runners at the *same path*. Used for scripts, common input data, and crucially, for storing the standard output and error logs generated by tasks. Paths are determined by the Host.
-  * **Local Temporary Storage (`local_temp_dir`):** Fast, node-specific storage available on each Runner. Tasks can use this for intermediate files or scratch space during execution (accessible via the `HAKURIVER_LOCAL_TEMP_DIR` environment variable injected into the task). Data here is generally considered temporary.
+```ascii
++-----------------+      HTTP API       +-----------------+      HTTP API       +--------------------+
+|  Client (CLI)   |<------------------->|   Host Server   |<------------------->|  Frontend (Web UI) |
+| (hakuriver.cli) | (Submit, Status,    | (hakuriver.core)| (Node/Task Data,    | (Vue.js)           |
+|                 |  Kill, List, ...)   |  - FastAPI      |  Submit, Kill)      |  - Monitoring      |
+|                 |                     |  - Peewee (DB)  |                     |  - Submit Task     |
+|                 |                     |  - Scheduling*  |                     |  - Check result    |
++-----------------+                     |  - State Mgmt   |                     +--------------------+
+                                        +--------+--------+
+                                                 | ▲  │ Registration, Heartbeat, Status Update
+                                                 │ │  ▼ Task Execution Command, Kill Command
+                                        +--------▼-+-------------+      +------------------------+
+                                        | Runner Agent (Node 1)  |      | Runner Agent (Node N)  |
+                                        | (hakuriver.core)       |      | (hakuriver.core)       |
+                                        |  - FastAPI             |      |  - FastAPI             |
+                                        |  - NUMA Detect         |      |  - NUMA Detect         |
+                                        |  - systemd-run (+sudo) |      |  - systemd-run (+sudo) |
+                                        |  - numactl             |      |  - numactl             |
+                                        +------------------------+      +------------------------+
+                                                    │                               │
+ Shared Filesystem (NFS, etc.)                      │ Access (Scripts, Output)      │ Access (Scripts, Output)
++----------------------------------+                ▼                               ▼
+| /path/to/shared_dir              |<------------------------------------------------
+|  - scripts/                      |                │                               │
+|  - task_outputs/ (*.out)         |                │ Access (Temporary data)       │ Access (Temporary data)
+|  - task_errors/  (*.err)         |                ▼                               ▼
++----------------------------------+    Node 1 Local Filesystem         Node N Local Filesystem
+                                       +--------------------------+     +--------------------------+
+                                       | /path/to/local_temp_dir  |     | /path/to/local_temp_dir  |
+                                       +--------------------------+     +--------------------------+
+
+ Host Local Filesystem
++----------------------------------+
+| /path/to/database/cluster.db     |
++----------------------------------+
+
+* Scheduling: Host validates targets & resources but relies on user specification via Client/Frontend.
+```
+
+*   **Host (`hakuriver.host`):** Central coordinator. Manages node registration (including NUMA topology), tracks node status/resources, stores task information in the DB, receives task submission requests (including multi-target), validates targets, generates unique task IDs, and dispatches individual task instances to the appropriate Runners.
+*   **Runner (`hakuriver.runner`):** Agent on each compute node. Detects NUMA topology (via `numactl`), registers with Host (reporting cores, RAM, NUMA info, URL). Sends periodic heartbeats (incl. CPU/Mem usage). Executes assigned tasks using `sudo systemd-run`, applying CPU Quota, Memory Limits, optional sandboxing, and optional `numactl` binding. Reports task status updates back to the Host. **Requires passwordless `sudo` for `systemd-run` and `systemctl`.**
+*   **Client (`hakuriver.client`):** CLI tool. Communicates with Host to submit tasks (specifying command, args, env, resources, and **one or more targets** like `host1` or `host1:0`), query task/node status (incl. NUMA info), and kill tasks.
+*   **Frontend:** Optional web UI providing visual overview and interaction capabilities similar to the Client.
+*   **Database:** Host uses SQLite via Peewee to store node inventory (incl. NUMA topology as JSON) and task details (incl. target NUMA ID, batch ID).
+*   **Storage:**
+    *   **Shared (`shared_dir`):** Mounted at the same path on Host and all Runners. Essential for task output logs (`*.out`, `*.err`) and potentially shared scripts/data.
+    *   **Local Temp (`local_temp_dir`):** Node-specific fast storage, path injected as `HAKURIVER_LOCAL_TEMP_DIR` env var for tasks.
+
+---
+
 
 ## 🚀 Getting Started
 
 ### Installation
 
-1. Clone the repository:
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/KohakuBlueleaf/HakuRiver.git
+    cd HakuRiver
+    ```
+2.  Install the package (preferably in a virtual environment):
+    ```bash
+    # Installs hakuriver and its dependencies
+    pip install .
+    # Or for development:
+    # pip install -e .
+    ```
+    This makes `hakurun`, `hakuriver.host`, `hakuriver.runner`, and `hakuriver.client` available.
+3.  **(Runner Nodes)** Install `numactl` if you intend to use NUMA targeting:
+    ```bash
+    # Example for Debian/Ubuntu
+    sudo apt update && sudo apt install numactl
+    # Example for CentOS/RHEL
+    sudo yum install numactl
+    ```
 
-   ```bash
-   git clone https://github.com/KohakuBlueleaf/HakuRiver.git
-   cd HakuRiver
-   ```
-2. Install the package (preferably in a virtual environment):
+---
 
-   ```bash
-   # Installs hakuriver and its dependencies specified in pyproject.toml
-   pip install .
-   ```
+## `hakurun`: Local Argument Spanning Utility
 
-   This will make the `hakurun`, `hakuriver.host`, `hakuriver.runner`, and `hakuriver.client` commands available in your environment.
+`hakurun` helps run commands or Python scripts *locally* with multiple argument combinations, useful for testing before submitting to the HakuRiver cluster.
 
-### Usage - Hakurun
+*   **Argument Spanning:**
+    *   `span:{start..end}` -> Integers (e.g., `span:{1..3}` -> `1`, `2`, `3`)
+    *   `span:[a,b,c]` -> List items (e.g., `span:[foo,bar]` -> `"foo"`, `"bar"`)
+*   **Execution:** Runs the Cartesian product of all spanned arguments. Use `--parallel` to run combinations concurrently via subprocesses.
+*   **Targets:** Runs Python modules (`mymod`), functions (`mymod:myfunc`), or executables (`python script.py`, `my_executable`).
 
-`hakurun` is a utility script included with HakuRiver designed for launching multiple variations of a command or Python script by automatically expanding specified arguments. This is particularly useful for running simple parameter sweeps or executing the same task with different inputs locally *before* submitting potentially many individual jobs to the HakuRiver cluster.
-
-**Key Features:**
-
-* **Argument Spanning:** Define ranges or lists for arguments, and `hakurun` will generate the Cartesian product of all combinations.
-  * **Integer Range:** `span:{start..end}` expands to all integers from `start` to `end` (inclusive). Example: `span:{1..3}` becomes `1`, `2`, `3`.
-  * **List:** `span:[item1, item2, ...]` expands to the provided list items. Example: `span:[alpha,beta]` becomes `"alpha"`, `"beta"`.
-* **Parallel Execution:** Use the `--parallel` flag to run the generated task combinations concurrently as separate subprocesses.
-* **Target Flexibility:** Can run Python modules (`my_module`), specific functions within modules (`my_module:my_function`), or general executable scripts/commands.
-
-**Example:**
-
-Consider the `demo_hakurun.py` script provided:
-
+**Example (`demo_hakurun.py`):**
 ```python
 # demo_hakurun.py
-import sys
-import time
-import random
-
+import sys, time, random
 time.sleep(random.random() * 0.1)
-print(sys.argv)
+print(f"Args: {sys.argv[1:]}, PID: {os.getpid()}")
 ```
-
-You can run this script with multiple combinations of arguments using `hakurun` with two different methods:
-
-Module import:
-
 ```bash
-# Command (runs 2 * 1 * 2 = 4 tasks in parallel)
-hakurun --parallel demo_hakurun "span:{1..2}" "fixed_arg" "span:[input_a, input_b]"
+# Runs 2 * 1 * 2 = 4 tasks locally and in parallel
+hakurun --parallel python ./demo_hakurun.py span:{1..2} fixed_arg span:[input_a,input_b]
 ```
 
-General script/executable (with python):
+**Note:** `hakurun` is a local helper. It does **not** interact with the HakuRiver cluster. Use it to generate commands you might later submit individually or as a batch using `hakuriver.client`.
 
-```bash
-hakurun --parallel python ./demo_hakurun.py "span:{1..2}" "fixed_arg" "span:[input_a, input_b]"
-```
+---
 
-**Example Output (order may vary with `--parallel`):**
+## 🔧 Configuration - HakuRiver
 
-```
-[HakuRun]-|xx:xx:xx|-INFO: Running 4 tasks in parallel via subprocess...
-[HakuRun]-|xx:xx:xx|-INFO:   Task 1/4: python /path/to/demo_hakurun.py 1 fixed_arg input_a
-[HakuRun]-|xx:xx:xx|-INFO:   Task 2/4: python /path/to/demo_hakurun.py 1 fixed_arg input_b
-[HakuRun]-|xx:xx:xx|-INFO:   Task 3/4: python /path/to/demo_hakurun.py 2 fixed_arg input_a
-[HakuRun]-|xx:xx:xx|-INFO:   Task 4/4: python /path/to/demo_hakurun.py 2 fixed_arg input_b
-[HakuRun]-|xx:xx:xx|-INFO: Waiting for parallel tasks to complete...
-['/path/to/demo_hakurun.py', '1', 'fixed_arg', 'input_a']
-['/path/to/demo_hakurun.py', '2', 'fixed_arg', 'input_a']
-['/path/to/demo_hakurun.py', '1', 'fixed_arg', 'input_b']
-['/path/to/demo_hakurun.py', '2', 'fixed_arg', 'input_b']
-[HakuRun]-|xx:xx:xx|-INFO: All parallel tasks finished successfully.
-```
+*   You can create a global default config with `hakuriver.init`, this command will create a default config file in `~/.hakuriver/config.toml`, all the command will use this config by default.
+*   Content of default config: `src/hakuriver/utils/default_config.toml`.
+*   Override with `--config /path/to/custom.toml` for any `hakuriver.*` command.
+*   **CRITICAL SETTINGS TO REVIEW/EDIT:**
+    *   `[network] host_reachable_address`: **Must** be the IP/hostname of the Host reachable by Runners and Clients.
+    *   `[network] runner_address`: **Must** be the IP/hostname of the Runner reachable by Host.
+    *   `[paths] shared_dir`: Absolute path to shared storage (must exist and be writable on runner nodes and readable on host node).
+    *   `[paths] local_temp_dir`: Absolute path to local temp storage (must exist and be writable on runner nodes).
+    *   `[paths] numactl_path`: Absolute path to `numactl` executable on runner nodes (e.g., `/usr/bin/numactl`). If empty, runner will try to use `numactl` directly.
+    *   `[database] db_file`: Path for the Host's SQLite database. Ensure the directory exists.
 
-**Note:** `hakurun` executes these tasks locally on the machine where it's invoked. It does **not** interact with the HakuRiver host or runners and does not submit jobs to the cluster. It's a standalone helper utility for generating and running command variations.
+---
 
-**Hint:** When you want to submit multiple similar commands into HakuRiver, it is recommended to combine them into a single job using the `hakurun` utility. This allows you to treat a bunch of commands as a single HakuRiver task, which can be useful for tasks like web crawling or dataset preprocessing involving many small, similar operations.
+## 💻 Usage - HakuRiver Cluster
 
-### Configuration - Hakuriver
+**1. Initialize Database (Run once on Host machine):**
+   The Host attempts this on startup. Ensure the directory for `db_file` exists and is writable. Delete the DB file if upgrading with schema changes.
 
-* A default configuration file is located at `src/hakuriver/utils/default_config.toml`.
-* **Crucially, review and potentially edit these settings in your default or a custom config file:**
-  * `[network] host_reachable_address`: Must be the IP or hostname of the Host server reachable by Runners and Clients.
-  * `[paths] shared_dir`: Absolute path to shared storage (must exist and be accessible with the same path on all nodes).
-  * `[paths] local_temp_dir`: Absolute path to local temp storage (must exist and be writable on runner nodes).
-  * `[database] db_file`: Path for the host's SQLite database file. Ensure the directory exists.
-* You can override the default configuration by providing a custom TOML file using the `--config` flag when running any `hakuriver.*` command.
+**2. Start Host Server (on manager node):**
+   ```bash
+   hakuriver.host
+   # With custom config:
+   # hakuriver.host --config /path/to/host_config.toml
+   ```
 
-### Usage - HakuRiver
+**3. Start Runner Agent (on each compute node):**
+   ```bash
+   # IMPORTANT: Run as a user with NOPASSWD sudo access for:
+   # /usr/bin/systemd-run, /usr/bin/systemctl
+   # (Needed for task launch, resource limits, killing tasks, potentially numactl if run via sudo)
+   # Example sudoers entry:
+   # your_user ALL=(ALL) NOPASSWD: /usr/bin/systemd-run, /usr/bin/systemctl
 
-**1. Initialize Database (Run once on the Host machine):**
-The Host server attempts to initialize the database on startup. Ensure the directory specified in `database.db_file` exists and is writable by the user running the host.
+   hakuriver.runner
+   # With custom config:
+   # hakuriver.runner --config /path/to/runner_config.toml
+   ```
+   *The runner will detect and report its NUMA topology if `numactl` is found and configured.*
 
-**2. Start the Host Server (on the manager node):**
+**4. Systemd Execution Notes:**
+   *   Tasks run via `systemd-run` do *not* inherit the Runner's working directory (usually start in user's home or `/`). Use absolute paths or env vars (`HAKURIVER_SHARED_DIR`, `HAKURIVER_LOCAL_TEMP_DIR`).
+   *   The task environment includes variables set via `--env`, `HAKURIVER_*` variables, and potentially variables inherited by the `systemd --user` instance or system instance depending on how `systemd-run` is invoked by sudo.
+   *   If `numactl` is used, it prepends the user's actual command within the systemd scope.
 
-```bash
-hakuriver.host
-# Or with a custom config:
-# hakuriver.host --config /path/to/host_config.toml
-```
+**5. Use the Client (`hakuriver.client`):**
 
-**3. Start the Runner Agent (on each compute node):**
+   | Action                 | Command Example                                                                                                                               | Notes                                                                          |
+   | :--------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------- |
+   | **List Nodes**         | `hakuriver.client --list-nodes`                                                                                                               | Shows status, cores, NUMA summary.                                             |
+   | **Node Health**        | `hakuriver.client --health` <br> `hakuriver.client --health <node-hostname>`                                                                    | Shows detailed stats, including full NUMA topology if available.               |
+   | **Submit Single Task** | `hakuriver.client --target <host1> --cores 1 -- echo "Basic Task"`                                                                              | Runs on any available core on `<host1>`.                                         |
+   | **Submit (NUMA)**      | `hakuriver.client --target <host1>:0 --cores 2 --memory 1G -- ./my_numa_script.sh`                                                             | Runs bound to NUMA node 0 on `<host1>`. Requires `numactl` on runner.          |
+   | **Submit (Multi-NUMA)**| `hakuriver.client --target <host1>:0 --target <host1>:1 --cores 1 -- ./process_shard.sh`                                                        | Runs two task instances on `<host1>`, one on NUMA 0, one on NUMA 1.            |
+   | **Submit (Multi-Node)**| `hakuriver.client --target <host1>:0 --target <host2> --cores 4 --env P=1 -- ./parallel_job.sh`                                                 | Runs on NUMA 0 of `<host1>` and any core on `<host2>`.                         |
+   | **Submit (Sandbox)**   | `hakuriver.client --target <host1> --cores 1 --private-network --private-pid -- ./isolated_task.sh`                                              | Applies systemd sandboxing options.                                            |
+   | **Check Status**       | `hakuriver.client --status <task_id>`                                                                                                         | Shows detailed status, including target NUMA, batch ID.                      |
+   | **Kill Task**          | `hakuriver.client --kill <task_id>`                                                                                                           | Requests termination of a specific task instance.                              |
+   | **Submit + Wait**      | `hakuriver.client --target <host1>:0 --wait -- sleep 30`                                                                                        | Waits for the specified task(s) to finish. Use cautiously with multi-target. |
+   | **Use Custom Config**  | `hakuriver.client --config client.toml --list-nodes`                                                                                          | Loads client config overrides.                                                 |
+   | **Combine w/ hakurun** | `hakurun hakuriver.client --target <host1>:0 --cores 1 -- python script.py span:{1..10}`<br>(Submits 10 separate HakuRiver jobs)                 | Useful for submitting many similar *independent* cluster jobs.                 |
+   | **Combine w/ hakurun** | `hakuriver.client --target <host1>:0 --cores 4 -- hakurun --parallel python process.py span:{A..Z}`<br>(Submits 1 HakuRiver job running hakurun) | Useful for grouping many small, related steps into *one* cluster job.          |
 
-```bash
-# IMPORTANT: Run this command as a user who has NOPASSWD sudo access
-# for systemd-run and systemctl commands. This is required for task
-# execution, resource limiting, and killing.
-# Example sudoers entry:
-# your_user ALL=(ALL) NOPASSWD: /usr/bin/systemd-run, /usr/bin/systemctl
+   **`--target` Syntax:**
 
-hakuriver.runner
-# Or with a custom config:
-# hakuriver.runner --config /path/to/runner_config.toml
-```
+   | Format           | Description                           |
+   | :--------------- | :------------------------------------ |
+   | `my-node`        | Target the physical node `my-node`.   |
+   | `my-node:0`      | Target NUMA node 0 on `my-node`.      |
+   | `another-node:1` | Target NUMA node 1 on `another-node`. |
 
-**Important Considerations for `systemd-run` Execution:**
+---
 
-* **Sudo Requirement:** As noted above, the user running `hakuriver.runner` needs passwordless `sudo` access for `systemd-run` and `systemctl`.
-* **Working Directory:** Tasks launched via `systemd-run` do *not* inherit the working directory of the `hakuriver.runner` process. They typically start in the home directory of the user specified (`--property=User=...`, which defaults to the user running the runner) or `/`. Your scripts should generally use absolute paths or rely on environment variables like `HAKURIVER_SHARED_DIR` and `HAKURIVER_LOCAL_TEMP_DIR`.
-* **Environment:** While HakuRiver passes specified environment variables (`--env`) and injects its own (`HAKURIVER_*`), the overall environment might differ slightly from a direct shell execution due to systemd's handling.
+## 🌐 Usage - Frontend Web UI (Experimental)
 
-**4. Use the Client:**
-
-```bash
-# List nodes
-hakuriver.client --list-nodes
-
-# Get health status for all nodes
-hakuriver.client --health
-
-# Get health for a specific node
-hakuriver.client --health node-01.compute.local
-
-# Submit a simple task requesting 1 core, 512MB RAM, and wait
-hakuriver.client --cores 1 --memory 512M --wait -- python -c "import time; print('Hello'); time.sleep(5)"
-
-# Submit a task with args, env vars, and network isolation
-hakuriver.client --cores 4 --memory 2G --env MY_VAR=ABC --private-network -- /path/to/shared/my_job.sh --input data.txt
-
-# Check task status
-hakuriver.client --status <task_id>
-
-# Kill a task
-hakuriver.client --kill <task_id>
-
-# Use a custom config for the client
-hakuriver.client --config client.toml --list-nodes
-
-# Combine multiple commands into one job using hakurun
-hakuriver.client --cores 4 --memory 1G -- hakurun --parallel python -c "import sys; print(f'Arg: {sys.argv[1]}')" "span:{1..10}"
-
-# Submit multiple similar commands as distinct HakuRiver jobs using hakurun + hakuriver.client
-hakurun hakuriver.client --cores 1 --memory 256M -- python -c "import sys; print(f'Task {sys.argv[1]}')" "span:{A..D}"
-```
-
-### Usage - Frontend Web UI (Experimental)
 
 | Overview | Node list and Task list | Submit Task from Manager UI |
 | -|-|-|
 |![1744643963836](image/README/1744643963836.png)| ![1744643981874](image/README/1744643981874.png) ![1744643997740](image/README/1744643997740.png) | ![1744644009190](image/README/1744644009190.png)|
 
-HakuRiver includes an optional web-based dashboard built with Vue.js and Element Plus for visual monitoring and management.
+HakuRiver includes an optional Vue.js dashboard for visual monitoring and management.
 
 **Prerequisites:**
-
-1. **Node.js and npm (or yarn/pnpm):** You need Node.js installed to build and run the frontend development server. You can download it from [https://nodejs.org/](https://nodejs.org/). npm is usually included with Node.js.
-2. **Running HakuRiver Host:** The frontend communicates with the HakuRiver Host API. Ensure the `hakuriver.host` server is running and accessible (by default at `http://127.0.0.1:8000` as configured in `vite.config.js` proxy).
+*   Node.js and npm/yarn/pnpm.
+*   Running HakuRiver Host accessible from where you run the frontend dev server.
 
 **Setup:**
+```bash
+cd frontend
+npm install
+```
 
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   # or: yarn install / pnpm install
-   ```
+**Running (Development):**
+1.  Ensure Host is running (e.g., `http://127.0.0.1:8000`).
+2.  Start Vite dev server:
+    ```bash
+    npm run dev
+    ```
+3.  Open the URL provided (e.g., `http://localhost:5173`).
+4.  The dev server proxies `/api` requests to the Host (see `vite.config.js`).
+5.  **Features:**
+    *   View node list, status, resources, and **NUMA topology**.
+    *   View task list, details (incl. Batch ID, Target NUMA), logs.
+    *   Submit new tasks using a form that includes a **multi-target selector** allowing node-wide or specific NUMA node selection.
+    *   Kill running tasks.
 
-**Running in Development Mode:**
+**Building (Production):**
+1.  Build static files:
+    ```bash
+    npm run build
+    ```
+2.  Serve the contents of `frontend/dist` using any static web server (Nginx, Apache, etc.).
+3.  **Important:** Configure your production web server to proxy API requests (e.g., requests to `/api/*`) to the actual running HakuRiver Host address and port, similar to the Vite dev server proxy, OR modify `src/services/api.js` to use the Host's absolute URL before building.
 
-1. Start the Vite development server:
-   ```bash
-   npm run dev
-   ```
-2. Vite will typically start the server and print the local URL (e.g., `http://localhost:5173`). Open this URL in your web browser.
-3. The development server is configured with a proxy (see `frontend/vite.config.js`). API requests made by the frontend (e.g., to `/api/nodes`) will be automatically forwarded to the HakuRiver Host server configured in the proxy target (default: `http://127.0.0.1:8000`). **Make sure your HakuRiver Host is running at this address.**
-4. The "Submit Task" dialog in the UI now includes fields for specifying a **Memory Limit** (e.g., "512M", "4G") and checkboxes for **Sandboxing Options** (Isolate Network, Isolate Processes).
+## Feature Details
 
-**Building for Production:**
+### NUMA Awareness
 
-1. To create a production-ready build (static HTML, JS, CSS files):
-   ```bash
-   npm run build
-   ```
-2. The optimized static files will be generated in the `frontend/dist` directory.
-3. These static files can then be served by any web server (like Nginx, Apache, or even Python's `http.server`).
-4. **Important:** When deploying the built frontend, you need to ensure it can correctly reach the HakuRiver Host API. The `src/services/api.js` file has a placeholder for the production URL (`http://your-production-hakuriver-host:8000`). You will need to:
-   * Modify `src/services/api.js` before building to point to your actual host address, OR
-   * Configure your deployment web server (e.g., Nginx) to proxy requests from the frontend's path (like `/api`) to the backend HakuRiver Host, similar to how the Vite dev server does it.
+Modern multi-socket or high-core-count CPUs often have Non-Uniform Memory Access (NUMA) architectures. Accessing memory attached to the *same* NUMA node (socket) as the running CPU core is faster than accessing memory attached to a *different* NUMA node.
 
-## Acknowledgement
+```ascii
++------------------------------- Node: my-compute-01 ------------------------------+
+| +------------- NUMA Node-------------+       +--------- NUMA Node 1 -----------+ |
+| |  +--- Memory Bank 0 (64 GiB) ---+  |       | +--- Memory Bank 1 (64GiB) ---+ | │
+| |  |                              |  |       | |                             | | │
+| |  +------------------------------+  |       | +-----------------------------+ | │
+| |        ▲                           |       |       ▲                         | │
+| |        │ Fast Access               │       │       │ Fast Access             | │
+| |  +-----▼------------------------+  |       | +-----▼-----------------------+ | │
+| |  | CPU Cores [0, 1, 2, ... 15] <-Interconnect-> CPU Cores [16..31]         | | │
+| |  +------------------------------+  |       | +-----------------------------+ | │
+| +------------------------------------+       +---------------------------------+ │
++----------------------------------------------------------------------------------+
 
-* Gemini 2.5 pro: basic implementation and this README
-* Claude 3.7 Sonnet: refine the code of logo.svg
+Example Task Binding:
+  Task A --> Bound to NUMA Node 0 (Uses Cores 0-15, Prefers Memory Bank 0) via `numactl --cpunodebind=0 --membind=0 ...`
+  Task B --> Bound to NUMA Node 1 (Uses Cores 16-31, Prefers Memory Bank 1) via `numactl --cpunodebind=1 --membind=1 ...`
+```
+
+*   **Detection:** Runners use `numactl --hardware` (if available and configured via `numactl_path`) to detect their NUMA layout (nodes, cores per node, memory per node).
+*   **Reporting:** Runners send this topology info to the Host during registration.
+*   **Targeting:** Users can specify a target like `my-compute-01:0` via the Client or Frontend to request the task run specifically on NUMA node 0 of that host.
+*   **Execution:** The Runner prepends the `numactl --cpunodebind=<id> --membind=<id>` command to the user's task command within the `systemd-run` scope, enforcing the binding.
+
+### Multi-Node / Multi-NUMA Task Submission
+
+Users can now submit a single request that HakuRiver replicates across multiple specified targets.
+
+```ascii
++-----------------+       +----------------------------------------------------+
+|  Client/        | ----> | Host Server                                        |
+|  Frontend       |       | Receives:                                          |
+|                 |       |  - Command: `my_script.sh --input {i}`             |
+| Request:        |       |  - Cores: 2                                        |
+|  Run my_script  |       |  - Targets: ["node1:0", "node1:1", "node2"]        |
+|  on node1:0,    |       +----------------------------------------------------+
+|  node1:1, node2 |        │                        │                        │                         
++-----------------+        │ Dispatch Task          │ Dispatch Task          │ Dispatch Task           
+                           │ (ID: 102, Target: 1:0) │ (ID: 103, Target: 1:1) │ (ID: 103, Target: 2)
+                 +---------▼----------+   +---------▼----------+   +---------▼----------+
+                 | Runner (Node 1)    |   | Runner (Node 1)    |   | Runner (Node 2)    |
+                 | Executes Task 101  |   | Executes Task 102  |   | Executes Task 103  |
+                 | (numactl bind 0)   |   | (numactl bind 1)   |   | (no numactl)       |
+                 +--------------------+   +--------------------+   +--------------------+
+```
+
+*   **Request:** The Client/Frontend sends a single `/submit` request containing a list of `targets` (e.g., `["node1:0", "node1:1", "node2"]`).
+*   **Host Processing:** The Host iterates through the targets. For each valid and available target, it:
+    *   Generates a unique Task ID (e.g., 101, 102, 103).
+    *   Creates a separate database record for that task instance, linking it to the target node/NUMA ID and potentially a common Batch ID.
+    *   Dispatches the task instance to the appropriate Runner, including the specific `target_numa_node_id` if applicable.
+*   **Response:** The Host responds with a list of the Task IDs successfully created and dispatched.
+
+---
+
+## 🙏 Acknowledgement
+
+*   Gemini 2.5 pro: Basic implementation and initial README generation.
+*   Claude 3.7 Sonnet: Refining the logo SVG code.
