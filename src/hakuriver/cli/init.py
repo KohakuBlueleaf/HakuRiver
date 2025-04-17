@@ -12,7 +12,11 @@ def main():
     config_path = os.path.join(base_dir, "utils", "default_config.toml")
     default_config_file = os.path.join(default_config_path, "config.toml")
     if not os.path.exists(default_config_file):
+        with open(config_path, "r") as g:
+            config = g.read()
+        logger.info("Default config:")
+        print(config)
+        logger.info("Creating default config file...")
         with open(default_config_file, "w") as f:
-            with open(config_path, "r") as g:
-                f.write(g.read())
+            f.write(config)
     logger.info(f"Default config file created at {default_config_file}")
