@@ -549,4 +549,18 @@ onUnmounted(() => {
 .allocated-col span {
   white-space: nowrap;
 }
+
+.numa-section { margin-top: 15px; }
+.numa-section .resource-title { margin-bottom: 10px; } /* Reuse resource title style */
+.numa-section .el-descriptions { background-color: var(--el-fill-color-lighter); } /* Slightly different background for distinction */
+.numa-section .el-descriptions__title { font-size: 0.9em; font-weight: 600; } /* Smaller title for NUMA node */
+.numa-section .code-like { /* Style for core list */
+    font-family: monospace;
+    background-color: var(--el-color-info-light-9);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+/* Ensure empty state is centered */
+.numa-section .el-empty { padding: 10px 0; }
 </style>
