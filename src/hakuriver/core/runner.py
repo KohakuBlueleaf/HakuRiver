@@ -120,7 +120,7 @@ def detect_numa_topology() -> dict | None:
         # Regex to find memory lines like: node 0 size: 64215 MB
         # Allows for different units (kB, MB, GB)
         node_mem_match = re.findall(
-            r"node (\d+) size: (\d+)\s*(?:MB|GB|kB)", output, re.IGNORECASE
+            r"node (\d+) size: (\d+)\s*((?:MB|GB|kB))", output, re.IGNORECASE
         )
         # Regex to find distance lines: node distances: node   0   1 \n  0:  10  21 \n  1:  21  10
         # We mainly care about the number of nodes reported here to validate parsing
