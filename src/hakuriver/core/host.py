@@ -642,27 +642,30 @@ async def submit_task(req: TaskRequest):
         try:
             # Use peewee transaction for safety if multiple operations needed per task
             with db.atomic():
-                task = Task.create(
-                    task_id=task_id,
-                    batch_id=current_batch_id,
-                    command=req.command,
-                    required_cores=req.required_cores,
-                    required_memory_bytes=req.required_memory_bytes,
-                    use_private_network=req.use_private_network,
-                    use_private_pid=req.use_private_pid,
-                    assigned_node=node,  # Assign to the validated node PK
-                    target_numa_node_id=target_numa_id,  # Store the target NUMA ID
-                    status="assigning",
-                    stdout_path=stdout_path,
-                    stderr_path=stderr_path,
-                    submitted_at=datetime.datetime.now(),
-                    systemd_unit_name=unit_name,
-                )
-                task.set_arguments(req.arguments)  # Use helper to store JSON
-                task.set_env_vars(req.env_vars)  # Use helper to store JSON
-                task.save()  # Save arguments/env_vars
+                task = Task.create(task_id=task_id,
+                arguments="",  # Will be set below
+                env_vars="",  # Will be set below
+                command=req.command,
+                required_cores=req.required_cores,
+                required_memory_bytes=req.required_memory_bytes,  # Store memory limit
+                use_private_network=req.use_private_network,  # Store sandbox flag
+                use_private_pid=req.use_private_pid,  # Store sandbox flag
+                assigned_node=node,
+                status="assigning",
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+                submitted_at=datetime.datetime.now(),
+                systemd_unit_name=unit_name,
+                target_numa_node_id=target_numa_id,
+            )
+            task.set_arguments(req.arguments)
+            task.set_env_vars(req.env_vars)
+            task.save()
             logger.info(
-                f"Task {task_id} (Batch: {current_batch_id}) created for target '{target_str}'. Assigning to {node.hostname}..."
+                f"Task {task_id} created, "
+                f"Req Cores: {req.required_cores}, "
+                f"Req Mem: {req.required_memory_bytes // 1e6 if req.required_memory_bytes else 'N/A'}MB. "
+                f"Assigning to {node.hostname} (Unit: {unit_name})."
             )
 
         except Exception as e:
