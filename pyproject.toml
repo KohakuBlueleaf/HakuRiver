@@ -8,7 +8,7 @@ version = "0.0.1"
 description = "A multi-node resource management tool with CPU core as unit."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "Apache License 2.0"}
+license = "Apache-2.0"
 authors = [
     {name = "Shih-Ying Yeh(KohakuBlueLeaf)", email = "apolloyeh0123@gmail.com"},
 ]
