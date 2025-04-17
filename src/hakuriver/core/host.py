@@ -556,7 +556,7 @@ async def submit_task(req: TaskRequest):
     if not targets:
         targets = find_suitable_node(req.required_cores).hostname
         targets = [targets]
-    for target_str in req.targets:
+    for target_str in targets:
         target_numa_id: int | None = None
         parts = target_str.split(":")
         target_hostname = parts[0]
