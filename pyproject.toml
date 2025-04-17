@@ -40,4 +40,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-myModule = ["*.toml"]
+hakuriver = ["*.toml"]
