@@ -60,7 +60,7 @@ class TaskRequest(BaseModel):
     use_private_pid: bool = Field(default=False)
     targets: list[str] | None = Field(
         default=None,
-        min_length=1,
+        min_length=0,
         description='List of targets, e.g., ["host1", "host2:0", "host1:1"]',
     )
 

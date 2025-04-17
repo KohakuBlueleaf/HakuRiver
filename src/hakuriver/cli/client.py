@@ -274,10 +274,6 @@ def main():
                 command_parts = command_parts[1:]
             if not command_parts:
                 parser.error("No command specified for submission.")
-            if not args.target:
-                parser.error(
-                    "Missing required argument: --target HOST[:NUMA_ID] is required for submitting a task."
-                )
 
             command_to_run = command_parts[0]
             command_arguments = command_parts[1:]
@@ -299,7 +295,9 @@ def main():
             env_vars = parse_key_value(args.env)
 
             logger.info(
-                f"Submitting command '{command_to_run}' with args {command_arguments} to targets: {', '.join(args.target)}"
+                f"Submitting command '{command_to_run}' "
+                f"with args {command_arguments} "
+                f"to targets: {', '.join(args.target)}"
             )
 
             # Call the updated core function

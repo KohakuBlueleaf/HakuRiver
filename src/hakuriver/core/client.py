@@ -117,8 +117,9 @@ def submit_task(
         "targets": targets,  # Pass the list of target strings
     }
     print(payload)
-    target_desc = ", ".join(targets)
-    logger.info(f"Submitting task to {url} for target(s): {target_desc}")
+    if targets:
+        target_desc = ", ".join(targets)
+        logger.info(f"Submitting task to {url} for target(s): {target_desc}")
     logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
     try:
         with httpx.Client(timeout=client_config.default_timeout) as client:
