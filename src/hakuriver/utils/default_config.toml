@@ -10,6 +10,7 @@ host_port = 8000
 host_reachable_address = "127.0.0.1"
 
 # Port the Runner server listens on
+runner_address = "127.0.1.1"
 runner_port = 8001
 
 [paths]

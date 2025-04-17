@@ -24,6 +24,7 @@ class RunnerConfig:
     # Network
     HOST_ADDRESS = settings["network"]["host_reachable_address"]
     HOST_PORT = settings["network"]["host_port"]
+    RUNNER_ADDRESS = settings["network"]["runner_address"]
     RUNNER_PORT = settings["network"]["runner_port"]
     HOST_URL = f"http://{HOST_ADDRESS}:{HOST_PORT}"
     # Paths
@@ -84,14 +85,7 @@ killed_tasks_pending_report: list[HeartbeatKilledTaskInfo] = []
 running_processes = (
     {}
 )  # task_id -> {'unit': str, 'process': asyncio.Process | None, 'memory_limit': int | None, 'pid': int | None}
-try:
-    runner_ip = socket.gethostbyname(RunnerConfig.RUNNER_HOSTNAME)
-except socket.gaierror:
-    logger.warning(
-        f"Could not resolve hostname '{RunnerConfig.RUNNER_HOSTNAME}' to IP. Using 127.0.0.1 for runner URL registration. This might fail if host cannot reach 127.0.0.1 of the runner."
-    )
-    runner_ip = "127.0.0.1"  # Fallback, likely problematic
-
+runner_ip = RunnerConfig.RUNNER_ADDRESS
 runner_url = f"http://{runner_ip}:{RunnerConfig.RUNNER_PORT}"
 total_cores = os.cpu_count()
 if not total_cores:
