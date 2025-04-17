@@ -211,8 +211,8 @@ hakurun --parallel python ./demo_hakurun.py span:{1..2} fixed_arg span:[input_a,
 | **Kill Task**           | `hakuriver.client --kill <task_id>`                                                                                                              | Requests termination of a specific task instance.                            |
 | **Submit + Wait**       | `hakuriver.client --target <host1>:0 --wait -- sleep 30`                                                                                         | Waits for the specified task(s) to finish. Use cautiously with multi-target. |
 | **Use Custom Config**   | `hakuriver.client --config client.toml --list-nodes`                                                                                             | Loads client config overrides.                                               |
-| **Combine w/ hakurun**  | `hakurun hakuriver.client --target <host1>:0 --cores 1 -- python script.py span:{1..10}<br>`(Submits 10 separate HakuRiver jobs)                 | Useful for submitting many similar*independent* cluster jobs.              |
-| **Combine w/ hakurun**  | `hakuriver.client --target <host1>:0 --cores 4 -- hakurun --parallel python process.py span:{A..Z}<br>`(Submits 1 HakuRiver job running hakurun) | Useful for grouping many small, related steps into*one* cluster job.       |
+| **Combine w/ hakurun**  | `hakurun hakuriver.client --target <host1>:0 --cores 1 -- python script.py span:{1..10}` <br>(Submits 10 separate HakuRiver jobs)                 | Useful for submitting many similar*independent* cluster jobs.              |
+| **Combine w/ hakurun**  | `hakuriver.client --target <host1>:0 --cores 4 -- hakurun --parallel python process.py span:{A..Z}` <br>(Submits 1 HakuRiver job running hakurun) | Useful for grouping many small, related steps into*one* cluster job.       |
 
    **`--target` Syntax:**
 

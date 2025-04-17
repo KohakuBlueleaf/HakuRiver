@@ -211,8 +211,8 @@ hakurun --parallel python ./demo_hakurun.py span:{1..2} fixed_arg span:[input_a,
 | **終止任務**                  | `hakuriver.client --kill <task_id>`                                                                                                              | 請求終止特定的任務實例。                                                     |
 | **提交 + 等待**               | `hakuriver.client --target <host1>:0 --wait -- sleep 30`                                                                                         | 等待指定的任務完成。對於多目標提交請謹慎使用。                               |
 | **使用自訂設定檔**            | `hakuriver.client --config client.toml --list-nodes`                                                                                             | 載入客戶端設定檔覆蓋。                                                       |
-| **與 hakurun 結合 (1)**     | `hakurun hakuriver.client --target <host1>:0 --cores 1 -- python script.py span:{1..10}<br>`(提交 10 個獨立的 HakuRiver 作業)                 | 用於提交許多相似的*獨立*叢集作業。                                             |
-| **與 hakurun 結合 (2)**     | `hakuriver.client --target <host1>:0 --cores 4 -- hakurun --parallel python process.py span:{A..Z}<br>`(提交 1 個運行 hakurun 的 HakuRiver 作業) | 用於將許多小型相關步驟分組到*一個*叢集作業中。                                 |
+| **與 hakurun 結合 (1)**     | `hakurun hakuriver.client --target <host1>:0 --cores 1 -- python script.py span:{1..10}` <br> (提交 10 個獨立的 HakuRiver 作業)                 | 用於提交許多相似的*獨立*叢集作業。                                             |
+| **與 hakurun 結合 (2)**     | `hakuriver.client --target <host1>:0 --cores 4 -- hakurun --parallel python process.py span:{A..Z}` <br> (提交 1 個運行 hakurun 的 HakuRiver 作業) | 用於將許多小型相關步驟分組到*一個*叢集作業中。                                 |
 
    **`--target` 語法：**
 
