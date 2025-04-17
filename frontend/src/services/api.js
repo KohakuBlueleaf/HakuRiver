@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.DEV ? '/api' : 'http://your-production-hakuriver-host:8000', // Adjust production URL
+  baseURL: '/api', // Adjust production URL
   timeout: 10000, // Default timeout
   headers: {
     'Content-Type': 'application/json',
@@ -11,7 +11,7 @@ const apiClient = axios.create({
 
 // Specific client for potentially long log requests, expecting text
 const logClient = axios.create({
-  baseURL: import.meta.env.DEV ? '/api' : 'http://your-production-hakuriver-host:8000',
+  baseURL: '/api',
   timeout: 30000, // Longer timeout for logs
   headers: {
     Accept: 'text/plain', // Indicate we prefer plain text
@@ -24,19 +24,22 @@ export default {
     return apiClient.get('/nodes');
   },
   submitTask(taskData) {
-    // MODIFIED: Add new fields to task submission data if they exist
+    // Payload now expects 'targets' list instead of individual target info
     const payload = {
       command: taskData.command,
-      arguments: taskData.arguments,
-      env_vars: taskData.env_vars,
+      arguments: taskData.arguments, // Assume taskData provides this already parsed
+      env_vars: taskData.env_vars, // Assume taskData provides this already parsed
       required_cores: taskData.required_cores,
-      required_memory_bytes: taskData.required_memory_bytes,
+      required_memory_bytes: taskData.required_memory_bytes, // Already handled bytes conversion
       use_private_network: taskData.use_private_network,
       use_private_pid: taskData.use_private_pid,
+      targets: taskData.targets, // Pass the array of target strings
     };
-    // Filter out null/undefined optional values if necessary, although backend should handle nulls
+    // Filter out null/undefined optional values if necessary
     Object.keys(payload).forEach((key) => payload[key] == null && delete payload[key]);
-    return apiClient.post('/submit', payload);
+    // Return the whole response data, as it might contain task_ids and failed_targets
+    return apiClient.post('/submit', payload).then((response) => response.data);
+    // Previous version returned only response.data.task_id
   },
   getTaskStatus(taskId) {
     // Note: This fetches full details now via the /status endpoint

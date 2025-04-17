@@ -7,24 +7,16 @@
     </el-button>
 
     <!-- Display errors prominently -->
+    <el-alert v-if="healthError" :title="healthError" type="error" show-icon :closable="false" style="margin-top: 15px" />
     <el-alert
-      v-if="healthError"
-      :title="healthError"
-      type="error"
+      v-if="taskError && !healthError"
+      :title="taskError"
+      type="warning"
       show-icon
       :closable="false"
       style="margin-top: 15px"
+      description="Node health may be displayed, but task allocation data might be missing or inaccurate."
     />
-    <el-alert
-        v-if="taskError && !healthError" 
-        :title="taskError"
-        type="warning"
-        show-icon
-        :closable="false"
-        style="margin-top: 15px;"
-        description="Node health may be displayed, but task allocation data might be missing or inaccurate."
-    />
-
 
     <el-row :gutter="20" style="margin-top: 20px">
       <!-- Left Column: Node List -->
@@ -49,7 +41,12 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="total_cores" label="Cores" sortable/>
+            <el-table-column label="NUMA Nodes" sortable :sort-method="sortByNumaNodes" width="125">
+              <template #default="scope">
+                {{ formatNumaSummary(scope.row.numa_topology) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="total_cores" label="Cores" sortable />
             <el-table-column prop="cpu_percent" label="CPU %" sortable>
               <template #default="scope">
                 {{ scope.row.cpu_percent?.toFixed(1) ?? 'N/A' }}
@@ -60,14 +57,14 @@
                 {{ scope.row.memory_percent?.toFixed(1) ?? 'N/A' }}
               </template>
             </el-table-column>
-             <el-table-column label="Allocated">
-                 <template #default="scope">
-                     <div class="allocated-col">
-                        <span>C: {{ getNodeAllocatedCores(scope.row.hostname) }}</span>
-                        <span>M: {{ formatBytesToGB(getNodeAllocatedMemory(scope.row.hostname)) }}G</span>
-                     </div>
-                 </template>
-             </el-table-column>
+            <el-table-column label="Allocated">
+              <template #default="scope">
+                <div class="allocated-col">
+                  <span>C: {{ getNodeAllocatedCores(scope.row.hostname) }}</span>
+                  <span>M: {{ formatBytesToGB(getNodeAllocatedMemory(scope.row.hostname)) }}G</span>
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column prop="last_heartbeat" label="Last Heartbeat" sortable>
               <template #default="scope">
                 {{ formatDateTime(scope.row.last_heartbeat) }}
@@ -96,14 +93,14 @@
             </el-descriptions>
 
             <!-- Display task error specifically for this card if relevant -->
-             <el-alert
+            <el-alert
               v-if="taskError && selectedNodeData"
               title="Task Allocation Data Unavailable"
               type="warning"
               show-icon
               :closable="false"
               class="info-alert"
-              style="margin-top: 15px;"
+              style="margin-top: 15px"
             />
 
             <!-- Dynamic Resources Section (Mimics HomeView) -->
@@ -147,18 +144,10 @@
                 <h4 class="resource-title">Memory Resources</h4>
                 <el-row :gutter="5" align="middle" class="resource-row">
                   <el-col :span="8" class="resource-col">
-                    <el-statistic
-                      title="Total"
-                      :value="formatBytesToGB(selectedNodeData.memory_total_bytes)"
-                      suffix=" GB"
-                    />
+                    <el-statistic title="Total" :value="formatBytesToGB(selectedNodeData.memory_total_bytes)" suffix=" GB" />
                   </el-col>
                   <el-col :span="8" class="resource-col">
-                    <el-statistic
-                      title="Allocated"
-                      :value="formatBytesToGB(selectedNodeAllocatedMemoryBytes)"
-                      suffix=" GB"
-                    />
+                    <el-statistic title="Allocated" :value="formatBytesToGB(selectedNodeAllocatedMemoryBytes)" suffix=" GB" />
                   </el-col>
                   <el-col :span="8" class="resource-col">
                     <div class="mini-chart-container">
@@ -183,6 +172,32 @@
                   </el-col>
                 </el-row>
               </div>
+            </div>
+
+            <el-divider />
+            <div class="numa-section">
+              <h4 class="resource-title">NUMA Topology</h4>
+              <div v-if="selectedNodeData.numa_topology && Object.keys(selectedNodeData.numa_topology).length > 0">
+                <el-descriptions
+                  :column="1"
+                  border
+                  size="small"
+                  v-for="(numaInfo, numaId) in sortedNumaTopology"
+                  :key="numaId"
+                  style="margin-bottom: 8px"
+                >
+                  <template #title>NUMA Node {{ numaId }}</template>
+                  <el-descriptions-item label="CPU Cores">
+                    <span class="code-like">{{ numaInfo.cores?.join(', ') || 'N/A' }}</span>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Memory">
+                    {{ formatBytesForNuma(numaInfo.memory_bytes) }}
+                  </el-descriptions-item>
+                  <!-- Optional: Add allocated resources per NUMA node later -->
+                  <!-- <el-descriptions-item label="Allocated Cores">{{ getAllocatedCoresForNuma(numaId) }}</el-descriptions-item> -->
+                </el-descriptions>
+              </div>
+              <el-empty v-else description="No NUMA topology reported by this node." :image-size="60" />
             </div>
           </div>
         </el-card>
@@ -288,7 +303,10 @@ const selectedNodeAllocatedCores = computed(() => {
     return 0;
   }
   return tasks.value
-    .filter(t => (t.status === 'running' || t.status === 'assigning') && t.assigned_node_hostname === selectedNodeData.value.hostname)
+    .filter(
+      (t) =>
+        (t.status === 'running' || t.status === 'assigning') && t.assigned_node_hostname === selectedNodeData.value.hostname
+    )
     .reduce((sum, task) => sum + (task.required_cores || 0), 0);
 });
 
@@ -298,38 +316,56 @@ const selectedNodeAllocatedMemoryBytes = computed(() => {
     return 0;
   }
   return tasks.value
-    .filter(t => (t.status === 'running' || t.status === 'assigning') && t.assigned_node_hostname === selectedNodeData.value.hostname)
+    .filter(
+      (t) =>
+        (t.status === 'running' || t.status === 'assigning') && t.assigned_node_hostname === selectedNodeData.value.hostname
+    )
     .reduce((sum, task) => sum + (task.required_memory_bytes || 0), 0);
 });
 
-
 // Function to get allocated cores for *any* node (used in table)
 const getNodeAllocatedCores = (hostname) => {
-    if (!hostname || !tasks.value || tasks.value.length === 0) return 0;
-    return tasks.value
-        .filter(t => (t.status === 'running' || t.status === 'assigning') && t.assigned_node_hostname === hostname)
-        .reduce((sum, task) => sum + (task.required_cores || 0), 0);
+  if (!hostname || !tasks.value || tasks.value.length === 0) return 0;
+  return tasks.value
+    .filter((t) => (t.status === 'running' || t.status === 'assigning') && t.assigned_node_hostname === hostname)
+    .reduce((sum, task) => sum + (task.required_cores || 0), 0);
 };
 
 // Function to get allocated memory for *any* node (used in table)
 const getNodeAllocatedMemory = (hostname) => {
-    if (!hostname || !tasks.value || tasks.value.length === 0) return 0;
-    return tasks.value
-        .filter(t => (t.status === 'running' || t.status === 'assigning') && t.assigned_node_hostname === hostname)
-        .reduce((sum, task) => sum + (task.required_memory_bytes || 0), 0);
+  if (!hostname || !tasks.value || tasks.value.length === 0) return 0;
+  return tasks.value
+    .filter((t) => (t.status === 'running' || t.status === 'assigning') && t.assigned_node_hostname === hostname)
+    .reduce((sum, task) => sum + (task.required_memory_bytes || 0), 0);
 };
-
 
 // Gauge data for selected node CPU %
 const selectedNodeCpuGaugeData = computed(() => {
   const cpu = selectedNodeData.value?.cpu_percent ?? 0;
-  return [{ name: 'Used', value: cpu }, { name: 'Free', value: Math.max(0, 100 - cpu) }];
+  return [
+    { name: 'Used', value: cpu },
+    { name: 'Free', value: Math.max(0, 100 - cpu) },
+  ];
 });
 
 // Gauge data for selected node Memory %
 const selectedNodeMemoryGaugeData = computed(() => {
   const mem = selectedNodeData.value?.memory_percent ?? 0;
-  return [{ name: 'Used', value: mem }, { name: 'Free', value: Math.max(0, 100 - mem) }];
+  return [
+    { name: 'Used', value: mem },
+    { name: 'Free', value: Math.max(0, 100 - mem) },
+  ];
+});
+
+const sortedNumaTopology = computed(() => {
+  if (!selectedNodeData.value?.numa_topology) return {};
+  // Sort by NUMA ID (key) numerically
+  const sortedKeys = Object.keys(selectedNodeData.value.numa_topology).sort((a, b) => parseInt(a) - parseInt(b));
+  const sorted = {};
+  for (const key of sortedKeys) {
+    sorted[key] = selectedNodeData.value.numa_topology[key];
+  }
+  return sorted;
 });
 
 // --- Chart Style ---
@@ -350,31 +386,48 @@ const handleNodeSelect = (row) => {
 // Watch for changes in the selected hostname to potentially update table selection styling
 watch(selectedHostname, (newHostname) => {
   if (nodeTableRef.value) {
-    const row = nodesHealthList.value.find(node => node.hostname === newHostname);
+    const row = nodesHealthList.value.find((node) => node.hostname === newHostname);
     nodeTableRef.value.setCurrentRow(row);
   }
 });
 
+const formatNumaSummary = (topology) => {
+  if (topology && typeof topology === 'object' && Object.keys(topology).length > 0) {
+    const count = Object.keys(topology).length;
+    return `${count} Node${count > 1 ? 's' : ''}`;
+  }
+  return 'N/A';
+};
+const sortByNumaNodes = (rowA, rowB) => {
+  const countA = Object.keys(rowA.numa_topology || {}).length;
+  const countB = Object.keys(rowB.numa_topology || {}).length;
+  return countA - countB;
+};
+const formatBytesForNuma = (bytes) => {
+  if (bytes === null || bytes === undefined) return 'N/A';
+  if (bytes < 1024) return `${bytes} B`; // Show bytes if less than 1 KiB
+  // Use the imported GiB formatter for consistency
+  return `${formatBytesToGB(bytes)} GiB`;
+};
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
-    // Initial fetch without showing loading indicators for polling fetches later
-    triggerFetchHealth(true);
-    if (backendHasGetTasks.value) {
-        fetchTasks(true);
-    } else {
-        isLoadingTasks.value = false;
-        taskError.value = "Backend API '/tasks' endpoint not available.";
-        tasks.value = [];
-    }
+  // Initial fetch without showing loading indicators for polling fetches later
+  triggerFetchHealth(true);
+  if (backendHasGetTasks.value) {
+    fetchTasks(true);
+  } else {
+    isLoadingTasks.value = false;
+    taskError.value = "Backend API '/tasks' endpoint not available.";
+    tasks.value = [];
+  }
 
-    // Set up polling, fetch without showing loading indicators
-    healthPollingInterval = setInterval(() => triggerFetchHealth(false), HEALTH_POLLING_RATE_MS);
-    if (backendHasGetTasks.value) {
-        taskPollingInterval = setInterval(() => fetchTasks(false), TASK_POLLING_RATE_MS);
-    }
+  // Set up polling, fetch without showing loading indicators
+  healthPollingInterval = setInterval(() => triggerFetchHealth(false), HEALTH_POLLING_RATE_MS);
+  if (backendHasGetTasks.value) {
+    taskPollingInterval = setInterval(() => fetchTasks(false), TASK_POLLING_RATE_MS);
+  }
 });
-
 
 onUnmounted(() => {
   if (healthPollingInterval) clearInterval(healthPollingInterval);
@@ -384,41 +437,116 @@ onUnmounted(() => {
 
 <style scoped>
 /* Reusing styles from HomeView where applicable */
-.info-card { margin-bottom: 20px; }
-.card-header { display: flex; justify-content: space-between; align-items: center; font-weight: 500; }
-.stats-row, .resource-row { text-align: center; }
-.resource-col { display: flex; justify-content: center; align-items: center; flex-direction: column; padding: 0 2px !important; /* Reduce padding for tighter fit */ }
-.el-statistic .el-statistic__head { color: var(--el-text-color-secondary); font-size: 0.8em; margin-bottom: 2px; white-space: nowrap;} /* smaller font */
-.el-statistic .el-statistic__content { font-size: 1.3em; font-weight: 600; line-height: 1.1; } /* smaller font */
-.info-alert { margin-bottom: 10px; }
-.el-divider { margin: 10px 0 15px 0; }
-.mini-chart-container { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90px; }
-.mini-chart-label { font-size: 0.8em; color: var(--el-text-color-disabled); margin-top: -5px; }
-.gauge-chart { position: relative; }
-.gauge-center-text { font-weight: bold; fill: var(--el-text-color-primary); }
-.mini-text { font-size: 1.3em; }
+.info-card {
+  margin-bottom: 20px;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 500;
+}
+.stats-row,
+.resource-row {
+  text-align: center;
+}
+.resource-col {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  padding: 0 2px !important; /* Reduce padding for tighter fit */
+}
+.el-statistic .el-statistic__head {
+  color: var(--el-text-color-secondary);
+  font-size: 0.8em;
+  margin-bottom: 2px;
+  white-space: nowrap;
+} /* smaller font */
+.el-statistic .el-statistic__content {
+  font-size: 1.3em;
+  font-weight: 600;
+  line-height: 1.1;
+} /* smaller font */
+.info-alert {
+  margin-bottom: 10px;
+}
+.el-divider {
+  margin: 10px 0 15px 0;
+}
+.mini-chart-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 90px;
+}
+.mini-chart-label {
+  font-size: 0.8em;
+  color: var(--el-text-color-disabled);
+  margin-top: -5px;
+}
+.gauge-chart {
+  position: relative;
+}
+.gauge-center-text {
+  font-weight: bold;
+  fill: var(--el-text-color-primary);
+}
+.mini-text {
+  font-size: 1.3em;
+}
 
 /* --- Styles specific to NodesView --- */
-.el-table { margin-top: 0; } /* Removed default top margin */
-.el-alert { margin-top: 15px; }
-.details-card { min-height: 400px; /* Adjust as needed */ }
-.placeholder-card { display: flex; align-items: center; justify-content: center; color: var(--el-text-color-secondary); text-align: center; }
-.placeholder-text { padding: 20px; }
-.node-static-info { margin-bottom: 15px; } /* Space between static info and resources */
-.resource-section { margin-bottom: 10px; }
-.resource-title { font-size: 1em; font-weight: 500; color: var(--el-text-color-secondary); margin-bottom: 10px; text-align: center; }
+.el-table {
+  margin-top: 0;
+} /* Removed default top margin */
+.el-alert {
+  margin-top: 15px;
+}
+.details-card {
+  min-height: 400px; /* Adjust as needed */
+}
+.placeholder-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-text-color-secondary);
+  text-align: center;
+}
+.placeholder-text {
+  padding: 20px;
+}
+.node-static-info {
+  margin-bottom: 15px;
+} /* Space between static info and resources */
+.resource-section {
+  margin-bottom: 10px;
+}
+.resource-title {
+  font-size: 1em;
+  font-weight: 500;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 10px;
+  text-align: center;
+}
 
-.el-table :deep(.el-table__row) { cursor: pointer; }
-.el-table :deep(.el-table__cell) { padding: 6px 0; } /* Reduce cell padding */
+.el-table :deep(.el-table__row) {
+  cursor: pointer;
+}
+.el-table :deep(.el-table__cell) {
+  padding: 6px 0;
+} /* Reduce cell padding */
 
 /* Style for the allocated column in the table */
 .allocated-col {
-    display: flex;
-    flex-direction: column;
-    font-size: 0.8em;
-    line-height: 1.3;
-    color: var(--el-text-color-secondary);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8em;
+  line-height: 1.3;
+  color: var(--el-text-color-secondary);
 }
-.allocated-col span { white-space: nowrap; }
-
+.allocated-col span {
+  white-space: nowrap;
+}
 </style>

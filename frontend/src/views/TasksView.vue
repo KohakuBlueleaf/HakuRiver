@@ -50,41 +50,56 @@ OTHER_VAR=123"
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="Required CPU Cores" prop="required_cores">
-              <el-input-number v-model="taskForm.required_cores" :min="1" controls-position="right" style="width: 100%;" />
+              <el-input-number v-model="taskForm.required_cores" :min="1" controls-position="right" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <!-- MODIFIED: Added Memory Limit Input -->
             <el-form-item label="Memory Limit (Optional)" prop="memory_limit_str">
-               <el-input v-model="taskForm.memory_limit_str" placeholder="e.g., 512M, 4G" clearable>
-                  <template #append>MB/GB</template>
-               </el-input>
-               <el-text size="small" type="info">Examples: 512M, 4G, 2048K. No suffix means bytes.</el-text>
+              <el-input v-model="taskForm.memory_limit_str" placeholder="e.g., 512M, 4G" clearable>
+                <template #append>MB/GB</template>
+              </el-input>
+              <el-text size="small" type="info">Examples: 512M, 4G, 2048K. No suffix means bytes.</el-text>
             </el-form-item>
           </el-col>
         </el-row>
 
-        <!-- MODIFIED: Added Sandboxing Options -->
-         <el-card shadow="never" style="margin-top: 10px; background-color: var(--el-fill-color-lighter);">
-             <template #header>
-                <div class="card-header" style="font-weight: normal; font-size: 0.95em;">
-                    <span>Sandboxing Options (via systemd)</span>
-                </div>
-             </template>
-             <el-row :gutter="20">
-                <el-col :span="12">
-                    <el-tooltip content="Uses systemd PrivateNetwork=yes. Task cannot access network." placement="top">
-                      <el-checkbox v-model="taskForm.use_private_network" label="Isolate Network" size="large" border />
-                    </el-tooltip>
-                </el-col>
-                 <el-col :span="12">
-                     <el-tooltip content="Uses systemd PrivatePID=yes. Task cannot see other processes." placement="top">
-                       <el-checkbox v-model="taskForm.use_private_pid" label="Isolate Processes (PID)" size="large" border />
-                    </el-tooltip>
-                </el-col>
-             </el-row>
-         </el-card>
+        <el-form-item label="Target Node(s) / NUMA Node(s)" prop="selectedTargets">
+          <el-select
+            v-model="taskForm.selectedTargets"
+            multiple
+            filterable
+            clearable
+            placeholder="Select target(s)"
+            style="width: 100%"
+            :loading="isLoadingNodes"
+            loading-text="Loading available nodes..."
+            no-data-text="No nodes found or failed to load"
+          >
+            <el-option v-for="item in targetOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-text size="small" type="info">Select one or more nodes. Suffix :N targets NUMA node N.</el-text>
+        </el-form-item>
 
+        <el-card shadow="never" style="margin-top: 10px; background-color: var(--el-fill-color-lighter)">
+          <template #header>
+            <div class="card-header" style="font-weight: normal; font-size: 0.95em">
+              <span>Sandboxing Options (via systemd)</span>
+            </div>
+          </template>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-tooltip content="Uses systemd PrivateNetwork=yes. Task cannot access network." placement="top">
+                <el-checkbox v-model="taskForm.use_private_network" label="Isolate Network" size="large" border />
+              </el-tooltip>
+            </el-col>
+            <el-col :span="12">
+              <el-tooltip content="Uses systemd PrivatePID=yes. Task cannot see other processes." placement="top">
+                <el-checkbox v-model="taskForm.use_private_pid" label="Isolate Processes (PID)" size="large" border />
+              </el-tooltip>
+            </el-col>
+          </el-row>
+        </el-card>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -145,6 +160,9 @@ OTHER_VAR=123"
         </template>
       </el-table-column>
       <el-table-column prop="assigned_node" label="Assigned Node" sortable />
+      <el-table-column prop="target_numa_node_id" label="Target NUMA" sortable width="130">
+        <template #default="scope">{{ scope.row.target_numa_node_id ?? 'Node Wide' }}</template>
+      </el-table-column>
       <el-table-column prop="submitted_at" label="Submitted" sortable>
         <template #default="scope">{{ formatDateTime(scope.row.submitted_at) }}</template>
       </el-table-column>
@@ -180,6 +198,10 @@ OTHER_VAR=123"
       <div v-if="selectedTaskDetail">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="Task ID">{{ selectedTaskDetail.task_id }}</el-descriptions-item>
+          <el-descriptions-item label="Batch ID">{{ selectedTaskDetail.batch_id || 'N/A' }}</el-descriptions-item>
+          <el-descriptions-item label="Target NUMA Node">{{
+            selectedTaskDetail.target_numa_node_id ?? 'Node Wide'
+          }}</el-descriptions-item>
           <el-descriptions-item label="Status">
             <el-tag :type="getTaskStatusType(selectedTaskDetail.status)">
               {{ selectedTaskDetail.status }}
@@ -297,7 +319,7 @@ OTHER_VAR=123"
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue';
 import api from '@/services/api';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { RefreshRight } from '@element-plus/icons-vue'; // Import icon
@@ -322,28 +344,67 @@ const taskForm = reactive({
   memory_limit_str: '', // Input as string (e.g., "512M")
   use_private_network: false,
   use_private_pid: false,
+  selectedTargets: [], // Holds the array of selected target strings, e.g., ["host1:0", "host2"]
+});
+
+const availableNodes = ref([]); // Raw node data from API
+const isLoadingNodes = ref(false);
+const nodesError = ref(null);
+
+const targetOptions = computed(() => {
+  const options = [];
+  if (!availableNodes.value) return options;
+
+  availableNodes.value.forEach((node) => {
+    // Only include online nodes as targets
+    if (node.status === 'online') {
+      // Option for the node as a whole
+      options.push({
+        label: `${node.hostname} (Node Wide)`,
+        value: node.hostname,
+      });
+
+      // Add options for each NUMA node if topology exists
+      if (node.numa_topology && typeof node.numa_topology === 'object') {
+        Object.keys(node.numa_topology)
+          .sort((a, b) => parseInt(a) - parseInt(b))
+          .forEach((numaId) => {
+            const numaInfo = node.numa_topology[numaId];
+            const coreCount = numaInfo?.cores?.length ?? '?';
+            const memGb = numaInfo?.memory_bytes ? (numaInfo.memory_bytes / 1024 ** 3).toFixed(1) : '?';
+            options.push({
+              // e.g., host1 / NUMA 0 (8 Cores, 64.0 GB)
+              label: `  ${node.hostname} / NUMA ${numaId} (${coreCount} Cores, ${memGb} GB)`,
+              value: `${node.hostname}:${numaId}`, // Format: "hostname:numa_id"
+            });
+          });
+      }
+    }
+  });
+  return options;
 });
 
 // MODIFIED: Add custom validator for memory string
 const validateMemoryString = (rule, value, callback) => {
-    if (!value) {
-        callback(); // Optional field
-        return;
-    }
-    // Basic regex for format like 123, 123K, 123M, 123G (case-insensitive)
-    const memRegex = /^\d+([kmg]?)$/i;
-    if (!memRegex.test(value.trim())) {
-        callback(new Error('Invalid format. Use numbers with optional K, M, G suffix (e.g., 512M, 4G)'));
-    } else {
-        callback();
-    }
+  if (!value) {
+    callback(); // Optional field
+    return;
+  }
+  // Basic regex for format like 123, 123K, 123M, 123G (case-insensitive)
+  const memRegex = /^\d+([kmg]?)$/i;
+  if (!memRegex.test(value.trim())) {
+    callback(new Error('Invalid format. Use numbers with optional K, M, G suffix (e.g., 512M, 4G)'));
+  } else {
+    callback();
+  }
 };
 
 const taskFormRules = reactive({
   command: [{ required: true, message: 'Command is required', trigger: 'blur' }],
   required_cores: [{ required: true, message: 'Number of cores is required', trigger: 'blur' }],
   // MODIFIED: Add rule for memory string format
-  memory_limit_str: [{ validator: validateMemoryString, trigger: 'blur' }]
+  memory_limit_str: [{ validator: validateMemoryString, trigger: 'blur' }],
+  selectedTargets: [{ type: 'array', min: 1, message: 'Please select at least one target', trigger: 'change' }],
 });
 
 const killingState = reactive({}); // Track loading state for individual kill buttons
@@ -361,28 +422,28 @@ const stderrError = ref(null);
 // --- Helper Functions ---
 // MODIFIED: Helper to parse memory string from form to bytes
 const parseMemoryToBytes = (memStr) => {
-    if (!memStr) return null;
-    const str = memStr.trim().toUpperCase();
-    const match = str.match(/^(\d+)([KMG]?)$/);
-    if (!match) return null; // Invalid format already handled by validator, but double check
+  if (!memStr) return null;
+  const str = memStr.trim().toUpperCase();
+  const match = str.match(/^(\d+)([KMG]?)$/);
+  if (!match) return null; // Invalid format already handled by validator, but double check
 
-    const val = parseInt(match[1], 10);
-    const unit = match[2];
+  const val = parseInt(match[1], 10);
+  const unit = match[2];
 
-    if (unit === 'G') return val * 1024 * 1024 * 1024;
-    if (unit === 'M') return val * 1024 * 1024;
-    if (unit === 'K') return val * 1024;
-    return val; // Bytes
+  if (unit === 'G') return val * 1024 * 1024 * 1024;
+  if (unit === 'M') return val * 1024 * 1024;
+  if (unit === 'K') return val * 1024;
+  return val; // Bytes
 };
 
 // MODIFIED: Helper to format bytes nicely for table/details
 const formatBytesForTable = (bytes) => {
-    if (bytes === null || bytes === undefined) return 'N/A';
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  if (bytes === null || bytes === undefined) return 'N/A';
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
 // --- API Functions ---
@@ -401,12 +462,15 @@ const fetchTasks = async () => {
   taskError.value = null;
   try {
     const response = await api.getTasks();
-    tasks.value = response.data.map(task => ({
-        ...task,
-        required_memory_bytes: task.required_memory_bytes ?? null,
-        use_private_network: task.use_private_network ?? false,
-        use_private_pid: task.use_private_pid ?? false,
-        systemd_unit_name: task.systemd_unit_name ?? null,
+    tasks.value = response.data.map((task) => ({
+      ...task,
+      // Explicitly ensure default values if backend might omit them
+      required_memory_bytes: task.required_memory_bytes ?? null,
+      use_private_network: task.use_private_network ?? false,
+      use_private_pid: task.use_private_pid ?? false,
+      systemd_unit_name: task.systemd_unit_name ?? null,
+      target_numa_node_id: task.target_numa_node_id ?? null,
+      batch_id: task.batch_id ?? null,
     }));
   } catch (err) {
     console.error('Error fetching tasks:', err);
@@ -417,17 +481,33 @@ const fetchTasks = async () => {
   }
 };
 
+const fetchAvailableNodes = async () => {
+  isLoadingNodes.value = true;
+  nodesError.value = null;
+  availableNodes.value = []; // Clear previous list
+  try {
+    // Use getNodes which should now return numa_topology
+    const response = await api.getNodes();
+    availableNodes.value = response.data;
+  } catch (error) {
+    console.error('Error fetching nodes for target selection:', error);
+    nodesError.value = error.response?.data?.detail || error.message || 'Failed to load available nodes.';
+  } finally {
+    isLoadingNodes.value = false;
+  }
+};
+
 const submitTaskApi = async (formData) => {
   isSubmitting.value = true;
   try {
     const argsList = formData.arguments_text
       .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line !== '');
+      .map((l) => l.trim())
+      .filter((l) => l !== '');
     const envDict = formData.env_vars_text
       .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line !== '' && line.includes('='))
+      .map((l) => l.trim())
+      .filter((l) => l !== '' && l.includes('='))
       .reduce((acc, line) => {
         const [key, ...valueParts] = line.split('=');
         acc[key.trim()] = valueParts.join('=').trim();
@@ -440,19 +520,41 @@ const submitTaskApi = async (formData) => {
       arguments: argsList,
       env_vars: envDict,
       required_cores: formData.required_cores,
-      required_memory_bytes: memoryBytes, // Send parsed bytes
+      required_memory_bytes: memoryBytes,
       use_private_network: formData.use_private_network,
       use_private_pid: formData.use_private_pid,
+      targets: formData.selectedTargets, // Use the selected targets array
     };
 
-    const response = await api.submitTask(payload);
-    ElMessage({ message: `Task submitted successfully! ID: ${response.data.task_id}`, type: 'success' });
-    submitDialogVisible.value = false;
-    fetchTasks(); // Refresh list
+    const responseData = await api.submitTask(payload); // api.js now returns response.data
+
+    let message = `Batch submitted. Tasks created: ${responseData.task_ids?.join(', ') || 'None'}`;
+    let messageType = 'success';
+
+    if (responseData.failed_targets && responseData.failed_targets.length > 0) {
+      message += `. ${responseData.failed_targets.length} target(s) failed: `;
+      message += responseData.failed_targets.map((f) => `${f.target} (${f.reason})`).join('; ');
+      messageType = 'warning'; // Partial success is a warning
+      console.warn('Partial submission failure:', responseData.failed_targets);
+    } else if (!responseData.task_ids || responseData.task_ids.length === 0) {
+      message = 'Submission failed. No tasks were created by the host.';
+      messageType = 'error';
+    }
+
+    ElMessage({
+      message: message,
+      type: messageType,
+      duration: messageType === 'warning' || messageType === 'error' ? 7000 : 4000,
+    });
+
+    if (responseData.task_ids && responseData.task_ids.length > 0) {
+      submitDialogVisible.value = false;
+      fetchTasks(); // Refresh list
+    }
   } catch (error) {
     console.error('Error submitting task:', error);
     const errorDetail = error.response?.data?.detail || error.message || 'Unknown error';
-    ElMessage({ message: `Failed to submit task: ${errorDetail}`, type: 'error' });
+    ElMessage({ message: `Failed to submit task: ${errorDetail}`, type: 'error', duration: 7000 });
   } finally {
     isSubmitting.value = false;
   }
@@ -523,6 +625,7 @@ const fetchStderr = async () => {
 
 // --- Dialog and Form Handling ---
 const openSubmitDialog = () => {
+  fetchAvailableNodes();
   submitDialogVisible.value = true;
 };
 
@@ -532,6 +635,10 @@ const resetForm = () => {
   }
   taskForm.arguments_text = '';
   taskForm.env_vars_text = '';
+  taskForm.memory_limit_str = '';
+  taskForm.use_private_network = false;
+  taskForm.use_private_pid = false;
+  taskForm.selectedTargets = [];
 };
 
 const handleTaskSubmit = async () => {
@@ -650,6 +757,14 @@ const maxCoresHint = ref(32); // Default value
 </script>
 
 <style scoped>
+.el-dialog {
+  /* Might need adjustment depending on global styles */
+  max-width: 90vw; /* Prevent excessive width on small screens */
+}
+.el-select--multiple .el-select__tags {
+  /* Improve multi-select appearance */
+  max-width: calc(100% - 30px); /* Prevent overflow */
+}
 .el-table {
   margin-top: 20px;
 }
