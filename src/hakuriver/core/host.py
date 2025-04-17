@@ -642,22 +642,23 @@ async def submit_task(req: TaskRequest):
         try:
             # Use peewee transaction for safety if multiple operations needed per task
             with db.atomic():
-                task = Task.create(task_id=task_id,
-                arguments="",  # Will be set below
-                env_vars="",  # Will be set below
-                command=req.command,
-                required_cores=req.required_cores,
-                required_memory_bytes=req.required_memory_bytes,  # Store memory limit
-                use_private_network=req.use_private_network,  # Store sandbox flag
-                use_private_pid=req.use_private_pid,  # Store sandbox flag
-                assigned_node=node,
-                status="assigning",
-                stdout_path=stdout_path,
-                stderr_path=stderr_path,
-                submitted_at=datetime.datetime.now(),
-                systemd_unit_name=unit_name,
-                target_numa_node_id=target_numa_id,
-            )
+                task = Task.create(
+                    task_id=task_id,
+                    arguments="",  # Will be set below
+                    env_vars="",  # Will be set below
+                    command=req.command,
+                    required_cores=req.required_cores,
+                    required_memory_bytes=req.required_memory_bytes,  # Store memory limit
+                    use_private_network=req.use_private_network,  # Store sandbox flag
+                    use_private_pid=req.use_private_pid,  # Store sandbox flag
+                    assigned_node=node,
+                    status="assigning",
+                    stdout_path=stdout_path,
+                    stderr_path=stderr_path,
+                    submitted_at=datetime.datetime.now(),
+                    systemd_unit_name=unit_name,
+                    target_numa_node_id=target_numa_id,
+                )
             task.set_arguments(req.arguments)
             task.set_env_vars(req.env_vars)
             task.save()

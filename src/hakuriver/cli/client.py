@@ -282,7 +282,9 @@ def main():
             command_to_run = command_parts[0]
             command_arguments = command_parts[1:]
 
-            print(f"Submitting command '{command_to_run}' with args {command_arguments}")
+            print(
+                f"Submitting command '{command_to_run}' with args {command_arguments}"
+            )
 
             if args.cores <= 0:
                 parser.error("--cores must be a positive integer.")
