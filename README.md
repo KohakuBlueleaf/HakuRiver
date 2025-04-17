@@ -312,7 +312,7 @@ Users can now submit a single request that HakuRiver replicates across multiple 
 |  on node1:0,    |       +----------------------------------------------------+
 |  node1:1, node2 |        │                        │                        │                       
 +-----------------+        │ Dispatch Task          │ Dispatch Task          │ Dispatch Task         
-                           │ (ID: 102, Target: 1:0) │ (ID: 103, Target: 1:1) │ (ID: 103, Target: 2)
+                           │ (ID: 101, Target: 1:0) │ (ID: 102, Target: 1:1) │ (ID: 103, Target: 2)
                  +---------▼----------+   +---------▼----------+   +---------▼----------+
                  | Runner (Node 1)    |   | Runner (Node 1)    |   | Runner (Node 2)    |
                  | Executes Task 101  |   | Executes Task 102  |   | Executes Task 103  |
