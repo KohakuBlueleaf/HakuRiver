@@ -1,6 +1,8 @@
 import asyncio
 import datetime
 import os
+import json
+import re
 from collections import defaultdict
 from typing import Iterable
 
@@ -41,6 +43,7 @@ class RunnerInfo(BaseModel):
     total_cores: int
     total_ram_bytes: int
     runner_url: str
+    numa_topology: dict | None = None
 
 
 class TaskRequest(BaseModel):
@@ -55,6 +58,24 @@ class TaskRequest(BaseModel):
     )
     use_private_network: bool = Field(default=False)
     use_private_pid: bool = Field(default=False)
+    targets: list[str] | None = Field(
+        default=None,
+        min_length=1,
+        description='List of targets, e.g., ["host1", "host2:0", "host1:1"]',
+    )
+
+    @field_validator("targets")
+    @classmethod
+    def validate_targets_format(cls, v):
+        if v is None:
+            return v
+        pattern = r"^[a-zA-Z0-9.-]+(:[0-9]+)?$"  # hostname[:numa_id]
+        for target in v:
+            if not re.match(pattern, target):
+                raise ValueError(
+                    f"Invalid target format: '{target}'. Use 'hostname' or 'hostname:numa_id'."
+                )
+        return v
 
 
 class TaskInfoForRunner(BaseModel):
@@ -68,6 +89,7 @@ class TaskInfoForRunner(BaseModel):
     required_memory_bytes: int | None = None
     use_private_network: bool = False
     use_private_pid: bool = False
+    target_numa_node_id: int | None = None
 
 
 class TaskStatusUpdate(BaseModel):
@@ -231,27 +253,35 @@ def get_secure_log_path(task: Task, log_type: str) -> str | None:
 @app.post("/register")
 async def register_runner(info: RunnerInfo):
     node: Node
-    node, created = Node.get_or_create(
-        hostname=info.hostname,
-        defaults={
-            "url": info.runner_url,
-            "total_cores": info.total_cores,
-            "last_heartbeat": datetime.datetime.now(),
-            "status": "online",
-            "memory_total_bytes": info.total_ram_bytes,
-        },
-    )
+    defaults = {
+        "url": info.runner_url,
+        "total_cores": info.total_cores,
+        "last_heartbeat": datetime.datetime.now(),
+        "status": "online",
+        "memory_total_bytes": info.total_ram_bytes,
+        "numa_topology": (
+            json.dumps(info.numa_topology) if info.numa_topology else None
+        ),  # Store as JSON
+    }
+    node, created = Node.get_or_create(hostname=info.hostname, defaults=defaults)
+
     if not created:
         # Update info if node re-registers
         node.url = info.runner_url
         node.total_cores = info.total_cores
         node.memory_total_bytes = info.total_ram_bytes
         node.last_heartbeat = datetime.datetime.now()
-        node.status = "online"  # Mark as online on registration/re-registration
+        node.status = "online"
+        # Update NUMA topology on re-registration as well
+        node.set_numa_topology(info.numa_topology)  # Use the setter method
         node.save()
-        logger.info(f"Runner {info.hostname} re-registered/updated.")
+        logger.info(
+            f"Runner {info.hostname} re-registered/updated (NUMA: {'Yes' if info.numa_topology else 'No'})."
+        )
     else:
-        logger.info(f"Runner {info.hostname} registered successfully.")
+        logger.info(
+            f"Runner {info.hostname} registered successfully (NUMA: {'Yes' if info.numa_topology else 'No'})."
+        )
     return {"message": f"Runner {info.hostname} acknowledged."}
 
 
@@ -448,48 +478,45 @@ async def get_task_stderr(task_id: int):
 
 @app.get("/tasks")
 async def get_tasks():
-    """
-    Retrieves a list of tasks from the database.
-    Currently retrieves all tasks, ordered by submission time descending.
-    TODO: Implement pagination and filtering in the future.
-    """
+    """Retrieves a list of tasks, including NUMA target and batch ID."""
     logger.debug("Received request to fetch tasks list.")
     try:
-        # Query to select tasks and join with Node to get hostname
-        # Order by most recently submitted first
-        query: list[Task] = (
-            Task.select(Task, Node.hostname)  # Select Task fields + Node.hostname
+        query: Iterable[Task] = (
+            Task.select(Task, Node.hostname)
             .join(
                 Node, peewee.JOIN.LEFT_OUTER, on=(Task.assigned_node == Node.hostname)
-            )  # LEFT JOIN on hostname PK
+            )
             .order_by(Task.submitted_at.desc())
         )
 
         tasks_data = []
-        # Execute the query and iterate through results
         for task in query:
-            # Access joined node hostname directly if node exists
-            node_hostname = (
-                task.assigned_node.hostname if task.assigned_node else None
-            )  # task.node holds the joined Node object or None
-
+            node_hostname = task.assigned_node.hostname if task.assigned_node else None
             tasks_data.append(
                 {
-                    "task_id": str(task.task_id),
+                    "task_id": str(task.task_id),  # Keep as string for consistency
+                    "batch_id": (
+                        str(task.batch_id) if task.batch_id else None
+                    ),  # Add batch ID
                     "command": task.command,
-                    "arguments": task.get_arguments(),  # Use existing method to parse JSON
-                    "env_vars": task.get_env_vars(),  # Use existing method to parse JSON
+                    "arguments": task.get_arguments(),
+                    "env_vars": task.get_env_vars(),
                     "required_cores": task.required_cores,
+                    "required_memory_bytes": task.required_memory_bytes,
                     "status": task.status,
-                    "assigned_node": node_hostname,  # Use the fetched hostname
+                    "assigned_node": node_hostname,
+                    "target_numa_node_id": task.target_numa_node_id,  # Add target NUMA ID
                     "stdout_path": task.stdout_path,
                     "stderr_path": task.stderr_path,
                     "exit_code": task.exit_code,
                     "error_message": task.error_message,
-                    # FastAPI usually automatically converts datetime to ISO strings in JSON responses
                     "submitted_at": task.submitted_at,
                     "started_at": task.started_at,
                     "completed_at": task.completed_at,
+                    "use_private_network": task.use_private_network,
+                    "use_private_pid": task.use_private_pid,
+                    "systemd_unit_name": task.systemd_unit_name,
+                    "assignment_suspicion_count": task.assignment_suspicion_count,
                 }
             )
         return tasks_data
@@ -504,79 +531,193 @@ async def get_tasks():
 
 @app.post("/submit", status_code=202)
 async def submit_task(req: TaskRequest):
-    # Consider memory in scheduling? (Future enhancement - for now, find node by cores only)
-    node = find_suitable_node(req.required_cores)
-    if not node:
-        raise HTTPException(
-            status_code=503,
-            detail="Insufficient resources or no suitable node available.",
-        )
+    """Accepts a task request and dispatches it to one or more target nodes/NUMA nodes."""
+    created_task_ids = []
+    failed_targets = []
+    current_batch_id = None
+    first_task_id_for_batch = None
 
-    task_id = snowflake()
-    # Ensure the base output directory exists (best done via deployment/Ansible)
     output_dir = os.path.join(HostConfig.SHARED_DIR, "task_outputs")
     errors_dir = os.path.join(HostConfig.SHARED_DIR, "task_errors")
     try:
         os.makedirs(output_dir, exist_ok=True)
-    except OSError as e:
-        logger.warning(f"Could not ensure output directory {output_dir} exists: {e}")
-        # Continue anyway, runner might create it or fail task later
-
-    try:
         os.makedirs(errors_dir, exist_ok=True)
     except OSError as e:
-        logger.warning(f"Could not ensure error directory {errors_dir} exists: {e}")
+        logger.error(
+            f"Cannot create output/error directories in {HostConfig.SHARED_DIR}: {e}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Server configuration error: Cannot create log directories.",
+        )
 
-    stdout_path = os.path.join(output_dir, f"{task_id}.out")
-    stderr_path = os.path.join(errors_dir, f"{task_id}.err")
-    unit_name = f"hakuriver-task-{task_id}.scope"  # Define unit name here
+    # --- Loop through each target specified in the request ---
+    targets = req.targets
+    if not targets:
+        targets = find_suitable_node(req.required_cores).hostname
+        targets = [targets]
+    for target_str in req.targets:
+        target_numa_id: int | None = None
+        parts = target_str.split(":")
+        target_hostname = parts[0]
+        if len(parts) > 1:
+            try:
+                target_numa_id = int(parts[1])
+                if target_numa_id < 0:
+                    raise ValueError("NUMA ID cannot be negative")
+            except ValueError:
+                logger.warning(
+                    f"Invalid NUMA ID format in target '{target_str}'. Skipping this target."
+                )
+                failed_targets.append(
+                    {"target": target_str, "reason": "Invalid NUMA ID format"}
+                )
+                continue
 
-    try:
-        task: Task = Task.create(
+        # --- Find and Validate Node ---
+        node: Node = Node.get_or_none(Node.hostname == target_hostname)
+        if not node:
+            logger.warning(
+                f"Target node '{target_hostname}' not registered. Skipping target '{target_str}'."
+            )
+            failed_targets.append(
+                {"target": target_str, "reason": "Node not registered"}
+            )
+            continue
+        if node.status != "online":
+            logger.warning(
+                f"Target node '{target_hostname}' is not online (status: {node.status}). Skipping target '{target_str}'."
+            )
+            failed_targets.append(
+                {"target": target_str, "reason": f"Node status is {node.status}"}
+            )
+            continue
+
+        # --- Validate NUMA Target (if specified) ---
+        node_topology = node.get_numa_topology()
+        if target_numa_id is not None:
+            if node_topology is None:
+                logger.warning(
+                    f"Target '{target_str}' specified NUMA ID {target_numa_id}, but node '{target_hostname}' has no NUMA topology reported. Skipping."
+                )
+                failed_targets.append(
+                    {"target": target_str, "reason": "Node has no NUMA topology"}
+                )
+                continue
+            # Check if the NUMA ID is valid within the reported topology (keys are integers after json.loads)
+            if target_numa_id not in node_topology:
+                logger.warning(
+                    f"Target '{target_str}' specified NUMA ID {target_numa_id}, which is invalid for node '{target_hostname}' (Valid: {list(node_topology.keys())}). Skipping."
+                )
+                failed_targets.append(
+                    {
+                        "target": target_str,
+                        "reason": f"Invalid NUMA ID for node (Valid: {list(node_topology.keys())})",
+                    }
+                )
+                continue
+            # Optional: Could add NUMA-specific resource checks here later
+
+        # --- Resource Check (Simple total cores on node for now) ---
+        available_cores = get_node_available_cores(node)
+        if available_cores < req.required_cores:
+            logger.warning(
+                f"Insufficient cores on node '{target_hostname}' ({available_cores} avail < {req.required_cores} req). Skipping target '{target_str}'."
+            )
+            failed_targets.append(
+                {"target": target_str, "reason": "Insufficient available cores"}
+            )
+            continue
+
+        # --- Generate ID and Create Task Record ---
+        task_id = snowflake()
+        if first_task_id_for_batch is None:
+            first_task_id_for_batch = task_id  # Use first task's ID as the batch ID
+        current_batch_id = first_task_id_for_batch
+
+        stdout_path = os.path.join(output_dir, f"{task_id}.out")
+        stderr_path = os.path.join(errors_dir, f"{task_id}.err")
+        unit_name = f"hakuriver-task-{task_id}.scope"
+
+        try:
+            # Use peewee transaction for safety if multiple operations needed per task
+            with db.atomic():
+                task = Task.create(
+                    task_id=task_id,
+                    batch_id=current_batch_id,
+                    command=req.command,
+                    required_cores=req.required_cores,
+                    required_memory_bytes=req.required_memory_bytes,
+                    use_private_network=req.use_private_network,
+                    use_private_pid=req.use_private_pid,
+                    assigned_node=node,  # Assign to the validated node PK
+                    target_numa_node_id=target_numa_id,  # Store the target NUMA ID
+                    status="assigning",
+                    stdout_path=stdout_path,
+                    stderr_path=stderr_path,
+                    submitted_at=datetime.datetime.now(),
+                    systemd_unit_name=unit_name,
+                )
+                task.set_arguments(req.arguments)  # Use helper to store JSON
+                task.set_env_vars(req.env_vars)  # Use helper to store JSON
+                task.save()  # Save arguments/env_vars
+            logger.info(
+                f"Task {task_id} (Batch: {current_batch_id}) created for target '{target_str}'. Assigning to {node.hostname}..."
+            )
+
+        except Exception as e:
+            logger.exception(
+                f"Failed to create task record in database for target '{target_str}': {e}"
+            )
+            failed_targets.append(
+                {"target": target_str, "reason": "Database error during task creation"}
+            )
+            continue  # Skip dispatching this task
+
+        # --- Prepare Runner Payload and Dispatch ---
+        task_info_for_runner = TaskInfoForRunner(
             task_id=task_id,
-            arguments="",  # Will be set below
-            env_vars="",  # Will be set below
             command=req.command,
+            arguments=req.arguments,
+            env_vars=req.env_vars,
             required_cores=req.required_cores,
-            required_memory_bytes=req.required_memory_bytes,  # Store memory limit
-            use_private_network=req.use_private_network,  # Store sandbox flag
-            use_private_pid=req.use_private_pid,  # Store sandbox flag
-            assigned_node=node,
-            status="assigning",
             stdout_path=stdout_path,
             stderr_path=stderr_path,
-            submitted_at=datetime.datetime.now(),
-            systemd_unit_name=unit_name,  # Store the expected unit name
+            required_memory_bytes=req.required_memory_bytes,
+            use_private_network=req.use_private_network,
+            use_private_pid=req.use_private_pid,
+            target_numa_node_id=target_numa_id,  # Pass the specific target NUMA ID
         )
-        task.set_arguments(req.arguments)
-        task.set_env_vars(req.env_vars)
-        task.save()
-        logger.info(
-            f"Task {task_id} created, "
-            f"Req Cores: {req.required_cores}, "
-            f"Req Mem: {req.required_memory_bytes // 1e6 if req.required_memory_bytes else 'N/A'}MB. "
-            f"Assigning to {node.hostname} (Unit: {unit_name})."
+
+        asyncio.create_task(send_task_to_runner(node.url, task_info_for_runner))
+        created_task_ids.append(str(task_id))  # Add successfully launched task ID
+
+    # --- Construct Final Response ---
+    if not created_task_ids and failed_targets:
+        # If all targets failed, return an error
+        detail = f"Failed to schedule task for any target. Failures: {failed_targets}"
+        logger.error(
+            f"Task submission failed for all targets: {req.targets}. Failures: {failed_targets}"
         )
-    except Exception as e:
-        logger.exception(f"Failed to create task record in database: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save task state.")
-
-    task_info_for_runner = TaskInfoForRunner(
-        task_id=task_id,
-        command=req.command,
-        arguments=req.arguments,
-        env_vars=req.env_vars,
-        required_cores=req.required_cores,
-        stdout_path=stdout_path,
-        stderr_path=stderr_path,
-        required_memory_bytes=req.required_memory_bytes,
-        use_private_network=req.use_private_network,
-        use_private_pid=req.use_private_pid,
-    )
-
-    asyncio.create_task(send_task_to_runner(node.url, task_info_for_runner))
-
-    return {"message": "Task accepted for processing.", "task_id": task_id}
+        raise HTTPException(status_code=503, detail=detail)
+    elif failed_targets:
+        # Partial success
+        message = f"Task batch submitted. {len(created_task_ids)} tasks created. Some targets failed."
+        logger.warning(
+            f"Partial task batch submission. Succeeded: {created_task_ids}. Failed targets: {failed_targets}"
+        )
+        return {
+            "message": message,
+            "task_ids": created_task_ids,
+            "failed_targets": failed_targets,
+        }
+    else:
+        # Full success
+        message = (
+            f"Task batch submitted successfully. {len(created_task_ids)} tasks created."
+        )
+        logger.info(f"Task batch submission successful. Task IDs: {created_task_ids}")
+        return {"message": message, "task_ids": created_task_ids}
 
 
 @app.post("/update")
@@ -627,40 +768,45 @@ async def update_task_status(update: TaskStatusUpdate):
 @app.get("/status/{task_id}")
 async def get_task_status(task_id: int):
     try:
+        # Task ID is now BigInt/Snowflake
         task_uuid = int(task_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid Task ID format.")
 
-    # Fetch associated node hostname efficiently if available
-    query: Task = (
+    query = (
         Task.select(Task, Node.hostname.alias("node_hostname"))
-        .left_outer_join(Node)
+        .left_outer_join(Node, on=(Task.assigned_node == Node.hostname))  # Join on PK
         .where(Task.task_id == task_uuid)
         .first()
     )
-    assigned_node: Node = query.assigned_node
+
     if not query:
         raise HTTPException(status_code=404, detail="Task not found")
-    task = query  # query is the Task object here due to Peewee's select behavior
+    task: Task = query  # The query itself is the Task object here
 
     response = {
-        "task_id": task.task_id,
+        "task_id": str(task.task_id),  # Return as string
+        "batch_id": str(task.batch_id) if task.batch_id else None,  # Add batch ID
         "command": task.command,
         "arguments": task.get_arguments(),
         "env_vars": task.get_env_vars(),
         "required_cores": task.required_cores,
+        "required_memory_bytes": task.required_memory_bytes,
         "status": task.status,
-        # Access the aliased hostname from the query result
         "assigned_node": (
-            assigned_node.hostname if assigned_node is not None else None
-        ),
+            task.node_hostname if hasattr(task, "node_hostname") else None
+        ),  # Use alias if joined
+        "target_numa_node_id": task.target_numa_node_id,  # Add target NUMA ID
         "stdout_path": task.stdout_path,
         "stderr_path": task.stderr_path,
         "exit_code": task.exit_code,
         "error_message": task.error_message,
-        "submitted_at": (task.submitted_at.isoformat() if task.submitted_at else None),
+        "submitted_at": task.submitted_at.isoformat() if task.submitted_at else None,
         "started_at": task.started_at.isoformat() if task.started_at else None,
-        "completed_at": (task.completed_at.isoformat() if task.completed_at else None),
+        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        "use_private_network": task.use_private_network,
+        "use_private_pid": task.use_private_pid,
+        "systemd_unit_name": task.systemd_unit_name,
         "assignment_suspicion_count": task.assignment_suspicion_count,
     }
     return response
@@ -774,49 +920,48 @@ async def request_kill_task(task_id: int):
 @app.get("/nodes")
 async def get_nodes_status():
     nodes_status = []
-
     nodes: list[Node] = list(Node.select())
-    # Need to calculate available cores for each online node
     online_nodes = {n.hostname: n for n in nodes if n.status == "online"}
     cores_in_use = defaultdict(int)
     if online_nodes:
-        running_tasks: list[Task] = list(
+        # Calculate cores in use for online nodes
+        running_tasks_usage = (
             Task.select(
-                Task.assigned_node, peewee.fn.SUM(Task.required_cores).alias("used")
+                Task.assigned_node,  # This selects the Node object (or its PK)
+                peewee.fn.SUM(Task.required_cores).alias("used_cores"),
             )
             .where(
-                (Task.status == "running")
-                & (Task.assigned_node << list(online_nodes.values()))
+                (Task.status.in_(["running", "assigning"]))
+                & (
+                    Task.assigned_node << list(online_nodes.values())
+                )  # Filter by Node objects
             )
             .group_by(Task.assigned_node)
         )
-
-        for task_usage in running_tasks:
-            # task_usage.assigned_node actually holds the foreign key ID here
-            # We need to map it back to hostname. Let's re-query node hostname.
-            node_fk: Node = task_usage.assigned_node
-            cores_in_use[node_fk.hostname] = task_usage.required_cores
+        for usage in running_tasks_usage:
+            # Access the joined Node object directly
+            if usage.assigned_node:
+                cores_in_use[usage.assigned_node.hostname] = usage.used_cores
 
     for node in nodes:
         available = 0
+        used = "N/A"
         if node.status == "online":
-            available = node.total_cores - cores_in_use.get(node.hostname, 0)
+            used = cores_in_use.get(node.hostname, 0)
+            available = node.total_cores - used
 
         nodes_status.append(
             {
                 "hostname": node.hostname,
                 "url": node.url,
                 "total_cores": node.total_cores,
-                "cores_in_use": (
-                    cores_in_use.get(node.hostname, 0)
-                    if node.status == "online"
-                    else "N/A"
-                ),
-                "available_cores": available if node.status == "online" else 0,
+                "cores_in_use": used,
+                "available_cores": available,
                 "status": node.status,
                 "last_heartbeat": (
                     node.last_heartbeat.isoformat() if node.last_heartbeat else None
                 ),
+                "numa_topology": node.get_numa_topology(),  # Parse JSON from DB
             }
         )
     return nodes_status
@@ -828,7 +973,7 @@ async def get_cluster_health(
         None, description="Optional: Filter by specific hostname"
     )
 ):
-    """Provides the last known health status (heartbeat data) for nodes."""
+    """Provides the last known health status (heartbeat data) and NUMA info for nodes."""
     logger.debug(f"Received health request. Filter hostname: {hostname}")
     try:
         query: Iterable[Node] = Node.select()
@@ -848,16 +993,15 @@ async def get_cluster_health(
                     "memory_percent": node.memory_percent,
                     "memory_used_bytes": node.memory_used_bytes,
                     "memory_total_bytes": node.memory_total_bytes,
-                    "total_cores": node.total_cores,  # Include for context
-                    "url": node.url,  # Include for context
+                    "total_cores": node.total_cores,
+                    "url": node.url,
+                    "numa_topology": node.get_numa_topology(),  # Parse JSON from DB
                 }
             )
-
         if hostname and not nodes_health:
             raise HTTPException(
                 status_code=404, detail=f"No health data found for hostname: {hostname}"
             )
-
         return nodes_health
 
     except peewee.PeeweeException as e:

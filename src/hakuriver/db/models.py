@@ -24,6 +24,24 @@ class Node(BaseModel):
     memory_total_bytes = peewee.BigIntegerField(
         null=True
     )  # Use BigIntegerField for bytes
+    numa_topology = peewee.TextField(null=True)  # Store NUMA info as JSON string
+
+    def get_numa_topology(self) -> dict | None:
+        """Parses the stored JSON string into a dictionary."""
+        if not self.numa_topology:
+            return None
+        try:
+            return json.loads(self.numa_topology)
+        except json.JSONDecodeError:
+            # Log this error? Maybe in the calling function.
+            return None  # Return None if parsing fails
+
+    def set_numa_topology(self, topology: dict | None):
+        """Stores the topology dictionary as a JSON string."""
+        if topology is None:
+            self.numa_topology = None
+        else:
+            self.numa_topology = json.dumps(topology)
 
 
 class Task(BaseModel):
@@ -48,6 +66,12 @@ class Task(BaseModel):
     use_private_network = peewee.BooleanField(default=False)
     use_private_pid = peewee.BooleanField(default=False)
     systemd_unit_name = peewee.CharField(null=True)  # Store the transient unit name
+    target_numa_node_id = peewee.IntegerField(
+        null=True
+    )  # Target NUMA node on the assigned_node
+    batch_id = peewee.BigIntegerField(
+        null=True, index=True
+    )  # ID linking tasks submitted together
 
     def get_arguments(self):
         try:
