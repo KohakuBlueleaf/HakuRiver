@@ -5,6 +5,10 @@ import sys
 
 DEFAULT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILENAME = "default_config.toml"
+if os.path.exists(os.path.join(os.path.expanduser("~"), ".hakuriver", "config.toml")):
+    CONFIG_FILENAME = os.path.join(os.path.expanduser("~"), ".hakuriver", "config.toml")
+if "HAKURIVER_CONFIG" in os.environ:
+    CONFIG_FILENAME = os.environ["HAKURIVER_CONFIG"]
 
 
 def find_config_path():
