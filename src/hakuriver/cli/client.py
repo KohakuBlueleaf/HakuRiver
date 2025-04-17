@@ -3,8 +3,11 @@ import os
 import sys
 import time
 import re
-
+import json
 import toml
+
+import hakuriver.core.client as client_core
+from hakuriver.utils.logger import logger  # Import logger setup by core
 
 
 def parse_memory_string(mem_str: str) -> int | None:
@@ -121,14 +124,25 @@ def main():
         help="Get health status for all nodes or a specific HOSTNAME.",
     )
 
-    # --- Options for Submit Action ---
-    parser.add_argument("--cores", type=int, default=1, help="CPU cores required.")
+    parser.add_argument(
+        "--target",
+        action="append",  # Allow multiple targets
+        metavar="HOST[:NUMA_ID]",
+        help="Target node or node:numa_id (repeatable for multi-node submission). Required for submission.",
+        default=[],  # Start with empty list
+    )
+    parser.add_argument(
+        "--cores",
+        type=int,
+        default=1,
+        help="CPU cores required (per target). Default: 1.",
+    )
     parser.add_argument(
         "--memory",
         type=str,
         default=None,
         metavar="SIZE",
-        help="Memory limit (e.g., '512M', '4G'). No suffix means bytes.",
+        help="Memory limit per target (e.g., '512M', '4G'). Optional.",
     )
     parser.add_argument(
         "--env",
@@ -260,31 +274,34 @@ def main():
                 command_parts = command_parts[1:]
             if not command_parts:
                 parser.error("No command specified for submission.")
+            if not args.target:
+                parser.error(
+                    "Missing required argument: --target HOST[:NUMA_ID] is required for submitting a task."
+                )
 
             command_to_run = command_parts[0]
             command_arguments = command_parts[1:]
 
-            if args.cores is None:
-                parser.error(
-                    "Missing required argument: --cores is required for submitting a task."
-                )
+            print(f"Submitting command '{command_to_run}' with args {command_arguments}")
+
             if args.cores <= 0:
-                parser.error("Argument --cores must be a positive integer.")
+                parser.error("--cores must be a positive integer.")
 
             memory_bytes = None
             if args.memory:
                 try:
                     memory_bytes = parse_memory_string(args.memory)
-                    if memory_bytes < 0:
-                        raise ValueError("Memory must be non-negative")
                 except ValueError as e:
                     parser.error(f"Invalid --memory value: {e}")
 
             env_vars = parse_key_value(args.env)
-            print(
-                f"Submitting command: '{command_to_run}' with args {command_arguments}"
+
+            logger.info(
+                f"Submitting command '{command_to_run}' with args {command_arguments} to targets: {', '.join(args.target)}"
             )
-            task_id = client_core.submit_task(
+
+            # Call the updated core function
+            task_ids = client_core.submit_task(
                 command=command_to_run,
                 args=command_arguments,
                 env=env_vars,
@@ -292,50 +309,75 @@ def main():
                 memory_bytes=memory_bytes,
                 private_network=args.private_network,
                 private_pid=args.private_pid,
+                targets=args.target,  # Pass the list of targets
             )
 
-            if task_id and args.wait:
-                # (Wait logic remains the same as previous version)
-                print(
-                    f"\nWaiting for task {task_id} to complete (checking every {args.poll_interval}s)..."
-                )
-                final_states = ["completed", "failed", "killed", "lost"]
-                consecutive_errors = 0
-                while True:
-                    time.sleep(args.poll_interval)
-                    current_status = client_core.check_status(task_id)
-                    if current_status is None:
-                        consecutive_errors += 1
-                        print(
-                            f"\nWarning: Could not get task status (attempt {consecutive_errors}). Retrying...",
-                            file=sys.stderr,
-                            end="\r",
-                            flush=True,
-                        )
-                        if consecutive_errors >= 3:
-                            print(
-                                "\nError: Failed to get task status after multiple attempts. Stopping wait."
-                                + " " * 20,
-                                file=sys.stderr,
+            if not task_ids:
+                logger.error("Task submission failed. No task IDs received from host.")
+                sys.exit(1)
+
+            logger.info(
+                f"Host accepted submission. Created Task IDs: {', '.join(task_ids)}"
+            )
+
+            if args.wait:
+                if len(task_ids) > 1:
+                    logger.warning(
+                        "`--wait` requested for multi-target submission. Waiting for ALL tasks individually."
+                    )
+                    # Implement waiting for multiple tasks if desired, otherwise just warn/exit.
+                    # For now, let's proceed but it might be long/noisy.
+
+                all_finished_normally = True
+                final_states = ["completed", "failed", "killed", "lost", "killed_oom"]
+                task_final_status = {}  # Track final status of each task
+
+                while len(task_final_status) < len(task_ids):
+                    waiting_for_ids = [
+                        tid for tid in task_ids if tid not in task_final_status
+                    ]
+                    logger.info(
+                        f"Waiting for tasks: {', '.join(waiting_for_ids)} (checking every {args.poll_interval}s)..."
+                    )
+
+                    # Check status for each remaining task
+                    # Add a small delay between checks if many tasks to avoid hammering host
+                    for i, task_id_to_check in enumerate(waiting_for_ids):
+                        if i > 0 and len(waiting_for_ids) > 5:
+                            time.sleep(0.1)  # Small delay
+
+                        current_status = client_core.check_status(
+                            task_id_to_check
+                        )  # This prints details
+                        if current_status is None:
+                            logger.warning(
+                                f"Could not get status for task {task_id_to_check}. Will retry."
                             )
-                            break
-                        continue
-                    else:
-                        if consecutive_errors > 0:
-                            print(" " * 80, end="\r", flush=True)
-                        consecutive_errors = 0
-                    if current_status in final_states:
-                        print(
-                            f"\nTask {task_id} finished with status: {current_status}"
-                        )
-                        break
-                    else:
-                        print(
-                            f"  (Current status: {current_status}){' '*20}",
-                            end="\r",
-                            flush=True,
-                        )
-                print()
+                            # Consider adding retry limit per task
+                        elif current_status in final_states:
+                            logger.info(
+                                f"Task {task_id_to_check} finished with status: {current_status}"
+                            )
+                            task_final_status[task_id_to_check] = current_status
+                            if current_status not in ["completed"]:
+                                all_finished_normally = False
+                        else:
+                            # Status is pending/running/assigning, continue waiting
+                            pass  # check_status already printed the details
+
+                    if len(task_final_status) < len(task_ids):
+                        time.sleep(
+                            args.poll_interval
+                        )  # Wait before next round of checks
+
+                logger.info("--- Wait Complete ---")
+                logger.info("Final statuses:")
+                for tid, status in task_final_status.items():
+                    logger.info(f"  Task {tid}: {status}")
+                if not all_finished_normally:
+                    logger.warning("One or more tasks did not complete successfully.")
+                    # Optionally exit with non-zero code
+                    # sys.exit(1)
 
         if not action_taken:
             parser.print_help()

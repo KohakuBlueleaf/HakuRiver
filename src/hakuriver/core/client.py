@@ -2,6 +2,7 @@ import json
 import sys
 import httpx
 from hakuriver.utils.config_loader import settings
+from hakuriver.utils.logger import logger
 
 
 class ClientConfig:
@@ -100,9 +101,11 @@ def submit_task(
     memory_bytes: int | None,
     private_network: bool,
     private_pid: bool,
-) -> str | None:
-    """Submits a task to the host."""
+    targets: list[str],  # Changed from individual target/sandbox flags
+) -> list[str] | None:  # Returns list of task IDs
+    """Submits a task potentially to multiple targets."""
     url = f"{client_config.host_url}/submit"
+    # Construct payload based on the Host's TaskRequest model
     payload = {
         "command": command,
         "arguments": args,
@@ -111,26 +114,41 @@ def submit_task(
         "required_memory_bytes": memory_bytes,
         "use_private_network": private_network,
         "use_private_pid": private_pid,
+        "targets": targets,  # Pass the list of target strings
     }
-    print(f"Submitting task to {url}")
-    print("Payload:", json.dumps(payload, indent=2))
+    print(payload)
+    target_desc = ", ".join(targets)
+    logger.info(f"Submitting task to {url} for target(s): {target_desc}")
+    logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
     try:
         with httpx.Client(timeout=client_config.default_timeout) as client:
             response = client.post(url, json=payload)
             response.raise_for_status()
-            print("--- Response ---")
             result = response.json()
+            logger.info("--- Submission Response ---")
+            # Print formatted response using helper
             print_response(response)
-            return result.get("task_id")
+            # Extract and return the list of task IDs
+            task_ids = result.get("task_ids")
+            if isinstance(task_ids, list):
+                # Convert IDs to string as they might be large integers (Snowflake)
+                return [str(tid) for tid in task_ids]
+            else:
+                logger.error(
+                    f"Host response missing or invalid 'task_ids' list: {result}"
+                )
+                return None
     except httpx.HTTPStatusError as e:
-        print("--- Error ---")
-        print_response(e.response)
+        logger.error("--- Submission Error ---")
+        print_response(e.response)  # Print detailed error from host
     except httpx.RequestError as e:
-        print("--- Connection Error ---")
-        print(f"Error connecting to host at {url}: {e}")
+        logger.error(f"--- Connection Error ---")
+        logger.error(f"Error connecting to host at {url}: {e}")
     except Exception as e:
-        print("--- Unexpected Error ---")
-        print(f"An unexpected error occurred: {e}")
+        logger.error("--- Unexpected Error ---")
+        logger.exception(
+            f"An unexpected error occurred during submission: {e}"
+        )  # Use logger.exception
     return None
 
 
@@ -184,48 +202,59 @@ def kill_task(task_id: str):
 
 
 def list_nodes():
-    """Fetches the status of compute nodes from the host."""
+    """Fetches the status of compute nodes, including NUMA info."""
     url = f"{client_config.host_url}/nodes"
-    print(f"Fetching node status from {url}")
+    logger.info(f"Fetching node status from {url}")
     try:
         with httpx.Client(timeout=client_config.nodes_timeout) as client:
             response = client.get(url)
             response.raise_for_status()
-            print("--- Nodes Status ---")
+            logger.info("--- Nodes Status ---")
+            # print_response can dump the full JSON including numa_topology
             print_response(response)
+            # Optional: Add custom formatting here later if print_response isn't sufficient
+            # nodes_data = response.json()
+            # for node in nodes_data:
+            #     print(f"Hostname: {node['hostname']}, Status: {node['status']}, Cores: {node['total_cores']}...")
+            #     if node.get('numa_topology'):
+            #         print(f"  NUMA Topology: {json.dumps(node['numa_topology'], indent=4)}")
+
     except httpx.HTTPStatusError as e:
-        print("--- Error ---")
+        logger.error("--- Error ---")
         print_response(e.response)
     except httpx.RequestError as e:
-        print("--- Connection Error ---")
-        print(f"Error connecting to host at {url}: {e}")
+        logger.error(f"--- Connection Error ---")
+        logger.error(f"Error connecting to host at {url}: {e}")
     except Exception as e:
-        print("--- Unexpected Error ---")
-        print(f"An unexpected error occurred: {e}")
+        logger.error("--- Unexpected Error ---")
+        logger.exception(f"An unexpected error occurred: {e}")  # Use logger.exception
 
 
 def get_health(hostname: str | None = None):
-    """Fetches the health status from the host's /health endpoint."""
+    """Fetches the health status, including NUMA info."""
     url = f"{client_config.host_url}/health"
     params = {}
+    log_msg = "Fetching cluster health status"
     if hostname:
         params["hostname"] = hostname
-        print(f"Fetching health status for node {hostname} from {url}")
-    else:
-        print(f"Fetching cluster health status from {url}")
+        log_msg = f"Fetching health status for node {hostname}"
+    logger.info(f"{log_msg} from {url}")
 
     try:
         with httpx.Client(timeout=client_config.health_timeout) as client:
             response = client.get(url, params=params)
             response.raise_for_status()
-            print("--- Health Status ---")
+            logger.info("--- Health Status ---")
+            # print_response will dump the full JSON including numa_topology
             print_response(response)
+            # Optional: Add custom formatting here later
+
     except httpx.HTTPStatusError as e:
-        print("--- Error ---")
+        logger.error("--- Error ---")
         print_response(e.response)
     except httpx.RequestError as e:
-        print("--- Connection Error ---")
-        print(f"Error connecting to host at {url}: {e}")
+        logger.error(f"--- Connection Error ---")
+        logger.error(f"Error connecting to host at {url}: {e}")
     except Exception as e:
-        print("--- Unexpected Error ---")
-        print(f"An unexpected error occurred: {e}")
+        logger.error("--- Unexpected Error ---")
+        logger.exception(f"An unexpected error occurred: {e}")  # Use logger.exception
