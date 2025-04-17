@@ -7,6 +7,8 @@ import datetime
 import shlex
 import subprocess
 import psutil
+import json
+import re
 
 from fastapi import FastAPI, HTTPException, Body, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -27,7 +29,9 @@ class RunnerConfig:
     # Paths
     SHARED_DIR = settings["paths"]["shared_dir"]
     LOCAL_TEMP_DIR = settings["paths"]["local_temp_dir"]
-    # NUMACTL_PATH = settings["paths"]["numactl_path"] or None
+    NUMACTL_PATH = (
+        settings["paths"]["numactl_path"] or "numactl"
+    )  # Default to system PATH
     # Timing
     HEARTBEAT_INTERVAL_SECONDS = settings["timing"]["heartbeat_interval"]
     TASK_CHECK_INTERVAL_SECONDS = settings["timing"].get("resource_check_interval", 1)
@@ -47,6 +51,9 @@ class TaskInfo(BaseModel):
     required_memory_bytes: int | None = None
     use_private_network: bool = False
     use_private_pid: bool = False
+    target_numa_node_id: int | None = Field(
+        default=None, description="Target NUMA node ID for execution"
+    )  # MODIFIED: Added field
 
 
 class TaskStatusUpdate(BaseModel):
@@ -91,8 +98,95 @@ if not total_cores:
     logger.warning("Could not determine CPU count, defaulting to 4.")
     total_cores = 4
 
+numa_topology: dict[int, dict] = {}
+
 
 # --- Helper Functions (Logic same, use logger) ---
+def detect_numa_topology() -> dict | None:
+    """Detects NUMA topology by parsing `numactl --hardware` output."""
+    if not RunnerConfig.NUMACTL_PATH:
+        logger.info("numactl path not configured, skipping NUMA detection.")
+        return None
+    try:
+        cmd = [RunnerConfig.NUMACTL_PATH, "-H"]
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=True, encoding="utf-8"
+        )
+        output = result.stdout
+
+        topology = {}
+        # Regex to find node lines like: node 0 cpus: 0 1 2 3 4 5 6 7 16 17 18 19 20 21 22 23
+        node_cpu_match = re.findall(r"node (\d+) cpus:((?:\s+\d+)+)", output)
+        # Regex to find memory lines like: node 0 size: 64215 MB
+        # Allows for different units (kB, MB, GB)
+        node_mem_match = re.findall(
+            r"node (\d+) size: (\d+)\s*(?:MB|GB|kB)", output, re.IGNORECASE
+        )
+        # Regex to find distance lines: node distances: node   0   1 \n  0:  10  21 \n  1:  21  10
+        # We mainly care about the number of nodes reported here to validate parsing
+        distance_header = re.search(r"node distances:\nnode\s+((?:\s*\d+)+)", output)
+        num_nodes_from_distance = (
+            len(distance_header.group(1).split()) if distance_header else 0
+        )
+
+        if not node_cpu_match:
+            logger.warning(
+                f"`{RunnerConfig.NUMACTL_PATH} --hardware` output did not contain expected CPU info."
+            )
+            return None  # No NUMA nodes detected based on CPU info
+
+        parsed_nodes = set()
+        for node_id_str, cpu_list_str in node_cpu_match:
+            node_id = int(node_id_str)
+            parsed_nodes.add(node_id)
+            cores = [int(cpu) for cpu in cpu_list_str.split()]
+            topology[node_id] = {
+                "cores": cores,
+                "memory_bytes": None,
+            }  # Initialize memory
+
+        for node_id_str, mem_size_str, mem_unit in node_mem_match:
+            node_id = int(node_id_str)
+            if node_id in topology:
+                size = int(mem_size_str)
+                unit = mem_unit.upper()
+                if unit == "GB":
+                    topology[node_id]["memory_bytes"] = size * 1024 * 1024 * 1024
+                elif unit == "MB":
+                    topology[node_id]["memory_bytes"] = size * 1024 * 1024
+                elif unit == "KB":
+                    topology[node_id]["memory_bytes"] = size * 1024
+                else:  # Assume bytes if no unit found by regex (though unlikely with the regex)
+                    topology[node_id]["memory_bytes"] = size
+
+        # Validation: Check if number of nodes from CPU list matches distance header (if available)
+        if num_nodes_from_distance > 0 and len(parsed_nodes) != num_nodes_from_distance:
+            logger.warning(
+                f"Mismatch between detected NUMA nodes from CPU list ({len(parsed_nodes)}) and distance matrix header ({num_nodes_from_distance}). Topology parsing might be incomplete."
+            )
+
+        if not topology:
+            logger.info("No NUMA nodes detected or parsed.")
+            return None
+
+        logger.info(f"Detected NUMA topology: {json.dumps(topology)}")
+        return topology
+
+    except FileNotFoundError:
+        logger.error(
+            f"`{RunnerConfig.NUMACTL_PATH}` command not found. Cannot detect NUMA topology."
+        )
+        return None
+    except subprocess.CalledProcessError as e:
+        logger.error(
+            f"Error running `{RunnerConfig.NUMACTL_PATH} --hardware`: {e.stderr}"
+        )
+        return None
+    except Exception as e:
+        logger.exception(f"Unexpected error during NUMA detection: {e}")
+        return None
+
+
 async def report_status_to_host(update_data: TaskStatusUpdate):
     logger.debug(
         f"Reporting status for task {update_data.task_id}: {update_data.status}"
@@ -163,6 +257,8 @@ async def run_task_background(task_info: TaskInfo):
     process_env["HAKURIVER_TASK_ID"] = str(task_id)  # Use HAKURIVER_ prefix
     process_env["HAKURIVER_LOCAL_TEMP_DIR"] = RunnerConfig.LOCAL_TEMP_DIR
     process_env["HAKURIVER_SHARED_DIR"] = RunnerConfig.SHARED_DIR
+    if task_info.target_numa_node_id is not None:
+        process_env["HAKURIVER_TARGET_NUMA_NODE"] = str(task_info.target_numa_node_id)
     for key, value in process_env.items():
         systemd_run_cmd.append(f"--setenv={key}={value}")  # Pass all env vars
 
@@ -185,8 +281,36 @@ async def run_task_background(task_info: TaskInfo):
         shlex.quote(arg) for arg in task_info.arguments
     ]
     inner_cmd_str = " ".join(inner_cmd_parts)
-    # The command systemd-run executes is /bin/sh -c '...'
-    shell_command = f"exec {inner_cmd_str} > {quoted_stdout} 2> {quoted_stderr}"
+
+    numactl_prefix = ""
+    if task_info.target_numa_node_id is not None and numa_topology is not None:
+        if (
+            RunnerConfig.NUMACTL_PATH
+            and numa_topology
+            and task_info.target_numa_node_id in numa_topology
+        ):
+            # Basic binding to both CPU and memory on the target node
+            numa_id = task_info.target_numa_node_id
+            # Use --interleave=all as a fallback if specific binds cause issues,
+            # or fine-tune with --physcpubind= based on numa_topology[numa_id]['cores']
+            numactl_prefix = f"{shlex.quote(RunnerConfig.NUMACTL_PATH)} --cpunodebind={numa_id} --membind={numa_id} "
+            logger.info(f"Task {task_id}: Applying NUMA binding to node {numa_id}.")
+        elif not RunnerConfig.NUMACTL_PATH:
+            logger.warning(
+                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but numactl path is not configured. Ignoring NUMA binding."
+            )
+        elif not numa_topology:
+            logger.warning(
+                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but NUMA topology couldn't be detected on this runner. Ignoring NUMA binding."
+            )
+        else:  # NUMA ID not found in detected topology
+            logger.warning(
+                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} not found in detected topology {list(numa_topology.keys())}. Ignoring NUMA binding."
+            )
+
+    shell_command = (
+        f"exec {numactl_prefix}{inner_cmd_str} > {quoted_stdout} 2> {quoted_stderr}"
+    )
     systemd_run_cmd.extend(["/bin/sh", "-c", shell_command])
 
     logger.info(f"Executing task {task_id} via systemd-run unit {unit_name}")
@@ -395,16 +519,21 @@ async def send_heartbeat():
 
 
 async def register_with_host():
+    global numa_topology  # Ensure we are using the global variable
+    if numa_topology is None:  # Detect only if not already done
+        numa_topology = detect_numa_topology()
+
     register_data = {
         "hostname": RunnerConfig.RUNNER_HOSTNAME,
         "total_cores": total_cores,
         "total_ram_bytes": psutil.virtual_memory().total,
         "runner_url": runner_url,
+        "numa_topology": numa_topology,  # Add the detected topology
     }
     logger.info(
         f"Attempting to register with host {RunnerConfig.HOST_URL} "
         f"as {RunnerConfig.RUNNER_HOSTNAME} "
-        f"({register_data['total_cores']} cores) at {runner_url}"
+        f"({register_data['total_cores']} cores, NUMA: {'Detected' if numa_topology else 'N/A'}) at {runner_url}"
     )
     try:
         async with httpx.AsyncClient() as client:
@@ -561,29 +690,33 @@ async def kill_task_endpoint(body: dict = Body(...)):
 
 
 async def startup_event():
+    global numa_topology
     logger.info(
         f"Runner starting up on {RunnerConfig.RUNNER_HOSTNAME} "
         f"({runner_ip}:{RunnerConfig.RUNNER_PORT})"
     )
+    # Detect topology *before* first registration attempt
+    logger.info("Detecting NUMA topology...")
+    numa_topology = detect_numa_topology()
+
     registered = False
     for attempt in range(5):
-        registered = await register_with_host()
+        registered = await register_with_host()  # Now sends topology if detected
         if registered:
             break
         wait_time = 5 * (attempt + 1)
         logger.info(
-            f"Registration attempt {attempt+1}/5 failed. "
-            f"Retrying in {wait_time} seconds..."
+            f"Registration attempt {attempt+1}/5 failed. Retrying in {wait_time} seconds..."
         )
         await asyncio.sleep(wait_time)
 
     if not registered:
         logger.error(
-            "Failed to register with host after multiple attempts. "
-            "Runner may not function correctly."
+            "Failed to register with host after multiple attempts. Runner may not function correctly."
         )
     else:
-        logger.info("Starting background tasks (Heartbeat, Resource Check).")
+        logger.info("Starting background tasks (Heartbeat).")
+        # Removed check_running_tasks call - rely on systemd-run --scope --collect
         asyncio.create_task(send_heartbeat())
 
 
