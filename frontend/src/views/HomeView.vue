@@ -290,9 +290,9 @@ const cpuHistory = ref([]);
 const memoryHistory = ref([]);
 const historyIndex = ref(0);
 
-const triggerFetchHealth = async () => {
-  if (isLoadingHealth.value) return;
-  isLoadingHealth.value = true;
+const triggerFetchHealth = async (showLoading=false) => {
+  if (isLoadingHealth.value && showLoading) return;
+  isLoadingHealth.value = showLoading;
   healthError.value = null;
   try {
     const rawHealthData = await fetchHealthData();
@@ -326,7 +326,7 @@ const taskError = ref(null);
 let taskPollingInterval = null;
 const backendHasGetTasks = ref(typeof api.getTasks === 'function'); // Check only once
 
-const fetchTasks = async () => {
+const fetchTasks = async (showLoading = false) => {
   if (!backendHasGetTasks.value) {
     taskError.value = "Backend API '/tasks' endpoint not available.";
     isLoadingTasks.value = false;
@@ -337,8 +337,8 @@ const fetchTasks = async () => {
     }
     return;
   }
-  if (isLoadingTasks.value) return;
-  isLoadingTasks.value = true;
+  if (isLoadingTasks.value && showLoading) return;
+  isLoadingTasks.value = showLoading;
   taskError.value = null;
   try {
     const response = await api.getTasks();
@@ -353,11 +353,11 @@ const fetchTasks = async () => {
 };
 
 // --- Combined Fetch Trigger ---
-const triggerCombinedFetch = () => {
-  triggerFetchHealth();
+const triggerCombinedFetch = (showLoading = false) => {
+  triggerFetchHealth(showLoading); // Fetch health data
   // Only fetch tasks if the function exists and polling isn't disabled
   if (backendHasGetTasks.value && taskPollingInterval !== null) {
-    fetchTasks();
+    fetchTasks(showLoading); // Fetch tasks
   } else if (!backendHasGetTasks.value) {
     // If API doesn't exist, ensure loading state is false and set error message
     isLoadingTasks.value = false;
@@ -411,9 +411,9 @@ const historyAxis = ref({
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
-  triggerCombinedFetch(); // Initial fetch
+  triggerCombinedFetch(true); // Initial fetch
 
-  healthPollingInterval = setInterval(triggerFetchHealth, HEALTH_POLLING_RATE_MS);
+  healthPollingInterval = setInterval(()=> triggerCombinedFetch(false), HEALTH_POLLING_RATE_MS);
 
   // Set up task polling only if the API exists
   if (backendHasGetTasks.value) {
