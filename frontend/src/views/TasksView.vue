@@ -448,7 +448,7 @@ const formatBytesForTable = (bytes) => {
 
 // --- API Functions ---
 
-const fetchTasks = async () => {
+const fetchTasks = async (showLoading = false) => {
   if (!backendHasGetTasks.value) {
     taskError.value = "Backend API '/tasks' endpoint not implemented.";
     isLoadingTasks.value = false;
@@ -456,9 +456,9 @@ const fetchTasks = async () => {
     if (taskPollingInterval) clearInterval(taskPollingInterval);
     return;
   }
-  if (isLoadingTasks.value) return; // Prevent overlap
+  if (isLoadingTasks.value && showLoading) return; // Prevent overlap
 
-  isLoadingTasks.value = true;
+  isLoadingTasks.value = showLoading;
   taskError.value = null;
   try {
     const response = await api.getTasks();
@@ -549,7 +549,7 @@ const submitTaskApi = async (formData) => {
 
     if (responseData.task_ids && responseData.task_ids.length > 0) {
       submitDialogVisible.value = false;
-      fetchTasks(); // Refresh list
+      fetchTasks(true); // Refresh list
     }
   } catch (error) {
     console.error('Error submitting task:', error);
@@ -695,7 +695,7 @@ const handleKill = (taskId) => {
 onMounted(() => {
   fetchTasks(); // Initial fetch
   if (backendHasGetTasks.value) {
-    taskPollingInterval = setInterval(fetchTasks, TASK_POLLING_RATE_MS);
+    taskPollingInterval = setInterval(()=> fetchTasks(false), TASK_POLLING_RATE_MS);
   }
 });
 
