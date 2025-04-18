@@ -401,7 +401,7 @@ const validateMemoryString = (rule, value, callback) => {
 
 const taskFormRules = reactive({
   command: [{ required: true, message: 'Command is required', trigger: 'blur' }],
-  required_cores: [{ message: 'Number of cores is required', trigger: 'blur' }],
+  required_cores: [{ required: false, trigger: 'blur' }],
   // MODIFIED: Add rule for memory string format
   memory_limit_str: [{ validator: validateMemoryString, trigger: 'blur' }],
   selectedTargets: [{ type: 'array', min: 0, trigger: 'change' }],

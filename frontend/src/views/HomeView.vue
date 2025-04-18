@@ -543,7 +543,7 @@ const failedTasksCount = computed(
   fill: var(--el-text-color-primary);
 }
 .mini-text {
-  font-size: 1.3em;
+  font-size: 0.7rem;
 } /* Smaller text for mini gauges */
 
 /* History Chart Styles */

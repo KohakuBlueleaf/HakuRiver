@@ -494,7 +494,7 @@ onUnmounted(() => {
   fill: var(--el-text-color-primary);
 }
 .mini-text {
-  font-size: 1.3em;
+  font-size: 0.7rem;
 }
 
 /* --- Styles specific to NodesView --- */
