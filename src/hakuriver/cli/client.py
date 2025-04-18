@@ -134,7 +134,7 @@ def main():
     parser.add_argument(
         "--cores",
         type=int,
-        default=1,
+        default=0,
         help="CPU cores required (per target). Default: 1.",
     )
     parser.add_argument(
@@ -282,8 +282,8 @@ def main():
                 f"Submitting command '{command_to_run}' with args {command_arguments}"
             )
 
-            if args.cores <= 0:
-                parser.error("--cores must be a positive integer.")
+            if args.cores < 0:
+                parser.error("--cores must be a positive integer or 0.")
 
             memory_bytes = None
             if args.memory:
