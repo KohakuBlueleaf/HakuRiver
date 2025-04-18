@@ -50,7 +50,7 @@ OTHER_VAR=123"
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="Required CPU Cores" prop="required_cores">
-              <el-input-number v-model="taskForm.required_cores" :min="1" controls-position="right" style="width: 100%" />
+              <el-input-number v-model="taskForm.required_cores" :min="0" controls-position="right" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -340,7 +340,7 @@ const taskForm = reactive({
   command: '',
   arguments_text: '',
   env_vars_text: '',
-  required_cores: 1,
+  required_cores: 0,
   memory_limit_str: '', // Input as string (e.g., "512M")
   use_private_network: false,
   use_private_pid: false,
@@ -401,7 +401,7 @@ const validateMemoryString = (rule, value, callback) => {
 
 const taskFormRules = reactive({
   command: [{ required: true, message: 'Command is required', trigger: 'blur' }],
-  required_cores: [{ required: true, message: 'Number of cores is required', trigger: 'blur' }],
+  required_cores: [{ message: 'Number of cores is required', trigger: 'blur' }],
   // MODIFIED: Add rule for memory string format
   memory_limit_str: [{ validator: validateMemoryString, trigger: 'blur' }],
   selectedTargets: [{ type: 'array', min: 0, trigger: 'change' }],
