@@ -404,7 +404,7 @@ const taskFormRules = reactive({
   required_cores: [{ required: true, message: 'Number of cores is required', trigger: 'blur' }],
   // MODIFIED: Add rule for memory string format
   memory_limit_str: [{ validator: validateMemoryString, trigger: 'blur' }],
-  selectedTargets: [{ type: 'array', min: 1, message: 'Please select at least one target', trigger: 'change' }],
+  selectedTargets: [{ type: 'array', min: 0, trigger: 'change' }],
 });
 
 const killingState = reactive({}); // Track loading state for individual kill buttons
