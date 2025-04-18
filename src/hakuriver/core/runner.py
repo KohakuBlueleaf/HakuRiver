@@ -364,7 +364,7 @@ async def run_task_background(task_info: TaskInfo):
                     completed_at=datetime.datetime.now(),
                 )
             )
-        else:
+        elif task_id in running_processes: # not killed by host
             error_message = f"systemd-run failed with exit code {exit_code}."
             stderr_decoded = stderr.decode(errors="replace").strip()
             if stderr_decoded:
