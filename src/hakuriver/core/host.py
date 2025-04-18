@@ -51,10 +51,10 @@ class TaskRequest(BaseModel):
     arguments: list[str] = Field(default_factory=list)
     env_vars: dict[str, str] = Field(default_factory=dict)
     required_cores: int = Field(
-        default=1, ge=1, description="Number of CPU cores required"
+        default=1, ge=0, description="Number of CPU cores required"
     )
     required_memory_bytes: int | None = Field(
-        default=1000_000_000, ge=1, description="Memory limit in bytes"
+        default=None, ge=0, description="Memory limit in bytes"
     )
     use_private_network: bool = Field(default=False)
     use_private_pid: bool = Field(default=False)
