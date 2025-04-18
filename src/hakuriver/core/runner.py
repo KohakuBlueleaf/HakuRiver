@@ -242,8 +242,7 @@ async def run_task_background(task_info: TaskInfo):
         systemd_run_cmd.append(
             f"--property=MemoryMax={task_info.required_memory_bytes}"
         )
-        # Consider adding MemorySwapMax=0 to prevent swapping if desired
-        # systemd_run_cmd.append('--property=MemorySwapMax=0')
+    systemd_run_cmd.append('--property=MemorySwapMax=0')
 
     # Environment Variables
     process_env = os.environ.copy()  # Start with runner's environment
@@ -341,7 +340,7 @@ async def run_task_background(task_info: TaskInfo):
             "unit": unit_name,
             "process": systemd_process,  # Store the systemd-run process object initially
             "memory_limit": task_info.required_memory_bytes,
-            "pid": None,  # PID will be filled by the check loop
+            "pid": systemd_process.pid,  # PID will be filled by the check loop
         }
 
         # Wait for systemd-run command to finish
@@ -615,6 +614,7 @@ async def kill_task_endpoint(body: dict = Body(...)):
             status_code=404, detail=f"Task {task_id} not found or not tracked."
         )
 
+    process = task_data["process"]
     unit_name = task_data["unit"]
     kill_message = f"Task killed by host request (Unit: {unit_name})."
     status = "killed"
@@ -625,8 +625,8 @@ async def kill_task_endpoint(body: dict = Body(...)):
         logger.info(
             f"Attempting to stop/kill systemd unit {unit_name} for task {task_id}"
         )
-        # Use systemctl kill first (more forceful)
-        kill_cmd = ["sudo", "systemctl", "kill", unit_name]
+        # Use kill directly to ensure we stop the unit
+        kill_cmd = ["sudo", "kill", "-s", "SIGKILL", str(process.pid)]
         kill_result = subprocess.run(
             kill_cmd, capture_output=True, text=True, check=False
         )
@@ -636,7 +636,7 @@ async def kill_task_endpoint(body: dict = Body(...)):
         else:
             # Maybe it already stopped? Or permission error?
             logger.warning(
-                f"systemctl kill {unit_name} failed (rc={kill_result.returncode}): {kill_result.stderr.strip()}. Unit might be stopped already."
+                f"kill {unit_name} failed (rc={kill_result.returncode}): {kill_result.stderr.strip()}. Unit might be stopped already."
             )
             # Check if it's inactive
             status_cmd = ["sudo", "systemctl", "is-active", unit_name]
