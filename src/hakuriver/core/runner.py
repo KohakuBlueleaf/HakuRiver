@@ -232,7 +232,7 @@ async def run_task_background(task_info: TaskInfo):
         # cpu_list = ",".join(map(str, range(min(task_info.required_cores, total_cores))))
         # systemd_run_cmd.append(f"--property=CPUAffinity={cpu_list}")
         # Optionally add CPUQuota for stricter enforcement (percentage)
-        cpu_quota = int((task_info.required_cores / total_cores) * 100)
+        cpu_quota = int(task_info.required_cores * 100)
         systemd_run_cmd.append(f"--property=CPUQuota={cpu_quota}%")
 
     if (
