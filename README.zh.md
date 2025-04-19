@@ -139,45 +139,45 @@ vim ~/.hakuriver/config.toml
 **2. 啟動主機服務器（在管理節點上）：**
 
 ```bash
-   hakuriver.host
-   # 使用自定義配置：
-   # hakuriver.host --config /path/to/host_config.toml
+hakuriver.host
+# 使用自定義配置：
+# hakuriver.host --config /path/to/host_config.toml
 ```
 
 或者您可以在系統中創建服務：
 ```bash
-   hakuriver.init service --host
-   # 使用自定義配置：
-   # hakuriver.init service --host --config /path/to/host_config.toml
-   systemctl restart hakuriver-host
-   systemctl enable hakuriver-host
-   # 檢查運行狀態
-   # systemctl status hakuriver-host
+hakuriver.init service --host
+# 使用自定義配置：
+# hakuriver.init service --host --config /path/to/host_config.toml
+systemctl restart hakuriver-host
+systemctl enable hakuriver-host
+# 檢查運行狀態
+# systemctl status hakuriver-host
 ```
 
 **3. 啟動運行器代理（在每個計算節點上）：**
 
 ```bash
-   # 重要：以具有以下命令 NOPASSWD sudo 訪問權限的用戶身份運行：
-   # /usr/bin/systemd-run, /usr/bin/systemctl
-   # （需要用於任務啟動、資源限制、終止任務，如果通過 sudo 運行可能還需要 numactl）
-   # sudoers 條目示例：
-   # your_user ALL=(ALL) NOPASSWD: /usr/bin/systemd-run, /usr/bin/systemctl
+# 重要：以具有以下命令 NOPASSWD sudo 訪問權限的用戶身份運行：
+# /usr/bin/systemd-run, /usr/bin/systemctl
+# （需要用於任務啟動、資源限制、終止任務，如果通過 sudo 運行可能還需要 numactl）
+# sudoers 條目示例：
+# your_user ALL=(ALL) NOPASSWD: /usr/bin/systemd-run, /usr/bin/systemctl
 
-   hakuriver.runner
-   # 使用自定義配置：
-   # hakuriver.runner --config /path/to/runner_config.toml
+hakuriver.runner
+# 使用自定義配置：
+# hakuriver.runner --config /path/to/runner_config.toml
 ```
 
 或者您可以在系統中創建服務：
 ```bash
-   hakuriver.init service --runner
-   # 使用自定義配置：
-   # hakuriver.init service --runner --config /path/to/runner_config.toml
-   systemctl restart hakuriver-runner
-   systemctl enable hakuriver-runner
-   # 檢查運行狀態
-   # systemctl status hakuriver-runner
+hakuriver.init service --runner
+# 使用自定義配置：
+# hakuriver.init service --runner --config /path/to/runner_config.toml
+systemctl restart hakuriver-runner
+systemctl enable hakuriver-runner
+# 檢查運行狀態
+# systemctl status hakuriver-runner
 ```
 
 **4. Systemd 執行說明：**
