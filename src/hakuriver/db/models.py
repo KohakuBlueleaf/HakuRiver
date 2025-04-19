@@ -31,7 +31,9 @@ class Node(BaseModel):
         if not self.numa_topology:
             return None
         try:
-            return {int(key): value for key, value in json.loads(self.numa_topology).items()}
+            return {
+                int(key): value for key, value in json.loads(self.numa_topology).items()
+            }
         except json.JSONDecodeError:
             # Log this error? Maybe in the calling function.
             return None  # Return None if parsing fails
