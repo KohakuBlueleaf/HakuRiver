@@ -8,7 +8,7 @@
 
 **HakuRiver** is a lightweight, self-hosted cluster manager designed for distributing command-line tasks across compute nodes. It focuses on allocating CPU cores (via **systemd CPU Quotas**) and memory limits, managing task lifecycles, and now offers **NUMA node targeting** and **multi-node task submission**.
 
-It leverages **systemd** for execution and basic sandboxing (`PrivateNetwork`, `PrivatePID`). HakuRiver is ideal for small research clusters, development environments, or internal batch processing systems where full-featured HPC schedulers might be overkill but some level of resource control and distribution is needed.
+HakuRiver is ideal for small research clusters, development environments, or internal batch processing systems where full-featured HPC schedulers might be overkill but some level of resource control and distribution is needed.
 
 ---
 
@@ -32,7 +32,6 @@ It leverages **systemd** for execution and basic sandboxing (`PrivateNetwork`, `
 * **Systemd-Based Task Execution:** Tasks run as transient systemd scope units (`systemd-run --scope`) for better lifecycle management and resource accounting.
 * **NUMA Node Targeting:** Optionally bind tasks to specific NUMA nodes using `numactl` (requires `numactl` installed on runners and path configured).
 * **Multi-Node/NUMA Task Submission:** Submit a single request to run the same command across multiple specified nodes or specific NUMA nodes within nodes.
-* **Optional Sandboxing:** Basic systemd sandboxing (`PrivateNetwork=yes`, `PrivatePIDs=yes`) configurable per task batch.
 * **Persistent Task & Node Records:** Host maintains SQLite DB of nodes (including detected NUMA topology) and tasks (status, target, resource requests, logs).
 * **Node Health & Resource Awareness:** Basic heartbeat detects offline runners. Runners report overall CPU/Memory usage and NUMA topology.
 * **Standalone Argument Spanning (`hakurun`):** Utility for local parameter sweeps (`span:{..}`, `span:[]`) before submitting to the cluster. Improves parallel Python execution robustness.
@@ -42,7 +41,7 @@ It leverages **systemd** for execution and basic sandboxing (`PrivateNetwork`, `
 ![](image/README/HakuRiverArch.jpg)
 
 * **Host (`hakuriver.host`):** Central coordinator. Manages node registration (including NUMA topology), tracks node status/resources, stores task information in the DB, receives task submission requests (including multi-target), validates targets, generates unique task IDs, and dispatches individual task instances to the appropriate Runners.
-* **Runner (`hakuriver.runner`):** Agent on each compute node. Detects NUMA topology (via `numactl`), registers with Host (reporting cores, RAM, NUMA info, URL). Sends periodic heartbeats (incl. CPU/Mem usage). Executes assigned tasks using `sudo systemd-run`, applying CPU Quota, Memory Limits, optional sandboxing, and optional `numactl` binding. Reports task status updates back to the Host. **Requires passwordless `sudo` for `systemd-run` and `systemctl`.**
+* **Runner (`hakuriver.runner`):** Agent on each compute node. Detects NUMA topology (via `numactl`), registers with Host (reporting cores, RAM, NUMA info, URL). Sends periodic heartbeats (incl. CPU/Mem usage). Executes assigned tasks using `sudo systemd-run`, applying CPU Quota, Memory Limits and optional `numactl` binding. Reports task status updates back to the Host. **Requires passwordless `sudo` for `systemd-run` and `systemctl`.**
 * **Client (`hakuriver.client`):** CLI tool. Communicates with Host to submit tasks (specifying command, args, env, resources, and **one or more targets** like `host1` or `host1:0`), query task/node status (incl. NUMA info), and kill tasks.
 * **Frontend:** Optional web UI providing visual overview and interaction capabilities similar to the Client.
 * **Database:** Host uses SQLite via Peewee to store node inventory (incl. NUMA topology as JSON) and task details (incl. target NUMA ID, batch ID).
@@ -195,8 +194,7 @@ Or you can create a service in your system:
 | **Submit Single Task**  | `hakuriver.client --target <host1> --cores 1 -- echo "Basic Task"`                                                                               | Runs on any available core on `<host1>`.                                   |
 | **Submit (NUMA)**       | `hakuriver.client --target <host1>:0 --cores 2 --memory 1G -- ./my_numa_script.sh`                                                               | Runs bound to NUMA node 0 on `<host1>`. Requires `numactl` on runner.    |
 | **Submit (Multi-NUMA)** | `hakuriver.client --target <host1>:0 --target <host1>:1 --cores 1 -- ./process_shard.sh`                                                         | Runs two task instances on `<host1>`, one on NUMA 0, one on NUMA 1.        |
-| **Submit (Multi-Node)** | `hakuriver.client --target <host1>:0 --target <host2> --cores 4 --env P=1 -- ./parallel_job.sh`                                                  | Runs on NUMA 0 of `<host1>` and any core on `<host2>`.                   |
-| **Submit (Sandbox)**    | `hakuriver.client --target <host1> --cores 1 --private-network --private-pid -- ./isolated_task.sh`                                              | Applies systemd sandboxing options.                                          |
+| **Submit (Multi-Node)** | `hakuriver.client --target <host1>:0 --target <host2> --cores 4 --env P=1 -- ./parallel_job.sh`                                                  | Runs on NUMA 0 of `<host1>` and any core on `<host2>`.                   |options.                                          |
 | **Check Status**        | `hakuriver.client --status <task_id>`                                                                                                            | Shows detailed status, including target NUMA, batch ID.                      |
 | **Kill Task**           | `hakuriver.client --kill <task_id>`                                                                                                              | Requests termination of a specific task instance.                            |
 | **Submit + Wait**       | `hakuriver.client --target <host1>:0 --wait -- sleep 30`                                                                                         | Waits for the specified task(s) to finish. Use cautiously with multi-target. |
