@@ -139,45 +139,45 @@ vim ~/.hakuriver/config.toml
 **2. Start Host Server (on manager node):**
 
 ```bash
-   hakuriver.host
-   # With custom config:
-   # hakuriver.host --config /path/to/host_config.toml
+hakuriver.host
+# With custom config:
+# hakuriver.host --config /path/to/host_config.toml
 ```
 
 Or you can create a service in your system:
 ```bash
-   hakuriver.init service --host
-   # With custom config:
-   # hakuriver.init service --host --config /path/to/host_config.toml
-   systemctl restart hakuriver-host
-   systemctl enable hakuriver-host
-   # To check running status
-   # systemctl status hakuriver-host
+hakuriver.init service --host
+# With custom config:
+# hakuriver.init service --host --config /path/to/host_config.toml
+systemctl restart hakuriver-host
+systemctl enable hakuriver-host
+# To check running status
+# systemctl status hakuriver-host
 ```
 
 **3. Start Runner Agent (on each compute node):**
 
 ```bash
-   # IMPORTANT: Run as a user with NOPASSWD sudo access for:
-   # /usr/bin/systemd-run, /usr/bin/systemctl
-   # (Needed for task launch, resource limits, killing tasks, potentially numactl if run via sudo)
-   # Example sudoers entry:
-   # your_user ALL=(ALL) NOPASSWD: /usr/bin/systemd-run, /usr/bin/systemctl
+# IMPORTANT: Run as a user with NOPASSWD sudo access for:
+# /usr/bin/systemd-run, /usr/bin/systemctl
+# (Needed for task launch, resource limits, killing tasks, potentially numactl if run via sudo)
+# Example sudoers entry:
+# your_user ALL=(ALL) NOPASSWD: /usr/bin/systemd-run, /usr/bin/systemctl
 
-   hakuriver.runner
-   # With custom config:
-   # hakuriver.runner --config /path/to/runner_config.toml
+hakuriver.runner
+# With custom config:
+# hakuriver.runner --config /path/to/runner_config.toml
 ```
 
 Or you can create a service in your system:
 ```bash
-   hakuriver.init service --runner
-   # With custom config:
-   # hakuriver.init service --runner --config /path/to/runner_config.toml
-   systemctl restart hakuriver-runner
-   systemctl enable hakuriver-runner
-   # To check running status
-   # systemctl status hakuriver-runner
+hakuriver.init service --runner
+# With custom config:
+# hakuriver.init service --runner --config /path/to/runner_config.toml
+systemctl restart hakuriver-runner
+systemctl enable hakuriver-runner
+# To check running status
+# systemctl status hakuriver-runner
 ```
 
 **4. Systemd Execution Notes:**
