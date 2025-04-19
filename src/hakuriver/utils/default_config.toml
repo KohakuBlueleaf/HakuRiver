@@ -38,3 +38,9 @@ heartbeat_interval = 5
 heartbeat_timeout_factor = 6
 # How often the host checks for dead runners
 cleanup_check_interval = 10
+
+[environment]
+# For better safety, you may want to ensure the tasks are executing under a specific user/group
+# Since the runner is running under sudoers with NOPASSWD
+# By default, the runner will run tasks as the user who started the runner
+runner_user = ""
