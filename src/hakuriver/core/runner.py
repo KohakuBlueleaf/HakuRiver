@@ -36,6 +36,7 @@ class RunnerConfig:
     # Timing
     HEARTBEAT_INTERVAL_SECONDS = settings["timing"]["heartbeat_interval"]
     TASK_CHECK_INTERVAL_SECONDS = settings["timing"].get("resource_check_interval", 1)
+    RUNNER_USER = settings.get("environment", {}).get("runner_user", getpass.getuser())
 
 
 RunnerConfig = RunnerConfig()
@@ -50,8 +51,6 @@ class TaskInfo(BaseModel):
     stdout_path: str
     stderr_path: str
     required_memory_bytes: int | None = None
-    use_private_network: bool = False
-    use_private_pid: bool = False
     target_numa_node_id: int | None = Field(
         default=None, description="Target NUMA node ID for execution"
     )  # MODIFIED: Added field
@@ -220,7 +219,7 @@ async def run_task_background(task_info: TaskInfo):
         "systemd-run",
         "--scope",  # Run as a transient scope unit
         "--collect",  # Garbage collect unit when process exits
-        f"--property=User={getpass.getuser()}",  # Run as the current user (or specify another user)
+        f"--property=User={RunnerConfig.RUNNER_USER}",  # Run as the current user (or specify another user)
         f"--unit={unit_name}",
         # Basic description
         f"--description=HakuRiver Task {task_id}: {shlex.quote(task_info.command)}",
@@ -255,14 +254,8 @@ async def run_task_background(task_info: TaskInfo):
     for key, value in process_env.items():
         systemd_run_cmd.append(f"--setenv={key}={value}")  # Pass all env vars
 
-    # Sandboxing Properties
-    if task_info.use_private_network:
-        systemd_run_cmd.append("--property=PrivateNetwork=yes")
-    if task_info.use_private_pid:
-        systemd_run_cmd.append("--property=PrivatePIDs=yes")
-
     # Working Directory (Optional - run in shared or temp?)
-    # systemd_run_cmd.append(f'--property=WorkingDirectory={RunnerConfig.SHARED_DIR}') # Example
+    systemd_run_cmd.append(f'--property=WorkingDirectory={RunnerConfig.SHARED_DIR}') # Example
 
     # Command and Arguments with Redirection
     # This is complex due to shell quoting needed inside systemd-run
@@ -579,7 +572,6 @@ async def accept_task(task_info: TaskInfo, background_tasks: BackgroundTasks):
         f"Accepted task {task_id}: {task_info.command} "
         f"Cores: {task_info.required_cores}, "
         f"Mem: {task_info.required_memory_bytes // (1024*1024) if task_info.required_memory_bytes else 'N/A'}MB, "
-        f"Net: {task_info.use_private_network}, PID: {task_info.use_private_pid}"
     )
     background_tasks.add_task(run_task_background, task_info)
     return {"message": "Task accepted for launch", "task_id": task_id}
