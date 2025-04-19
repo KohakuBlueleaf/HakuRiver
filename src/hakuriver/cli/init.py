@@ -14,6 +14,7 @@ def create_service_files(args):
     username = getpass.getuser()
     python_path = sys.executable
     venv_path = os.environ.get("VIRTUAL_ENV")
+    env_path_base = os.environ.get("PATH")
     env_path_addition = f"{venv_path}/bin:" if venv_path else ""
 
     # Load configuration
@@ -51,7 +52,7 @@ WorkingDirectory={working_dir}
 ExecStart={python_path} -m hakuriver.cli.host --config {host_config}
 Restart=on-failure
 RestartSec=5
-Environment="PATH={env_path_addition}$PATH"
+Environment="PATH={env_path_addition}:{env_path_base}"
 
 [Install]
 WantedBy=multi-user.target
@@ -78,7 +79,7 @@ WorkingDirectory={working_dir}
 ExecStart={python_path} -m hakuriver.cli.runner --config {runner_config}
 Restart=on-failure
 RestartSec=5
-Environment="PATH={env_path_addition}$PATH"
+Environment="PATH={env_path_addition}:{env_path_base}"
 
 [Install]
 WantedBy=multi-user.target
