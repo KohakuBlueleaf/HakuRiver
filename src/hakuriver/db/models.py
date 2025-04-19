@@ -65,8 +65,6 @@ class Task(BaseModel):
     completed_at = peewee.DateTimeField(null=True)
     assignment_suspicion_count = peewee.IntegerField(default=0)
     required_memory_bytes = peewee.BigIntegerField(null=True)
-    use_private_network = peewee.BooleanField(default=False)
-    use_private_pid = peewee.BooleanField(default=False)
     systemd_unit_name = peewee.CharField(null=True)  # Store the transient unit name
     target_numa_node_id = peewee.IntegerField(
         null=True

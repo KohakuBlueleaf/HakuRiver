@@ -99,8 +99,6 @@ def submit_task(
     env: dict[str, str],
     cores: int,
     memory_bytes: int | None,
-    private_network: bool,
-    private_pid: bool,
     targets: list[str],  # Changed from individual target/sandbox flags
 ) -> list[str] | None:  # Returns list of task IDs
     """Submits a task potentially to multiple targets."""
@@ -112,8 +110,6 @@ def submit_task(
         "env_vars": env,
         "required_cores": cores,
         "required_memory_bytes": memory_bytes,
-        "use_private_network": private_network,
-        "use_private_pid": private_pid,
         "targets": targets,  # Pass the list of target strings
     }
     print(payload)

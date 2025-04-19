@@ -31,8 +31,6 @@ export default {
       env_vars: taskData.env_vars, // Assume taskData provides this already parsed
       required_cores: taskData.required_cores,
       required_memory_bytes: taskData.required_memory_bytes, // Already handled bytes conversion
-      use_private_network: taskData.use_private_network,
-      use_private_pid: taskData.use_private_pid,
       targets: taskData.targets, // Pass the array of target strings
     };
     // Filter out null/undefined optional values if necessary

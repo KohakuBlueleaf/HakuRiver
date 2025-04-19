@@ -56,8 +56,6 @@ class TaskRequest(BaseModel):
     required_memory_bytes: int | None = Field(
         default=None, ge=0, description="Memory limit in bytes"
     )
-    use_private_network: bool = Field(default=False)
-    use_private_pid: bool = Field(default=False)
     targets: list[str] | None = Field(
         default=None,
         min_length=0,
@@ -87,8 +85,6 @@ class TaskInfoForRunner(BaseModel):
     stdout_path: str
     stderr_path: str
     required_memory_bytes: int | None = None
-    use_private_network: bool = False
-    use_private_pid: bool = False
     target_numa_node_id: int | None = None
 
 
@@ -513,8 +509,6 @@ async def get_tasks():
                     "submitted_at": task.submitted_at,
                     "started_at": task.started_at,
                     "completed_at": task.completed_at,
-                    "use_private_network": task.use_private_network,
-                    "use_private_pid": task.use_private_pid,
                     "systemd_unit_name": task.systemd_unit_name,
                     "assignment_suspicion_count": task.assignment_suspicion_count,
                 }
@@ -649,8 +643,6 @@ async def submit_task(req: TaskRequest):
                     command=req.command,
                     required_cores=req.required_cores,
                     required_memory_bytes=req.required_memory_bytes,  # Store memory limit
-                    use_private_network=req.use_private_network,  # Store sandbox flag
-                    use_private_pid=req.use_private_pid,  # Store sandbox flag
                     assigned_node=node,
                     status="assigning",
                     stdout_path=stdout_path,
@@ -688,8 +680,6 @@ async def submit_task(req: TaskRequest):
             stdout_path=stdout_path,
             stderr_path=stderr_path,
             required_memory_bytes=req.required_memory_bytes,
-            use_private_network=req.use_private_network,
-            use_private_pid=req.use_private_pid,
             target_numa_node_id=target_numa_id,  # Pass the specific target NUMA ID
         )
 
@@ -808,8 +798,6 @@ async def get_task_status(task_id: int):
         "submitted_at": task.submitted_at.isoformat() if task.submitted_at else None,
         "started_at": task.started_at.isoformat() if task.started_at else None,
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-        "use_private_network": task.use_private_network,
-        "use_private_pid": task.use_private_pid,
         "systemd_unit_name": task.systemd_unit_name,
         "assignment_suspicion_count": task.assignment_suspicion_count,
     }

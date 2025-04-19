@@ -87,18 +87,6 @@ OTHER_VAR=123"
               <span>Sandboxing Options (via systemd)</span>
             </div>
           </template>
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-tooltip content="Uses systemd PrivateNetwork=yes. Task cannot access network." placement="top">
-                <el-checkbox v-model="taskForm.use_private_network" label="Isolate Network" size="large" border />
-              </el-tooltip>
-            </el-col>
-            <el-col :span="12">
-              <el-tooltip content="Uses systemd PrivatePID=yes. Task cannot see other processes." placement="top">
-                <el-checkbox v-model="taskForm.use_private_pid" label="Isolate Processes (PID)" size="large" border />
-              </el-tooltip>
-            </el-col>
-          </el-row>
         </el-card>
       </el-form>
       <template #footer>
@@ -342,8 +330,6 @@ const taskForm = reactive({
   env_vars_text: '',
   required_cores: 0,
   memory_limit_str: '', // Input as string (e.g., "512M")
-  use_private_network: false,
-  use_private_pid: false,
   selectedTargets: [], // Holds the array of selected target strings, e.g., ["host1:0", "host2"]
 });
 
@@ -466,8 +452,6 @@ const fetchTasks = async (showLoading = false) => {
       ...task,
       // Explicitly ensure default values if backend might omit them
       required_memory_bytes: task.required_memory_bytes ?? null,
-      use_private_network: task.use_private_network ?? false,
-      use_private_pid: task.use_private_pid ?? false,
       systemd_unit_name: task.systemd_unit_name ?? null,
       target_numa_node_id: task.target_numa_node_id ?? null,
       batch_id: task.batch_id ?? null,
@@ -521,8 +505,6 @@ const submitTaskApi = async (formData) => {
       env_vars: envDict,
       required_cores: formData.required_cores,
       required_memory_bytes: memoryBytes,
-      use_private_network: formData.use_private_network,
-      use_private_pid: formData.use_private_pid,
       targets: formData.selectedTargets, // Use the selected targets array
     };
 
@@ -636,8 +618,6 @@ const resetForm = () => {
   taskForm.arguments_text = '';
   taskForm.env_vars_text = '';
   taskForm.memory_limit_str = '';
-  taskForm.use_private_network = false;
-  taskForm.use_private_pid = false;
   taskForm.selectedTargets = [];
 };
 

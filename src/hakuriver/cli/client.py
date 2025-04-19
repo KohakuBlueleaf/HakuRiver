@@ -151,16 +151,6 @@ def main():
         help="Environment variables (repeatable).",
         default=[],
     )
-    parser.add_argument(
-        "--private-network",
-        action="store_true",
-        help="Run task with systemd PrivateNetwork=yes.",
-    )
-    parser.add_argument(
-        "--private-pid",
-        action="store_true",
-        help="Run task with systemd PrivatePID=yes.",
-    )
 
     parser.add_argument("--wait", action="store_true", help="Wait for submitted task.")
     parser.add_argument(
@@ -307,8 +297,6 @@ def main():
                 env=env_vars,
                 cores=args.cores,
                 memory_bytes=memory_bytes,
-                private_network=args.private_network,
-                private_pid=args.private_pid,
                 targets=args.target,  # Pass the list of targets
             )
 
