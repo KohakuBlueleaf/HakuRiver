@@ -80,14 +80,6 @@ OTHER_VAR=123"
           </el-select>
           <el-text size="small" type="info">Select one or more nodes. Suffix :N targets NUMA node N.</el-text>
         </el-form-item>
-
-        <el-card shadow="never" style="margin-top: 10px; background-color: var(--el-fill-color-lighter)">
-          <template #header>
-            <div class="card-header" style="font-weight: normal; font-size: 0.95em">
-              <span>Sandboxing Options (via systemd)</span>
-            </div>
-          </template>
-        </el-card>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
