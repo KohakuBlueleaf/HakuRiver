@@ -39,45 +39,7 @@ It leverages **systemd** for execution and basic sandboxing (`PrivateNetwork`, `
 * **Web Dashboard (Experimental):** Vue.js frontend for visual monitoring, task submission (incl. multi-target), status checks, and killing tasks.
 
 ## 🏗️ Architecture Overview
-
-```ascii
-+-----------------+      HTTP API       +-----------------+      HTTP API       +--------------------+
-|  Client (CLI)   |<------------------->|   Host Server   |<------------------->|  Frontend (Web UI) |
-| (hakuriver.cli) | (Submit, Status,    | (hakuriver.core)| (Node/Task Data,    | (Vue.js)           |
-|                 |  Kill, List, ...)   |  - FastAPI      |  Submit, Kill)      |  - Monitoring      |
-|                 |                     |  - Peewee (DB)  |                     |  - Submit Task     |
-|                 |                     |  - Scheduling*  |                     |  - Check result    |
-+-----------------+                     |  - State Mgmt   |                     +--------------------+
-                                        +--------+--------+
-                                                 | ▲  │ Registration, Heartbeat, Status Update
-                                                 │ │  ▼ Task Execution Command, Kill Command
-                                        +--------▼-+-------------+      +------------------------+
-                                        | Runner Agent (Node 1)  |      | Runner Agent (Node N)  |
-                                        | (hakuriver.core)       |      | (hakuriver.core)       |
-                                        |  - FastAPI             |      |  - FastAPI             |
-                                        |  - NUMA Detect         |      |  - NUMA Detect         |
-                                        |  - systemd-run (+sudo) |      |  - systemd-run (+sudo) |
-                                        |  - numactl             |      |  - numactl             |
-                                        +------------------------+      +------------------------+
-                                                    │                               │
- Shared Filesystem (NFS, etc.)                      │ Access (Scripts, Output)      │ Access (Scripts, Output)
-+----------------------------------+                ▼                               ▼
-| /path/to/shared_dir              |<------------------------------------------------
-|  - scripts/                      |                │                               │
-|  - task_outputs/ (*.out)         |                │ Access (Temporary data)       │ Access (Temporary data)
-|  - task_errors/  (*.err)         |                ▼                               ▼
-+----------------------------------+    Node 1 Local Filesystem         Node N Local Filesystem
-                                       +--------------------------+     +--------------------------+
-                                       | /path/to/local_temp_dir  |     | /path/to/local_temp_dir  |
-                                       +--------------------------+     +--------------------------+
-
- Host Local Filesystem
-+----------------------------------+
-| /path/to/database/cluster.db     |
-+----------------------------------+
-
-* Scheduling: Host validates targets & resources but relies on user specification via Client/Frontend.
-```
+![](image/README/HakuRiverArch.jpg)
 
 * **Host (`hakuriver.host`):** Central coordinator. Manages node registration (including NUMA topology), tracks node status/resources, stores task information in the DB, receives task submission requests (including multi-target), validates targets, generates unique task IDs, and dispatches individual task instances to the appropriate Runners.
 * **Runner (`hakuriver.runner`):** Agent on each compute node. Detects NUMA topology (via `numactl`), registers with Host (reporting cores, RAM, NUMA info, URL). Sends periodic heartbeats (incl. CPU/Mem usage). Executes assigned tasks using `sudo systemd-run`, applying CPU Quota, Memory Limits, optional sandboxing, and optional `numactl` binding. Reports task status updates back to the Host. **Requires passwordless `sudo` for `systemd-run` and `systemctl`.**
@@ -87,6 +49,10 @@ It leverages **systemd** for execution and basic sandboxing (`PrivateNetwork`, `
 * **Storage:**
   * **Shared (`shared_dir`):** Mounted at the same path on Host and all Runners. Essential for task output logs (`*.out`, `*.err`) and potentially shared scripts/data.
   * **Local Temp (`local_temp_dir`):** Node-specific fast storage, path injected as `HAKURIVER_LOCAL_TEMP_DIR` env var for tasks.
+
+
+The communication flow chart of HakuRiver:
+![](image/README/HakuRiverFlow.jpg)
 
 ---
 
@@ -163,8 +129,13 @@ hakurun --parallel python ./demo_hakurun.py span:{1..2} fixed_arg span:[input_a,
 
 ## 💻 Usage - HakuRiver Cluster
 
-**1. Initialize Database (Run once on Host machine):**
-   The Host attempts this on startup. Ensure the directory for `db_file` exists and is writable. Delete the DB file if upgrading with schema changes.
+**1. Initialize Config:**
+Use `hakuriver.init` command on every node (host and runner) to create config file in ~/.hakuriver/config.toml.
+Then you can modify the configuration based on your setup.
+```bash
+hakuriver.init
+vim ~/.hakuriver/config.toml
+```
 
 **2. Start Host Server (on manager node):**
 
@@ -172,6 +143,17 @@ hakurun --parallel python ./demo_hakurun.py span:{1..2} fixed_arg span:[input_a,
    hakuriver.host
    # With custom config:
    # hakuriver.host --config /path/to/host_config.toml
+```
+
+Or you can create a service in your system:
+```bash
+   hakuriver.init service --host
+   # With custom config:
+   # hakuriver.init service --host --config /path/to/host_config.toml
+   systemctl restart hakuriver-host
+   systemctl enable hakuriver-host
+   # To check running status
+   # systemctl status hakuriver-host
 ```
 
 **3. Start Runner Agent (on each compute node):**
@@ -188,13 +170,21 @@ hakurun --parallel python ./demo_hakurun.py span:{1..2} fixed_arg span:[input_a,
    # hakuriver.runner --config /path/to/runner_config.toml
 ```
 
-   *The runner will detect and report its NUMA topology if `numactl` is found and configured.*
+Or you can create a service in your system:
+```bash
+   hakuriver.init service --runner
+   # With custom config:
+   # hakuriver.init service --runner --config /path/to/runner_config.toml
+   systemctl restart hakuriver-runner
+   systemctl enable hakuriver-runner
+   # To check running status
+   # systemctl status hakuriver-runner
+```
 
 **4. Systemd Execution Notes:**
-
-* Tasks run via `systemd-run` do *not* inherit the Runner's working directory (usually start in user's home or `/`). Use absolute paths or env vars (`HAKURIVER_SHARED_DIR`, `HAKURIVER_LOCAL_TEMP_DIR`).
+* `systemd-run` and `systemctl` are used for task execution and management. Those commands are run via `sudo` to ensure proper permissions. You should have passwordless sudo access for these commands.
+* Tasks run via `systemd-run` WILL inherit the Runner's working directory (usually start in user's home or `/`). Use absolute paths or env vars (`HAKURIVER_SHARED_DIR`, `HAKURIVER_LOCAL_TEMP_DIR`).
 * The task environment includes variables set via `--env`, `HAKURIVER_*` variables, and potentially variables inherited by the `systemd --user` instance or system instance depending on how `systemd-run` is invoked by sudo.
-* If `numactl` is used, it prepends the user's actual command within the systemd scope.
 
 **5. Use the Client (`hakuriver.client`):**
 
@@ -268,66 +258,6 @@ npm install
 2. Serve the contents of `frontend/dist` using any static web server (Nginx, Apache, etc.).
 3. **Important:** Configure your production web server to proxy API requests (e.g., requests to `/api/*`) to the actual running HakuRiver Host address and port, similar to the Vite dev server proxy, OR modify `src/services/api.js` to use the Host's absolute URL before building.
 
-## Feature Details
-
-### NUMA Awareness
-
-Modern multi-socket or high-core-count CPUs often have Non-Uniform Memory Access (NUMA) architectures. Accessing memory attached to the *same* NUMA node (socket) as the running CPU core is faster than accessing memory attached to a *different* NUMA node.
-
-```ascii
-+------------------------------- Node: my-compute-01 ------------------------------+
-| +------------- NUMA Node-------------+       +--------- NUMA Node 1 -----------+ |
-| |  +--- Memory Bank 0 (64 GiB) ---+  |       | +--- Memory Bank 1 (64GiB) ---+ | │
-| |  |                              |  |       | |                             | | │
-| |  +------------------------------+  |       | +-----------------------------+ | │
-| |        ▲                           |       |       ▲                         | │
-| |        │ Fast Access               │       │       │ Fast Access             | │
-| |  +-----▼------------------------+  |       | +-----▼-----------------------+ | │
-| |  | CPU Cores [0, 1, 2, ... 15] <-Interconnect-> CPU Cores [16..31]         | | │
-| |  +------------------------------+  |       | +-----------------------------+ | │
-| +------------------------------------+       +---------------------------------+ │
-+----------------------------------------------------------------------------------+
-
-Example Task Binding:
-  Task A --> Bound to NUMA Node 0 (Uses Cores 0-15, Prefers Memory Bank 0) via `numactl --cpunodebind=0 --membind=0 ...`
-  Task B --> Bound to NUMA Node 1 (Uses Cores 16-31, Prefers Memory Bank 1) via `numactl --cpunodebind=1 --membind=1 ...`
-```
-
-* **Detection:** Runners use `numactl --hardware` (if available and configured via `numactl_path`) to detect their NUMA layout (nodes, cores per node, memory per node).
-* **Reporting:** Runners send this topology info to the Host during registration.
-* **Targeting:** Users can specify a target like `my-compute-01:0` via the Client or Frontend to request the task run specifically on NUMA node 0 of that host.
-* **Execution:** The Runner prepends the `numactl --cpunodebind=<id> --membind=<id>` command to the user's task command within the `systemd-run` scope, enforcing the binding.
-
-### Multi-Node / Multi-NUMA Task Submission
-
-Users can now submit a single request that HakuRiver replicates across multiple specified targets.
-
-```ascii
-+-----------------+       +----------------------------------------------------+
-|  Client/        | ----> | Host Server                                        |
-|  Frontend       |       | Receives:                                          |
-|                 |       |  - Command: `my_script.sh --input {i}`             |
-| Request:        |       |  - Cores: 2                                        |
-|  Run my_script  |       |  - Targets: ["node1:0", "node1:1", "node2"]        |
-|  on node1:0,    |       +----------------------------------------------------+
-|  node1:1, node2 |        │                        │                        │                       
-+-----------------+        │ Dispatch Task          │ Dispatch Task          │ Dispatch Task         
-                           │ (ID: 101, Target: 1:0) │ (ID: 102, Target: 1:1) │ (ID: 103, Target: 2)
-                 +---------▼----------+   +---------▼----------+   +---------▼----------+
-                 | Runner (Node 1)    |   | Runner (Node 1)    |   | Runner (Node 2)    |
-                 | Executes Task 101  |   | Executes Task 102  |   | Executes Task 103  |
-                 | (numactl bind 0)   |   | (numactl bind 1)   |   | (no numactl)       |
-                 +--------------------+   +--------------------+   +--------------------+
-```
-
-* **Request:** The Client/Frontend sends a single `/submit` request containing a list of `targets` (e.g., `["node1:0", "node1:1", "node2"]`).
-* **Host Processing:** The Host iterates through the targets. For each valid and available target, it:
-  * Generates a unique Task ID (e.g., 101, 102, 103).
-  * Creates a separate database record for that task instance, linking it to the target node/NUMA ID and potentially a common Batch ID.
-  * Dispatches the task instance to the appropriate Runner, including the specific `target_numa_node_id` if applicable.
-* **Response:** The Host responds with a list of the Task IDs successfully created and dispatched.
-
----
 
 ## 🙏 Acknowledgement
 
