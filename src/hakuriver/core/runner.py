@@ -255,7 +255,7 @@ async def run_task_background(task_info: TaskInfo):
         systemd_run_cmd.append(f"--setenv={key}={value}")  # Pass all env vars
 
     # Working Directory (Optional - run in shared or temp?)
-    systemd_run_cmd.append(f'--property=WorkingDirectory={RunnerConfig.SHARED_DIR}') # Example
+    systemd_run_cmd.append(f'--working-directory={RunnerConfig.SHARED_DIR}') # Example
 
     # Command and Arguments with Redirection
     # This is complex due to shell quoting needed inside systemd-run
