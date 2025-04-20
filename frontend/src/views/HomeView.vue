@@ -180,7 +180,7 @@
           <div ref="cpuChartContainerRef" v-loading="isLoadingHealth" class="history-chart-container">
             <Chart
               v-if="!isLoadingHealth && !healthError && cpuHistory.length > 1"
-              :size="{ width: cpuChartContainerWidth || 300, height: 180 }"
+              :size="{ width: cpuChartContainerWidth || 300, height: 315 }"
               :data="cpuHistoryData"
               :margin="{ top: 5, bottom: 5, left: 0, right: 10 }"
               :axis="historyAxis"
@@ -208,7 +208,7 @@
           <div ref="memoryChartContainerRef" v-loading="isLoadingHealth" class="history-chart-container">
             <Chart
               v-if="!isLoadingHealth && !healthError && memoryHistory.length > 1"
-              :size="{ width: memoryChartContainerWidth || 300, height: 180 }"
+              :size="{ width: memoryChartContainerWidth || 300, height: 315 }"
               :data="memoryHistoryData"
               :margin="{ top: 5, bottom: 5, left: 0, right: 10 }"
               :axis="historyAxis"
@@ -228,7 +228,11 @@
             <el-alert v-else-if="healthError" :title="healthError" type="error" show-icon :closable="false" />
           </div>
         </el-card>
+      </el-col>
+    </el-row>
 
+    <el-row :gutter="20" style="margin-top: 35px">
+      <el-col>
         <!-- About Card -->
         <el-card shadow="hover" class="info-card about-card">
           <template #header>
