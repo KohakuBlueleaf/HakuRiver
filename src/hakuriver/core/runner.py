@@ -1,5 +1,6 @@
 import getpass
 import os
+import signal
 import httpx
 import socket
 import asyncio
@@ -84,6 +85,7 @@ killed_tasks_pending_report: list[HeartbeatKilledTaskInfo] = []
 running_processes = (
     {}
 )  # task_id -> {'unit': str, 'process': asyncio.Process | None, 'memory_limit': int | None, 'pid': int | None}
+paused_processes = {}
 runner_ip = RunnerConfig.RUNNER_ADDRESS
 runner_url = f"http://{runner_ip}:{RunnerConfig.RUNNER_PORT}"
 total_cores = os.cpu_count()
@@ -575,6 +577,112 @@ async def accept_task(task_info: TaskInfo, background_tasks: BackgroundTasks):
     )
     background_tasks.add_task(run_task_background, task_info)
     return {"message": "Task accepted for launch", "task_id": task_id}
+
+
+@app.post("/pause")
+async def pause_task(body: dict = Body(...)):
+    task_id = body.get("task_id")
+    if not task_id:
+        raise HTTPException(
+            status_code=400, detail="Missing 'task_id' in request body."
+        )
+
+    logger.info(f"Received pause request for task {task_id}")
+    task_data = running_processes.get(task_id, None)
+    unit_name = task_data["unit"]
+
+    if not task_data:
+        logger.warning(
+            f"Pause request for task {task_id}, but it's not actively tracked."
+        )
+        raise HTTPException(
+            status_code=404, detail=f"Task {task_id} not found or not tracked."
+        )
+
+    try:
+        if "task_pid" in task_data:
+            pid = task_data["task_pid"]
+        else:
+            logger.info(f"Finding process for task {unit_name} to pause.")
+            find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
+            process = subprocess.run(
+                find_cmd, capture_output=True, text=True
+            )
+            result = re.search(rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout)
+            if not result:
+                logger.error(
+                    f"Failed to find process for task {task_id}."
+                    f"\nOutput: {process.stdout}"
+                )
+                raise Exception(f"Failed to find process for task {task_id}.\nOutput: {process.stdout}")
+            pid = result.group(1)
+            logger.info(f"Found process {pid} for task {task_id}.")
+        logger.info(f"Attempting to pause task {task_id} using kill.")
+        stop_cmd = ["sudo", "kill", "-s", "SIGSTOP", str(pid)]
+        result = subprocess.run(stop_cmd, check=False, timeout=1)
+        if result.returncode != 0:
+            raise Exception(f"Failed to pause task {task_id} using kill.")
+
+        logger.info(f"Task {task_id} paused successfully.")
+        paused_processes[task_id] = running_processes.pop(task_id)
+        paused_processes[task_id]["task_pid"] = pid  # Store the paused PID
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="paused",
+                exit_code=None,
+                message="Task paused using kill.",
+            )
+        )
+    except Exception as e:
+        logger.exception(f"Error during kill pause for task {task_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"message": f"Pause request processed for task {task_id}"}
+
+
+@app.post("/resume")
+async def resume_task(body: dict = Body(...)):
+    task_id = body.get("task_id")
+    if not task_id:
+        raise HTTPException(
+            status_code=400, detail="Missing 'task_id' in request body."
+        )
+
+    logger.info(f"Received resume request for task {task_id}")
+    task_data = paused_processes.get(task_id, None)
+
+    if not task_data:
+        logger.warning(
+            f"Resume request for task {task_id}, but it's not actively tracked."
+        )
+        raise HTTPException(
+            status_code=404, detail=f"Task {task_id} not found or not tracked."
+        )
+
+    try:
+        logger.info(f"Attempting to resume task {task_id} using kill.")
+        task_pid = task_data["task_pid"]
+        resume_cmd = ["sudo", "kill", "-s", "SIGCONT", str(task_pid)]
+        result = subprocess.run(resume_cmd, check=False, timeout=1)
+        if result.returncode != 0:
+            raise Exception(f"Failed to resume task {task_id} using kill.")
+
+        logger.info(f"Task {task_id} resumed successfully.")
+        running_processes[task_id] = paused_processes.pop(task_id)
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="running",
+                exit_code=None,
+                message="Task resumed using kill.",
+            )
+        )
+    except Exception as e:
+        logger.exception(f"Error during kill resume for task {task_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"message": f"Resume request processed for task {task_id}"}
 
 
 @app.post("/kill")

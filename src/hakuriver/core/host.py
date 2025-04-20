@@ -854,6 +854,86 @@ async def send_kill_to_runner(runner_url: str, task_id: int, unit_name: str | No
         )
 
 
+async def send_pause_to_runner(runner_url: str, task_id: int, unit_name: str | None):
+    if not unit_name:
+        logger.warning(
+            f"Cannot send pause for task {task_id} to {runner_url}, systemd unit name unknown."
+        )
+        return
+
+    logger.info(
+        f"Sending pause request for task {task_id} (Unit: {unit_name}) to runner {runner_url}"
+    )
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{runner_url}/pause",
+                json={"task_id": task_id, "unit_name": unit_name},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            logger.info(
+                f"Pause command for task {task_id} acknowledged by runner {runner_url}."
+            )
+            return "Pause command sent successfully."
+    except httpx.RequestError as e:
+        logger.error(
+            f"Failed to send pause command for task {task_id} to {runner_url}: {e}"
+        )
+        return "Failed to send pause command."
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            f"Runner {runner_url} failed pause for "
+            f"task {task_id}: {e.response.status_code} - {e.response.text}"
+        )
+        return "Runner error during pause command."
+    except Exception as e:
+        logger.exception(
+            f"Unexpected error sending pause for task {task_id} to {runner_url}: {e}"
+        )
+        return "Unexpected error sending pause command."
+
+
+async def send_resume_to_runner(runner_url: str, task_id: int, unit_name: str | None):
+    if not unit_name:
+        logger.warning(
+            f"Cannot send resume for task {task_id} to {runner_url}, systemd unit name unknown."
+        )
+        return
+
+    logger.info(
+        f"Sending resume request for task {task_id} (Unit: {unit_name}) to runner {runner_url}"
+    )
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{runner_url}/resume",
+                json={"task_id": task_id, "unit_name": unit_name},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            logger.info(
+                f"Resume command for task {task_id} acknowledged by runner {runner_url}."
+            )
+            return "Resume command sent successfully."
+    except httpx.RequestError as e:
+        logger.error(
+            f"Failed to send resume command for task {task_id} to {runner_url}: {e}"
+        )
+        return "Failed to send resume command."
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            f"Runner {runner_url} failed resume for "
+            f"task {task_id}: {e.response.status_code} - {e.response.text}"
+        )
+        return "Runner error during resume command."
+    except Exception as e:
+        logger.exception(
+            f"Unexpected error sending resume for task {task_id} to {runner_url}: {e}"
+        )
+        return "Unexpected error sending resume command."
+
+
 @app.post("/kill/{task_id}", status_code=202)
 async def request_kill_task(task_id: int):
     try:
@@ -907,6 +987,29 @@ async def request_kill_task(task_id: int):
         )
 
     return {"message": f"Kill requested for task {task_id}. Task marked as killed."}
+
+
+@app.post("/command/{task_id}/{command}")
+async def send_command_to_task(task_id: int, command: str):
+    """Send a command to a task."""
+    logger.info(f"Received command '{command}' for task {task_id}")
+    task: Task = Task.get_or_none(Task.task_id == task_id)
+    if not task:
+        logger.warning(f"Received command for unknown task ID: {task_id}. Ignoring.")
+        raise HTTPException(status_code=404, detail="Task not found")
+    match (command, task.status):
+        case ("pause", "running"):
+            unit_name = task.systemd_unit_name
+            response = await send_pause_to_runner(task.assigned_node.url, task_id, unit_name)
+            return {"message": f"Pause for task {task_id} sent to runner: {response}"}
+        case ("resume", "paused"):
+            unit_name = task.systemd_unit_name
+            response = await send_resume_to_runner(task.assigned_node.url, task_id, unit_name)
+            return {"message": f"Resume for task {task_id} sent to runner: {response}"}
+        case _:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid command or task state: {command} for {task.status}"
+            )
 
 
 @app.get("/nodes")
