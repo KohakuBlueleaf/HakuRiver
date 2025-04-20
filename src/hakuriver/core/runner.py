@@ -722,16 +722,37 @@ async def kill_task_endpoint(body: dict = Body(...)):
     exit_code = -9  # Assume SIGKILL equivalent
 
     try:
+        if "task_pid" in task_data:
+            pid = task_data["task_pid"]
+        else:
+            logger.info(f"Finding process for task {unit_name} to pause.")
+            find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
+            process = subprocess.run(
+                find_cmd, capture_output=True, text=True
+            )
+            result = re.search(rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout)
+            if not result:
+                logger.error(
+                    f"Failed to find process for task {task_id}."
+                    f"\nOutput: {process.stdout}"
+                )
+                raise Exception(f"Failed to find process for task {task_id}.\nOutput: {process.stdout}")
+            pid = result.group(1)
+            logger.info(f"Found process {pid} for task {task_id}.")
         logger.info(
             f"Attempting to stop/kill systemd unit {unit_name} for task {task_id}"
         )
         # Use kill directly to ensure we stop the unit
+        kill_cmd_task = ["sudo", "kill", "-s", "SIGKILL", str(pid)]
+        kill_result_task = subprocess.run(
+            kill_cmd_task, capture_output=True, text=True, check=False
+        )
         kill_cmd = ["sudo", "kill", "-s", "SIGKILL", str(process.pid)]
         kill_result = subprocess.run(
             kill_cmd, capture_output=True, text=True, check=False
         )
 
-        if kill_result.returncode == 0:
+        if kill_result.returncode == 0 and kill_result_task.returncode == 0:
             logger.info(f"Successfully sent kill signal to unit {unit_name}.")
         else:
             # Maybe it already stopped? Or permission error?
