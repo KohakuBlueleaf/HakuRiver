@@ -149,33 +149,27 @@ OTHER_VAR=123"
       <!-- Removed Started/Completed from main table for brevity -->
       <el-table-column label="Actions" fixed="right">
         <template #default="scope">
-        <div class="action-buttons">
-          <!-- Stop propagation to prevent row click when clicking buttons -->
-          <el-button
-            :type="scope.row.status === 'paused' ? 'success' : 'warning'"
-            size="small"
-            @click.stop="handlePauseResume(scope.row.task_id, scope.row.status)"
-            :disabled="!isPauseResumeable(scope.row.status)"
-          >
-            {{ pauseOrResume(scope.row.status) }}
-          </el-button>
-          <el-button
-            type="danger"
-            size="small"
-            @click.stop="handleKill(scope.row.task_id)"
-            :disabled="!isKillable(scope.row.status)"
-            v-loading="killingState[scope.row.task_id]"
-          >
-            Kill
-          </el-button>
-          <el-button 
-            type="primary" 
-            size="small" 
-            @click.stop="handleRowClick(scope.row)"
-          > 
-            Details 
-          </el-button>
-        </div>
+          <div class="action-buttons">
+            <!-- Stop propagation to prevent row click when clicking buttons -->
+            <el-button
+              :type="scope.row.status === 'paused' ? 'success' : 'warning'"
+              size="small"
+              @click.stop="handlePauseResume(scope.row.task_id, scope.row.status)"
+              :disabled="!isPauseResumeable(scope.row.status)"
+            >
+              {{ pauseOrResume(scope.row.status) }}
+            </el-button>
+            <el-button
+              type="danger"
+              size="small"
+              @click.stop="handleKill(scope.row.task_id)"
+              :disabled="!isKillable(scope.row.status)"
+              v-loading="killingState[scope.row.task_id]"
+            >
+              Kill
+            </el-button>
+            <el-button type="primary" size="small" @click.stop="handleRowClick(scope.row)"> Details </el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -678,7 +672,6 @@ const handleKill = (taskId) => {
     });
 };
 
-
 const handlePauseResume = (taskId, status) => {
   if (!taskId) return;
   const command = pauseOrResume(status);
@@ -690,10 +683,11 @@ const handlePauseResume = (taskId, status) => {
   })
     .then(() => {
       // Placeholder for pause/resume logic
-      api.submitCommand({
-        task_id: taskId,
-        command: command,
-      })
+      api
+        .submitCommand({
+          task_id: taskId,
+          command: command,
+        })
         .then(() => {
           ElMessage({ message: `Task ${taskId} ${command}ed successfully.`, type: 'success' });
           fetchTasks(true); // Refresh list
@@ -702,31 +696,28 @@ const handlePauseResume = (taskId, status) => {
           console.error(`Error ${command}ing task ${taskId}:`, error);
           const errorDetail = error.response?.data?.detail || error.message || 'Unknown error';
           ElMessage({ message: `Failed to ${command} task ${taskId}: ${errorDetail}`, type: 'error' });
-      });
+        });
     })
     .catch(() => {
       ElMessage({ type: 'info', message: `${command} action cancelled.` });
     });
 };
 
-
 const pauseOrResume = (status) => {
   status = status?.toLowerCase();
-  if (status === 'running') return 'pause'
+  if (status === 'running') return 'pause';
   else return 'resume';
-}
-
+};
 
 const isPauseResumeable = (status) => {
   return ['running', 'paused'].includes(status?.toLowerCase());
 };
 
-
 // --- Lifecycle Hooks ---
 onMounted(() => {
   fetchTasks(); // Initial fetch
   if (backendHasGetTasks.value) {
-    taskPollingInterval = setInterval(()=> fetchTasks(false), TASK_POLLING_RATE_MS);
+    taskPollingInterval = setInterval(() => fetchTasks(false), TASK_POLLING_RATE_MS);
   }
 });
 

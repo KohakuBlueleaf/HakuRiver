@@ -2,26 +2,20 @@
   <div class="common-layout">
     <el-container class="main-container">
       <!-- Mobile Menu Overlay (visible only on small screens) -->
-      <div 
-        v-if="isMobileScreen && sidebarVisible" 
-        class="mobile-overlay" 
-        @click="toggleSidebar"
-      ></div>
+      <div v-if="isMobileScreen && sidebarVisible" class="mobile-overlay" @click="toggleSidebar"></div>
 
       <!-- Sidebar Navigation with dynamic width -->
-      <el-aside :width="sidebarWidth" :class="{ 'mobile-sidebar': isMobileScreen && sidebarVisible, 'sidebar-collapsed': !sidebarVisible && !isMobileScreen }">
+      <el-aside
+        :width="sidebarWidth"
+        :class="{ 'mobile-sidebar': isMobileScreen && sidebarVisible, 'sidebar-collapsed': !sidebarVisible && !isMobileScreen }"
+      >
         <div class="sidebar-header">
           <div class="logo-container">
             <h2 v-if="sidebarVisible">HakuRiver</h2>
             <h2 v-else>H</h2>
           </div>
           <!-- Toggle button on larger screens -->
-          <el-button 
-            v-if="!isMobileScreen" 
-            type="text" 
-            class="toggle-sidebar-btn"
-            @click="toggleSidebar"
-          >
+          <el-button v-if="!isMobileScreen" type="text" class="toggle-sidebar-btn" @click="toggleSidebar">
             <el-icon v-if="sidebarVisible"><ArrowLeft /></el-icon>
             <el-icon v-else><ArrowRight /></el-icon>
           </el-button>
@@ -59,25 +53,20 @@
         <el-header class="content-header">
           <div class="header-content">
             <!-- Mobile menu toggle button -->
-            <el-button 
-              v-if="isMobileScreen" 
-              type="text" 
-              class="mobile-menu-btn"
-              @click="toggleSidebar"
-            >
+            <el-button v-if="isMobileScreen" type="text" class="mobile-menu-btn" @click="toggleSidebar">
               <el-icon><Menu /></el-icon>
             </el-button>
-            
+
             <!-- Page title or breadcrumbs could go here -->
             <div class="page-title">{{ currentPageTitle }}</div>
-            
+
             <!-- Right side header content (optional) -->
             <div class="header-actions">
               <!-- Any header actions like profile, notifications, etc. -->
             </div>
           </div>
         </el-header>
-        
+
         <el-main class="content-main">
           <router-view />
         </el-main>
@@ -329,7 +318,7 @@ body,
   :root {
     font-size: 16px; /* Smaller base font size for mobile */
   }
-  
+
   .content-main {
     padding: 15px;
   }

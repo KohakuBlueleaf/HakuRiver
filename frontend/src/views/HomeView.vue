@@ -294,7 +294,7 @@ const cpuHistory = ref([]);
 const memoryHistory = ref([]);
 const historyIndex = ref(0);
 
-const triggerFetchHealth = async (showLoading=false) => {
+const triggerFetchHealth = async (showLoading = false) => {
   if (isLoadingHealth.value && showLoading) return;
   isLoadingHealth.value = showLoading;
   healthError.value = null;
@@ -417,7 +417,7 @@ const historyAxis = ref({
 onMounted(() => {
   triggerCombinedFetch(true); // Initial fetch
 
-  healthPollingInterval = setInterval(()=> triggerCombinedFetch(false), HEALTH_POLLING_RATE_MS);
+  healthPollingInterval = setInterval(() => triggerCombinedFetch(false), HEALTH_POLLING_RATE_MS);
 
   // Set up task polling only if the API exists
   if (backendHasGetTasks.value) {
