@@ -20,7 +20,7 @@
 
     <el-row :gutter="20" style="margin-top: 20px">
       <!-- Left Column: Node List -->
-      <el-col :xs="24" :md="16">
+      <el-col :xs="24" :lg="16">
         <el-card shadow="never">
           <template #header>Node List</template>
           <el-table
@@ -75,7 +75,7 @@
       </el-col>
 
       <!-- Right Column: Selected Node Details & Resources -->
-      <el-col :xs="24" :md="8">
+      <el-col :xs="24" :lg="8">
         <el-card shadow="never" v-if="selectedNodeData" class="details-card">
           <template #header>Details: {{ selectedNodeData.hostname }}</template>
 
