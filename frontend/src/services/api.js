@@ -39,6 +39,11 @@ export default {
     return apiClient.post('/submit', payload).then((response) => response.data);
     // Previous version returned only response.data.task_id
   },
+  submitCommand(commandData) {
+    const task_id = commandData.task_id;
+    const command = commandData.command;
+    return apiClient.post(`/command/${task_id}/${command}`);
+  },
   getTaskStatus(taskId) {
     // Note: This fetches full details now via the /status endpoint
     // The dedicated /tasks endpoint is used for the main list view

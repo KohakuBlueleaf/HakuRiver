@@ -149,9 +149,17 @@ OTHER_VAR=123"
       <!-- Removed Started/Completed from main table for brevity -->
       <el-table-column label="Actions" fixed="right">
         <template #default="scope">
+        <div class="action-buttons">
           <!-- Stop propagation to prevent row click when clicking buttons -->
           <el-button
-            link
+            :type="scope.row.status === 'paused' ? 'success' : 'warning'"
+            size="small"
+            @click.stop="handlePauseResume(scope.row.task_id, scope.row.status)"
+            :disabled="!isPauseResumeable(scope.row.status)"
+          >
+            {{ pauseOrResume(scope.row.status) }}
+          </el-button>
+          <el-button
             type="danger"
             size="small"
             @click.stop="handleKill(scope.row.task_id)"
@@ -160,7 +168,14 @@ OTHER_VAR=123"
           >
             Kill
           </el-button>
-          <el-button link type="primary" size="small" @click.stop="handleRowClick(scope.row)"> Details </el-button>
+          <el-button 
+            type="primary" 
+            size="small" 
+            @click.stop="handleRowClick(scope.row)"
+          > 
+            Details 
+          </el-button>
+        </div>
         </template>
       </el-table-column>
     </el-table>
@@ -663,6 +678,50 @@ const handleKill = (taskId) => {
     });
 };
 
+
+const handlePauseResume = (taskId, status) => {
+  if (!taskId) return;
+  const command = pauseOrResume(status);
+  ElMessageBox.confirm(`Are you sure you want to ${command} task ${taskId}?`, 'Confirm Pause/Resume', {
+    confirmButtonText: `${command} Task`,
+    cancelButtonText: 'Cancel',
+    type: 'warning',
+    draggable: true,
+  })
+    .then(() => {
+      // Placeholder for pause/resume logic
+      api.submitCommand({
+        task_id: taskId,
+        command: command,
+      })
+        .then(() => {
+          ElMessage({ message: `Task ${taskId} ${command}ed successfully.`, type: 'success' });
+          fetchTasks(true); // Refresh list
+        })
+        .catch((error) => {
+          console.error(`Error ${command}ing task ${taskId}:`, error);
+          const errorDetail = error.response?.data?.detail || error.message || 'Unknown error';
+          ElMessage({ message: `Failed to ${command} task ${taskId}: ${errorDetail}`, type: 'error' });
+      });
+    })
+    .catch(() => {
+      ElMessage({ type: 'info', message: `${command} action cancelled.` });
+    });
+};
+
+
+const pauseOrResume = (status) => {
+  status = status?.toLowerCase();
+  if (status === 'running') return 'pause'
+  else return 'resume';
+}
+
+
+const isPauseResumeable = (status) => {
+  return ['running', 'paused'].includes(status?.toLowerCase());
+};
+
+
 // --- Lifecycle Hooks ---
 onMounted(() => {
   fetchTasks(); // Initial fetch
@@ -798,5 +857,15 @@ const maxCoresHint = ref(32); // Default value
   color: var(--el-text-color-primary); /* Ensure readability */
   background-color: var(--el-bg-color-overlay); /* Match dialog bg */
   /* Remove max-height here, scrollbar handles it */
+}
+
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 5px; /* Space between buttons */
+}
+.action-buttons .el-button {
+  width: 100%; /* Full width for buttons */
+  margin: 0;
 }
 </style>
