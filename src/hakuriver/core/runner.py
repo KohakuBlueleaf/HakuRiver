@@ -257,7 +257,7 @@ async def run_task_background(task_info: TaskInfo):
         systemd_run_cmd.append(f"--setenv={key}={value}")  # Pass all env vars
 
     # Working Directory (Optional - run in shared or temp?)
-    systemd_run_cmd.append(f'--working-directory={RunnerConfig.SHARED_DIR}') # Example
+    systemd_run_cmd.append(f"--working-directory={RunnerConfig.SHARED_DIR}")  # Example
 
     # Command and Arguments with Redirection
     # This is complex due to shell quoting needed inside systemd-run
@@ -605,16 +605,16 @@ async def pause_task(body: dict = Body(...)):
         else:
             logger.info(f"Finding process for task {unit_name} to pause.")
             find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
-            process = subprocess.run(
-                find_cmd, capture_output=True, text=True
-            )
+            process = subprocess.run(find_cmd, capture_output=True, text=True)
             result = re.search(rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout)
             if not result:
                 logger.error(
                     f"Failed to find process for task {task_id}."
                     f"\nOutput: {process.stdout}"
                 )
-                raise Exception(f"Failed to find process for task {task_id}.\nOutput: {process.stdout}")
+                raise Exception(
+                    f"Failed to find process for task {task_id}.\nOutput: {process.stdout}"
+                )
             pid = result.group(1)
             logger.info(f"Found process {pid} for task {task_id}.")
         logger.info(f"Attempting to pause task {task_id} using kill.")
@@ -727,16 +727,16 @@ async def kill_task_endpoint(body: dict = Body(...)):
         else:
             logger.info(f"Finding process for task {unit_name} to pause.")
             find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
-            process = subprocess.run(
-                find_cmd, capture_output=True, text=True
-            )
+            process = subprocess.run(find_cmd, capture_output=True, text=True)
             result = re.search(rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout)
             if not result:
                 logger.error(
                     f"Failed to find process for task {task_id}."
                     f"\nOutput: {process.stdout}"
                 )
-                raise Exception(f"Failed to find process for task {task_id}.\nOutput: {process.stdout}")
+                raise Exception(
+                    f"Failed to find process for task {task_id}.\nOutput: {process.stdout}"
+                )
             pid = result.group(1)
             logger.info(f"Found process {pid} for task {task_id}.")
         logger.info(

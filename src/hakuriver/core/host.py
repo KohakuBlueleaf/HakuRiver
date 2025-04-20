@@ -1000,15 +1000,20 @@ async def send_command_to_task(task_id: int, command: str):
     match (command, task.status):
         case ("pause", "running"):
             unit_name = task.systemd_unit_name
-            response = await send_pause_to_runner(task.assigned_node.url, task_id, unit_name)
+            response = await send_pause_to_runner(
+                task.assigned_node.url, task_id, unit_name
+            )
             return {"message": f"Pause for task {task_id} sent to runner: {response}"}
         case ("resume", "paused"):
             unit_name = task.systemd_unit_name
-            response = await send_resume_to_runner(task.assigned_node.url, task_id, unit_name)
+            response = await send_resume_to_runner(
+                task.assigned_node.url, task_id, unit_name
+            )
             return {"message": f"Resume for task {task_id} sent to runner: {response}"}
         case _:
             raise HTTPException(
-                status_code=400, detail=f"Invalid command or task state: {command} for {task.status}"
+                status_code=400,
+                detail=f"Invalid command or task state: {command} for {task.status}",
             )
 
 
