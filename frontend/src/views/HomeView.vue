@@ -299,22 +299,12 @@ const triggerFetchHealth = async (showLoading = false) => {
   isLoadingHealth.value = showLoading;
   healthError.value = null;
   try {
-    const rawHealthData = await fetchHealthData();
-    const newStats = calculateAggregatedStats(rawHealthData);
-    aggregatedHealthStats.value = newStats;
-
-    if (newStats) {
-      cpuHistory.value.push({ index: 0, value: newStats.avgCpuPercent });
-      if (cpuHistory.value.length > MAX_HISTORY_POINTS) {
-        cpuHistory.value.shift();
-      }
-      memoryHistory.value.push({ index: 0, value: newStats.avgMemPercent });
-      if (memoryHistory.value.length > MAX_HISTORY_POINTS) {
-        memoryHistory.value.shift();
-      }
-      cpuHistory.value = cpuHistory.value.map((item, i) => ({ index: i, value: item.value }));
-      memoryHistory.value = memoryHistory.value.map((item, i) => ({ index: i, value: item.value }));
-    }
+    const rawHealthData = await api.getHealth();
+    const monitoringData = rawHealthData.data.aggregate;
+    const newStats = rawHealthData.data.nodes;
+    aggregatedHealthStats.value = calculateAggregatedStats(newStats[newStats.length - 1]);
+    cpuHistory.value = monitoringData.map((item, i) => ({ index: i, value: item.avgCpuPercent }));
+    memoryHistory.value = monitoringData.map((item, i) => ({ index: i, value: item.avgMemPercent }));
   } catch (err) {
     console.error('Error fetching/processing cluster health:', err);
     healthError.value = err.response?.data?.detail || err.message || 'Failed to load health data.';

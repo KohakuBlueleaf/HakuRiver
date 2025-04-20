@@ -1076,33 +1076,15 @@ async def get_cluster_health(
     """Provides the last known health status (heartbeat data) and NUMA info for nodes."""
     logger.debug(f"Received health request. Filter hostname: {hostname}")
     try:
-        query: Iterable[Node] = Node.select()
-        if hostname:
-            query = query.where(Node.hostname == hostname)
-
-        nodes_health = []
-        for node in query:
-            nodes_health.append(
-                {
-                    "hostname": node.hostname,
-                    "status": node.status,
-                    "last_heartbeat": (
-                        node.last_heartbeat.isoformat() if node.last_heartbeat else None
-                    ),
-                    "cpu_percent": node.cpu_percent,
-                    "memory_percent": node.memory_percent,
-                    "memory_used_bytes": node.memory_used_bytes,
-                    "memory_total_bytes": node.memory_total_bytes,
-                    "total_cores": node.total_cores,
-                    "url": node.url,
-                    "numa_topology": node.get_numa_topology(),  # Parse JSON from DB
-                }
-            )
-        if hostname and not nodes_health:
-            raise HTTPException(
-                status_code=404, detail=f"No health data found for hostname: {hostname}"
-            )
-        return nodes_health
+        if hostname and hostname in health_datas:
+            return [health_datas[-1][hostname]]
+        return {
+            "nodes": [
+                [v for k, v in data.items() if k != "aggregate"]
+                for data in health_datas
+            ],
+            "aggregate": [data["aggregate"] for data in health_datas],
+        }
 
     except peewee.PeeweeException as e:
         logger.error(f"Database error fetching node health: {e}", exc_info=True)
@@ -1117,6 +1099,58 @@ async def get_cluster_health(
 
 
 # --- Background Tasks (Logic same, use logger) ---
+health_datas = []
+
+
+async def collate_health_data():
+    global health_datas
+    """
+    Calculate aggregate health data for all nodes.
+    Record history data as well (keep recent 60sec, 1s intervals).
+    """
+    while True:
+        await asyncio.sleep(1)
+        new_node_health = {}
+        aggregate_health = {
+            "totalNodes": 0,
+            "onlineNodes": 0,
+            "totalCores": 0,
+            "totalMemBytes": 0,
+            "usedMemBytes": 0,
+            "avgCpuPercent": 0,
+            "avgMemPercent": 0,
+            "lastUpdated": datetime.datetime.now().isoformat(),
+        }
+        for node in Node.select():
+            new_node_health[node.hostname] = {
+                "status": node.status,
+                "last_heartbeat": (
+                    node.last_heartbeat.isoformat() if node.last_heartbeat else None
+                ),
+                "cpu_percent": node.cpu_percent,
+                "memory_percent": node.memory_percent,
+                "memory_used_bytes": node.memory_used_bytes,
+                "memory_total_bytes": node.memory_total_bytes,
+                "total_cores": node.total_cores,
+            }
+            aggregate_health["totalNodes"] += 1
+            if node.status == "online":
+                aggregate_health["onlineNodes"] += 1
+            aggregate_health["totalCores"] += node.total_cores
+            aggregate_health["totalMemBytes"] += node.memory_total_bytes
+            aggregate_health["usedMemBytes"] += node.memory_used_bytes
+            aggregate_health["avgCpuPercent"] += node.cpu_percent * node.total_cores
+            if node.last_heartbeat.isoformat() > aggregate_health["lastUpdated"]:
+                aggregate_health["lastUpdated"] = node.last_heartbeat.isoformat()
+        aggregate_health["avgCpuPercent"] /= max(1, aggregate_health["totalCores"])
+        aggregate_health["avgMemPercent"] /= aggregate_health["usedMemBytes"] / max(
+            1, aggregate_health["totalMemBytes"]
+        )
+        new_node_health["aggregate"] = aggregate_health
+        health_datas.append(new_node_health)
+        health_datas = health_datas[-60:]  # Keep only the last 60 seconds of data
+
+
 async def check_dead_runners():
     while True:
         await asyncio.sleep(HostConfig.CLEANUP_CHECK_INTERVAL_SECONDS)
@@ -1169,6 +1203,7 @@ async def startup_event():
     logger.info("Host server starting up.")
     # Start background task AFTER app starts running
     asyncio.create_task(check_dead_runners())
+    asyncio.create_task(collate_health_data())
 
 
 app.add_event_handler("startup", startup_event)
