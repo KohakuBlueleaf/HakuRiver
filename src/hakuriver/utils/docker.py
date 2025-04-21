@@ -176,7 +176,6 @@ def create_container_tar(
 
         # 2. Save the *newly committed image* to a tarball
         logger.info(f"Saving image {hakuriver_image_tag} to tarball {tarball_path}")
-        # NEW MODIFIED: Ensure container_tar_dir exists
         os.makedirs(container_tar_dir, exist_ok=True)
         _run_command(
             ["docker", "save", "-o", tarball_path, hakuriver_image_tag], check=True
@@ -234,12 +233,10 @@ def list_shared_container_tars(
     pattern = re.compile(rf"^{re.escape(container_name)}-(\d+)\.tar$")
 
     try:
-        # NEW MODIFIED: Check container_tar_dir
         if not os.path.isdir(container_tar_dir):
             logger.warning(f"Container tar directory not found: {container_tar_dir}")
             return []
 
-        # NEW MODIFIED: List from container_tar_dir
         for filename in os.listdir(container_tar_dir):
             match = pattern.match(filename)
             if match:
@@ -324,7 +321,6 @@ def needs_sync(container_name: str, container_tar_dir: str) -> tuple[bool, str |
         path_to_latest_tar is the path to the newest tarball if sync is needed, otherwise None.
     """
     local_timestamp = get_local_image_timestamp(container_name)
-    # NEW MODIFIED: Use container_tar_dir
     shared_tars = list_shared_container_tars(container_tar_dir, container_name)
 
     if not shared_tars:
@@ -391,7 +387,6 @@ def modify_command_for_docker(
     original_command_list: list[str],
     container_image_name: str,  # This should be hakuriver/<container_name>:base
     task_id: int,
-    # NEW MODIFIED: Removed shared_dir, local_temp_dir from args
     # These are handled by the runner now based on its config
     privileged: bool = False,
     mount_dirs: (
@@ -443,7 +438,6 @@ def modify_command_for_docker(
                 )
                 continue
             host_path, container_path = parts
-            # NEW MODIFIED: Add read-only option? Defaulting to RW for simplicity now.
             docker_cmd.extend(
                 ["--mount", f"type=bind,source={host_path},target={container_path}"]
             )
@@ -453,11 +447,6 @@ def modify_command_for_docker(
         docker_cmd.extend(["--cpus", str(cpu_cores)])
     if memory_limit:
         docker_cmd.extend(["--memory", memory_limit])
-
-    # NEW MODIFIED: Removed adding HAKURIVER_* env vars here.
-    # The runner should set these via systemd-run --setenv=...
-    # If the task inside docker needs them, they must be passed via
-    # the TaskRequest -> TaskInfoForRunner env_vars mechanism.
 
     # Add the container image name
     docker_cmd.append(container_image_name)
@@ -522,9 +511,6 @@ if __name__ == "__main__":
     )
     # Simulate modification (optional, requires running container)
     try:
-        # _run_command(["docker", "start", test_source_container_name], check=True) # Ensure running if stopped
-        # _run_command(["docker", "exec", test_source_container_name, "touch", "/tmp/modified_file"], check=True)
-        # _run_command(["docker", "stop", test_source_container_name], check=True) # Stop before commit
         print("(Skipping modification simulation for simplicity)")
     except Exception as e:
         print(f"Error during modification simulation: {e}")
@@ -576,11 +562,3 @@ if __name__ == "__main__":
     print("Original command:", original_cmd)
     print("Docker wrapped command base:", docker_wrapped_cmd)
     print("Full command string (base):", shlex.join(docker_wrapped_cmd))
-
-    # Clean up test directories (optional)
-    # import shutil
-    # shutil.rmtree(test_base_shared_dir)
-    # shutil.rmtree(test_local_temp_dir)
-    # print("\nCleaned up test directories.")
-
-    # docker stop <name> ; docker rm <name> ; docker rmi hakuriver/<name>:base ; docker rmi ubuntu:latest

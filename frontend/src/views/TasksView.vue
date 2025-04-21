@@ -54,7 +54,6 @@ OTHER_VAR=123"
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <!-- MODIFIED: Added Memory Limit Input -->
             <el-form-item label="Memory Limit (Optional)" prop="memory_limit_str">
               <el-input v-model="taskForm.memory_limit_str" placeholder="e.g., 512M, 4G" clearable>
                 <template #append>MB/GB</template>
@@ -324,7 +323,6 @@ const backendHasGetTasks = ref(typeof api.getTasks === 'function'); // Check if 
 const submitDialogVisible = ref(false);
 const taskFormRef = ref(null); // Reference to the ElForm component
 const isSubmitting = ref(false);
-// MODIFIED: Update taskForm
 const taskForm = reactive({
   command: '',
   arguments_text: '',
@@ -371,7 +369,7 @@ const targetOptions = computed(() => {
   return options;
 });
 
-// MODIFIED: Add custom validator for memory string
+
 const validateMemoryString = (rule, value, callback) => {
   if (!value) {
     callback(); // Optional field
@@ -389,7 +387,6 @@ const validateMemoryString = (rule, value, callback) => {
 const taskFormRules = reactive({
   command: [{ required: true, message: 'Command is required', trigger: 'blur' }],
   required_cores: [{ required: false, trigger: 'blur' }],
-  // MODIFIED: Add rule for memory string format
   memory_limit_str: [{ validator: validateMemoryString, trigger: 'blur' }],
   selectedTargets: [{ type: 'array', min: 0, trigger: 'change' }],
 });
@@ -407,7 +404,6 @@ const stdoutError = ref(null);
 const stderrError = ref(null);
 
 // --- Helper Functions ---
-// MODIFIED: Helper to parse memory string from form to bytes
 const parseMemoryToBytes = (memStr) => {
   if (!memStr) return null;
   const str = memStr.trim().toUpperCase();
@@ -423,7 +419,6 @@ const parseMemoryToBytes = (memStr) => {
   return val; // Bytes
 };
 
-// MODIFIED: Helper to format bytes nicely for table/details
 const formatBytesForTable = (bytes) => {
   if (bytes === null || bytes === undefined) return 'N/A';
   if (bytes === 0) return '0 B';

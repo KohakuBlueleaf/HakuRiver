@@ -8,7 +8,7 @@ from typing import Iterable
 
 import peewee
 import httpx
-from fastapi import FastAPI, HTTPException, Query, Body, Path
+from fastapi import FastAPI, HTTPException, Query, Path
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -1205,7 +1205,6 @@ async def create_docker_container(req: CreateContainerRequest):
         raise HTTPException(status_code=500, detail=detail)
 
 
-# NEW MODIFIED: Renamed refresh endpoint to create_tar
 @app.post("/docker/create_tar/{container_name}")
 async def create_container_tar_endpoint(
     container_name: str = Path(
