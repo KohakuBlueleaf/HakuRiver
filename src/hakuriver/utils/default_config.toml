@@ -44,3 +44,20 @@ cleanup_check_interval = 10
 # Since the runner is running under sudoers with NOPASSWD
 # By default, the runner will run tasks as the user who started the runner
 runner_user = ""
+
+[docker]
+# The relative path to container tar files (relative to shared_dir)
+container_dir = "hakuriver-containers"
+# The default base container name for HakuRiver tasks
+default_container_name = "hakuriver-base"
+
+# The name of the initial Docker image to use if the default container tar
+# does not exist when the host starts. Ignored if the tar exists.
+initial_base_image = "python:3.12.10-bookworm"
+
+# Whether tasks should run with --privileged flag inside Docker. Use with caution.
+tasks_privileged = false
+
+# Optional list of additional host directories to mount into the container.
+# Each entry should be "host_path:container_path".
+additional_mounts = []

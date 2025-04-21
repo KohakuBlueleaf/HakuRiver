@@ -1,6 +1,5 @@
 import getpass
 import os
-import signal
 import httpx
 import socket
 import asyncio
@@ -17,6 +16,7 @@ from pydantic import BaseModel, Field
 # Load configuration FIRST
 from hakuriver.utils.logger import logger
 from hakuriver.utils.config_loader import settings
+from hakuriver.utils import docker as docker_utils
 
 
 class RunnerConfig:
@@ -38,6 +38,9 @@ class RunnerConfig:
     HEARTBEAT_INTERVAL_SECONDS = settings["timing"]["heartbeat_interval"]
     TASK_CHECK_INTERVAL_SECONDS = settings["timing"].get("resource_check_interval", 1)
     RUNNER_USER = settings.get("environment", {}).get("runner_user", getpass.getuser())
+    CONTAINER_TAR_DIR = os.path.join(
+        settings["paths"]["shared_dir"], settings["docker"]["container_dir"]
+    )
 
 
 RunnerConfig = RunnerConfig()
@@ -54,7 +57,10 @@ class TaskInfo(BaseModel):
     required_memory_bytes: int | None = None
     target_numa_node_id: int | None = Field(
         default=None, description="Target NUMA node ID for execution"
-    )  # MODIFIED: Added field
+    )
+    docker_image_name: str  # Image tag to use (e.g., hakuriver/myenv:base)
+    docker_privileged: bool
+    docker_additional_mounts: list[str]  # ONLY additional mounts specified by host/task
 
 
 class TaskStatusUpdate(BaseModel):
@@ -86,6 +92,7 @@ running_processes = (
     {}
 )  # task_id -> {'unit': str, 'process': asyncio.Process | None, 'memory_limit': int | None, 'pid': int | None}
 paused_processes = {}
+docker_lock = asyncio.Lock()  # Lock for Docker image sync operations
 runner_ip = RunnerConfig.RUNNER_ADDRESS
 runner_url = f"http://{runner_ip}:{RunnerConfig.RUNNER_PORT}"
 total_cores = os.cpu_count()
@@ -215,96 +222,208 @@ async def run_task_background(task_info: TaskInfo):
     unit_name = f"hakuriver-task-{task_id}"
     start_time = datetime.datetime.now()
 
-    # --- Construct systemd-run command ---
-    systemd_run_cmd = [
-        "sudo",
-        "systemd-run",
-        "--scope",  # Run as a transient scope unit
-        "--collect",  # Garbage collect unit when process exits
-        f"--property=User={RunnerConfig.RUNNER_USER}",  # Run as the current user (or specify another user)
-        f"--unit={unit_name}",
-        # Basic description
-        f"--description=HakuRiver Task {task_id}: {shlex.quote(task_info.command)}",
-    ]
-
-    # Resource Allocation Properties
-    if task_info.required_cores > 0 and total_cores > 0:
-        # Generate CPU list like "0,1,2" if required_cores=3
-        # cpu_list = ",".join(map(str, range(min(task_info.required_cores, total_cores))))
-        # systemd_run_cmd.append(f"--property=CPUAffinity={cpu_list}")
-        # Optionally add CPUQuota for stricter enforcement (percentage)
-        cpu_quota = int(task_info.required_cores * 100)
-        systemd_run_cmd.append(f"--property=CPUQuota={cpu_quota}%")
-
-    if (
-        task_info.required_memory_bytes is not None
-        and task_info.required_memory_bytes > 0
-    ):
-        systemd_run_cmd.append(
-            f"--property=MemoryMax={task_info.required_memory_bytes}"
+    await report_status_to_host(
+        TaskStatusUpdate(
+            task_id=task_id,
+            status="pending",
+            started_at=start_time,
         )
-    systemd_run_cmd.append("--property=MemorySwapMax=0")
-
-    # Environment Variables
-    process_env = os.environ.copy()  # Start with runner's environment
-    process_env.update(task_info.env_vars)
-    process_env["HAKURIVER_TASK_ID"] = str(task_id)  # Use HAKURIVER_ prefix
-    process_env["HAKURIVER_LOCAL_TEMP_DIR"] = RunnerConfig.LOCAL_TEMP_DIR
-    process_env["HAKURIVER_SHARED_DIR"] = RunnerConfig.SHARED_DIR
-    if task_info.target_numa_node_id is not None:
-        process_env["HAKURIVER_TARGET_NUMA_NODE"] = str(task_info.target_numa_node_id)
-    for key, value in process_env.items():
-        systemd_run_cmd.append(f"--setenv={key}={value}")  # Pass all env vars
-
-    # Working Directory (Optional - run in shared or temp?)
-    systemd_run_cmd.append(f"--working-directory={RunnerConfig.SHARED_DIR}")  # Example
-
-    # Command and Arguments with Redirection
-    # This is complex due to shell quoting needed inside systemd-run
-    # Ensure stdout/stderr paths are absolute and quoted if they contain spaces
-    quoted_stdout = shlex.quote(task_info.stdout_path)
-    quoted_stderr = shlex.quote(task_info.stderr_path)
-    # Use shlex.join for the inner command and args if possible, otherwise manual quoting
-    inner_cmd_parts = [shlex.quote(task_info.command)] + [
-        shlex.quote(arg) for arg in task_info.arguments
-    ]
-    inner_cmd_str = " ".join(inner_cmd_parts)
-
-    numactl_prefix = ""
-    if task_info.target_numa_node_id is not None and numa_topology is not None:
-        if (
-            RunnerConfig.NUMACTL_PATH
-            and numa_topology
-            and task_info.target_numa_node_id in numa_topology
-        ):
-            # Basic binding to both CPU and memory on the target node
-            numa_id = task_info.target_numa_node_id
-            # Use --interleave=all as a fallback if specific binds cause issues,
-            # or fine-tune with --physcpubind= based on numa_topology[numa_id]['cores']
-            numactl_prefix = f"{shlex.quote(RunnerConfig.NUMACTL_PATH)} --cpunodebind={numa_id} --membind={numa_id} "
-            logger.info(f"Task {task_id}: Applying NUMA binding to node {numa_id}.")
-        elif not RunnerConfig.NUMACTL_PATH:
-            logger.warning(
-                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but numactl path is not configured. Ignoring NUMA binding."
-            )
-        elif not numa_topology:
-            logger.warning(
-                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but NUMA topology couldn't be detected on this runner. Ignoring NUMA binding."
-            )
-        else:  # NUMA ID not found in detected topology
-            logger.warning(
-                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} not found in detected topology {list(numa_topology.keys())}. Ignoring NUMA binding."
-            )
-
-    shell_command = (
-        f"exec {numactl_prefix}{inner_cmd_str} > {quoted_stdout} 2> {quoted_stderr}"
     )
-    systemd_run_cmd.extend(["/bin/sh", "-c", shell_command])
+    working_dir = os.path.join(RunnerConfig.SHARED_DIR, "shared_data")
 
-    logger.info(f"Executing task {task_id} via systemd-run unit {unit_name}")
-    logger.debug(
-        f"systemd-run command: {' '.join(systemd_run_cmd)}"
-    )  # Log the full command for debugging
+    if task_info.docker_image_name not in {None, "", "NULL"}:
+        use_systemd = False
+        logger.info(
+            f"Task {task_id}: Checking Docker image sync status for '{task_info.docker_image_name}'."
+        )
+        container_name_from_tag = task_info.docker_image_name.split("/")[1].split(":")[
+            0
+        ]  # Extract 'myenv' from 'hakuriver/myenv:base'
+        container_tar_dir = (
+            RunnerConfig.CONTAINER_TAR_DIR
+        )  # Use runner's configured path
+
+        try:
+            async with docker_lock:
+                needs_sync, sync_path = docker_utils.needs_sync(
+                    container_name_from_tag, container_tar_dir
+                )
+                if needs_sync:
+                    if sync_path:
+                        logger.info(
+                            f"Task {task_id}: Syncing required Docker image from {sync_path}..."
+                        )
+                        sync_success = await asyncio.get_running_loop().run_in_executor(
+                            None,
+                            docker_utils.sync_from_shared,
+                            container_name_from_tag,
+                            sync_path,
+                        )
+                        if not sync_success:
+                            raise RuntimeError(
+                                f"Failed to sync Docker image from {sync_path}"
+                            )
+                        logger.info(f"Task {task_id}: Docker image sync successful.")
+                    else:
+                        # This case shouldn't happen if needs_sync is True, but handle defensively
+                        raise RuntimeError(
+                            f"Sync needed but no tarball path found for {container_name_from_tag}"
+                        )
+                else:
+                    logger.info(
+                        f"Task {task_id}: Local Docker image '{task_info.docker_image_name}' is up-to-date."
+                    )
+
+        except Exception as e:
+            error_message = (
+                f"Docker image sync check/load failed for task {task_id}: {e}"
+            )
+            logger.error(error_message)
+            await report_status_to_host(
+                TaskStatusUpdate(
+                    task_id=task_id,
+                    status="failed",
+                    message=error_message,
+                    completed_at=datetime.datetime.now(),
+                )
+            )
+            return  # Stop processing this task
+
+        task_command_list = [task_info.command] + [
+            shlex.quote(arg) for arg in task_info.arguments
+        ]
+        docker_wrapper_cmd = docker_utils.modify_command_for_docker(
+            original_command_list=task_command_list,
+            container_image_name=task_info.docker_image_name,
+            task_id=task_id,
+            privileged=task_info.docker_privileged,
+            mount_dirs=task_info.docker_additional_mounts
+            + [
+                f"{working_dir}:/shared",
+                f"{RunnerConfig.LOCAL_TEMP_DIR}:/local_temp",
+            ],
+            working_dir="/shared",
+            cpu_cores=task_info.required_cores,
+            memory_limit=(
+                f"{task_info.required_memory_bytes/1e6:.1f}M"
+                if task_info.required_memory_bytes
+                else None
+            ),
+        )
+        inner_cmd_str = " ".join(docker_wrapper_cmd)
+        shell_cmd = f"exec {inner_cmd_str} > {shlex.quote(task_info.stdout_path)} 2> {shlex.quote(task_info.stderr_path)}"
+        run_cmd = ["sudo", "/bin/bash", "-c", shell_cmd]
+    else:
+        use_systemd = True
+        # No docker image specified, run directly
+        # --- Construct systemd-run command ---
+        run_cmd = [
+            "sudo",
+            "systemd-run",
+            "--scope",  # Run as a transient scope unit
+            "--collect",  # Garbage collect unit when process exits
+            f"--property=User={RunnerConfig.RUNNER_USER}",  # Run as the current user (or specify another user)
+            f"--unit={unit_name}",
+            # Basic description
+            f"--description=HakuRiver Task {task_id}: {shlex.quote(task_info.command)}",
+        ]
+
+        # Resource Allocation Properties
+        if task_info.required_cores > 0 and total_cores > 0:
+            # Generate CPU list like "0,1,2" if required_cores=3
+            # cpu_list = ",".join(map(str, range(min(task_info.required_cores, total_cores))))
+            # run_cmd.append(f"--property=CPUAffinity={cpu_list}")
+            # Optionally add CPUQuota for stricter enforcement (percentage)
+            cpu_quota = int(task_info.required_cores * 100)
+            run_cmd.append(f"--property=CPUQuota={cpu_quota}%")
+
+        if (
+            task_info.required_memory_bytes is not None
+            and task_info.required_memory_bytes > 0
+        ):
+            run_cmd.append(f"--property=MemoryMax={task_info.required_memory_bytes}")
+        run_cmd.append("--property=MemorySwapMax=0")
+
+        # Environment Variables
+        process_env = os.environ.copy()  # Start with runner's environment
+        process_env.update(task_info.env_vars)
+        process_env["HAKURIVER_TASK_ID"] = str(task_id)  # Use HAKURIVER_ prefix
+        process_env["HAKURIVER_LOCAL_TEMP_DIR"] = RunnerConfig.LOCAL_TEMP_DIR
+        process_env["HAKURIVER_SHARED_DIR"] = RunnerConfig.SHARED_DIR
+        if task_info.target_numa_node_id is not None:
+            process_env["HAKURIVER_TARGET_NUMA_NODE"] = str(
+                task_info.target_numa_node_id
+            )
+        for key, value in process_env.items():
+            run_cmd.append(f"--setenv={key}={value}")  # Pass all env vars
+
+        # Working Directory (Optional - run in shared or temp?)
+        run_cmd.append(f"--working-directory={working_dir}")  # Example
+
+        # Command and Arguments with Redirection
+        # This is complex due to shell quoting needed inside systemd-run
+        # Ensure stdout/stderr paths are absolute and quoted if they contain spaces
+        quoted_stdout = shlex.quote(task_info.stdout_path)
+        quoted_stderr = shlex.quote(task_info.stderr_path)
+        # Use shlex.join for the inner command and args if possible, otherwise manual quoting
+        if not task_info.docker_image_name:
+            inner_cmd_parts = [task_info.command] + [
+                shlex.quote(arg) for arg in task_info.arguments
+            ]
+        else:
+            task_command_list = [task_info.command] + [
+                shlex.quote(arg) for arg in task_info.arguments
+            ]
+            docker_wrapper_cmd = docker_utils.modify_command_for_docker(
+                original_command_list=task_command_list,
+                container_image_name=task_info.docker_image_name,
+                task_id=task_id,
+                privileged=task_info.docker_privileged,
+                mount_dirs=task_info.docker_additional_mounts
+                + [
+                    f"{RunnerConfig.SHARED_DIR}/shared_data:/shared",
+                    f"{RunnerConfig.LOCAL_TEMP_DIR}:/local_temp",
+                ],
+                working_dir="/shared",
+            )
+            inner_cmd_parts = docker_wrapper_cmd
+        inner_cmd_str = " ".join(inner_cmd_parts)
+
+        numactl_prefix = ""
+        if task_info.target_numa_node_id is not None and numa_topology is not None:
+            if (
+                RunnerConfig.NUMACTL_PATH
+                and numa_topology
+                and task_info.target_numa_node_id in numa_topology
+            ):
+                # Basic binding to both CPU and memory on the target node
+                numa_id = task_info.target_numa_node_id
+                # Use --interleave=all as a fallback if specific binds cause issues,
+                # or fine-tune with --physcpubind= based on numa_topology[numa_id]['cores']
+                numactl_prefix = f"{shlex.quote(RunnerConfig.NUMACTL_PATH)} --cpunodebind={numa_id} --membind={numa_id} "
+                logger.info(f"Task {task_id}: Applying NUMA binding to node {numa_id}.")
+            elif not RunnerConfig.NUMACTL_PATH:
+                logger.warning(
+                    f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but numactl path is not configured. Ignoring NUMA binding."
+                )
+            elif not numa_topology:
+                logger.warning(
+                    f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but NUMA topology couldn't be detected on this runner. Ignoring NUMA binding."
+                )
+            else:  # NUMA ID not found in detected topology
+                logger.warning(
+                    f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} not found in detected topology {list(numa_topology.keys())}. Ignoring NUMA binding."
+                )
+
+        shell_command = (
+            f"exec {numactl_prefix}{inner_cmd_str} > {quoted_stdout} 2> {quoted_stderr}"
+        )
+        run_cmd.extend(["/bin/sh", "-c", shell_command])
+
+        logger.info(f"Executing task {task_id} via systemd-run unit {unit_name}")
+        logger.debug(
+            f"systemd-run command: {' '.join(run_cmd)}"
+        )  # Log the full command for debugging
 
     exit_code = None
     error_message = None
@@ -318,7 +437,7 @@ async def run_task_background(task_info: TaskInfo):
 
         # Run systemd-run itself
         systemd_process = await asyncio.create_subprocess_exec(
-            *systemd_run_cmd,
+            *run_cmd,
             stdout=asyncio.subprocess.PIPE,  # Capture systemd-run's output/errors
             stderr=asyncio.subprocess.PIPE,
         )
@@ -334,8 +453,8 @@ async def run_task_background(task_info: TaskInfo):
         running_processes[task_id] = {
             "unit": unit_name,
             "process": systemd_process,  # Store the systemd-run process object initially
-            "memory_limit": task_info.required_memory_bytes,
             "pid": systemd_process.pid,  # PID will be filled by the check loop
+            "use_systemd": use_systemd,
         }
 
         # Wait for systemd-run command to finish
@@ -427,10 +546,6 @@ async def run_task_background(task_info: TaskInfo):
                 completed_at=datetime.datetime.now(),
             )
         )
-
-    # Note: The run_task_background function now primarily handles LAUNCHING the task.
-    # The actual completion/failure/OOM kill is detected by the check_running_tasks loop
-    # and reported via heartbeat or direct status updates from that loop.
 
 
 async def send_heartbeat():
@@ -600,32 +715,40 @@ async def pause_task(body: dict = Body(...)):
         )
 
     try:
-        if "task_pid" in task_data:
-            pid = task_data["task_pid"]
+        if task_data["use_systemd"]:
+            if "task_pid" in task_data:
+                pid = task_data["task_pid"]
+            else:
+                logger.info(f"Finding process for task {unit_name} to pause.")
+                find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
+                process = subprocess.run(find_cmd, capture_output=True, text=True)
+                result = re.search(
+                    rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout
+                )
+                if not result:
+                    logger.error(
+                        f"Failed to find process for task {task_id}."
+                        f"\nOutput: {process.stdout}"
+                    )
+                    raise Exception(
+                        f"Failed to find process for task {task_id}.\nOutput: {process.stdout}"
+                    )
+                pid = result.group(1)
+                logger.info(f"Found process {pid} for task {task_id}.")
+            logger.info(f"Attempting to pause task {task_id} using kill.")
+            stop_cmd = ["sudo", "kill", "-s", "SIGSTOP", str(pid)]
+            result = subprocess.run(stop_cmd, check=False, timeout=1)
+            if result.returncode != 0:
+                raise Exception(f"Failed to pause task {task_id} using kill.")
+            paused_processes[task_id] = running_processes.pop(task_id)
+            paused_processes[task_id]["task_pid"] = pid  # Store the paused PID
         else:
-            logger.info(f"Finding process for task {unit_name} to pause.")
-            find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
-            process = subprocess.run(find_cmd, capture_output=True, text=True)
-            result = re.search(rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout)
-            if not result:
-                logger.error(
-                    f"Failed to find process for task {task_id}."
-                    f"\nOutput: {process.stdout}"
-                )
-                raise Exception(
-                    f"Failed to find process for task {task_id}.\nOutput: {process.stdout}"
-                )
-            pid = result.group(1)
-            logger.info(f"Found process {pid} for task {task_id}.")
-        logger.info(f"Attempting to pause task {task_id} using kill.")
-        stop_cmd = ["sudo", "kill", "-s", "SIGSTOP", str(pid)]
-        result = subprocess.run(stop_cmd, check=False, timeout=1)
-        if result.returncode != 0:
-            raise Exception(f"Failed to pause task {task_id} using kill.")
+            container_name = f"hakuriver-task-{task_id}"
+            pause_cmd = ["docker", "pause", container_name]
+            docker_utils._run_command(pause_cmd, check=True, timeout=1)
+            paused_processes[task_id] = running_processes.pop(task_id)
 
         logger.info(f"Task {task_id} paused successfully.")
-        paused_processes[task_id] = running_processes.pop(task_id)
-        paused_processes[task_id]["task_pid"] = pid  # Store the paused PID
         await report_status_to_host(
             TaskStatusUpdate(
                 task_id=task_id,
@@ -661,12 +784,17 @@ async def resume_task(body: dict = Body(...)):
         )
 
     try:
-        logger.info(f"Attempting to resume task {task_id} using kill.")
-        task_pid = task_data["task_pid"]
-        resume_cmd = ["sudo", "kill", "-s", "SIGCONT", str(task_pid)]
-        result = subprocess.run(resume_cmd, check=False, timeout=1)
-        if result.returncode != 0:
-            raise Exception(f"Failed to resume task {task_id} using kill.")
+        if task_data["use_systemd"]:
+            logger.info(f"Attempting to resume task {task_id} using kill.")
+            task_pid = task_data["task_pid"]
+            resume_cmd = ["sudo", "kill", "-s", "SIGCONT", str(task_pid)]
+            result = subprocess.run(resume_cmd, check=False, timeout=1)
+            if result.returncode != 0:
+                raise Exception(f"Failed to resume task {task_id} using kill.")
+        else:
+            container_name = f"hakuriver-task-{task_id}"
+            resume_cmd = ["docker", "unpause", container_name]
+            docker_utils._run_command(resume_cmd, check=True, timeout=1)
 
         logger.info(f"Task {task_id} resumed successfully.")
         running_processes[task_id] = paused_processes.pop(task_id)
@@ -717,62 +845,68 @@ async def kill_task_endpoint(body: dict = Body(...)):
     process = task_data["process"]
     unit_name = task_data["unit"]
     kill_message = f"Task killed by host request (Unit: {unit_name})."
-    status = "killed"
-    completion_time = datetime.datetime.now()
-    exit_code = -9  # Assume SIGKILL equivalent
 
     try:
-        if "task_pid" in task_data:
-            pid = task_data["task_pid"]
-        else:
-            logger.info(f"Finding process for task {unit_name} to pause.")
-            find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
-            process = subprocess.run(find_cmd, capture_output=True, text=True)
-            result = re.search(rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout)
-            if not result:
-                logger.error(
-                    f"Failed to find process for task {task_id}."
-                    f"\nOutput: {process.stdout}"
-                )
-                raise Exception(
-                    f"Failed to find process for task {task_id}.\nOutput: {process.stdout}"
-                )
-            pid = result.group(1)
-            logger.info(f"Found process {pid} for task {task_id}.")
-        logger.info(
-            f"Attempting to stop/kill systemd unit {unit_name} for task {task_id}"
-        )
-        # Use kill directly to ensure we stop the unit
-        kill_cmd_task = ["sudo", "kill", "-s", "SIGKILL", str(pid)]
-        kill_result_task = subprocess.run(
-            kill_cmd_task, capture_output=True, text=True, check=False
-        )
-        kill_cmd = ["sudo", "kill", "-s", "SIGKILL", str(process.pid)]
-        kill_result = subprocess.run(
-            kill_cmd, capture_output=True, text=True, check=False
-        )
-
-        if kill_result.returncode == 0 and kill_result_task.returncode == 0:
-            logger.info(f"Successfully sent kill signal to unit {unit_name}.")
-        else:
-            # Maybe it already stopped? Or permission error?
-            logger.warning(
-                f"kill {unit_name} failed (rc={kill_result.returncode}): {kill_result.stderr.strip()}. Unit might be stopped already."
-            )
-            # Check if it's inactive
-            status_cmd = ["sudo", "systemctl", "is-active", unit_name]
-            status_result = subprocess.run(
-                status_cmd, capture_output=True, text=True, check=False
-            )
-            if status_result.stdout.strip() != "active":
-                logger.info(
-                    f"Unit {unit_name} is not active, assuming kill effective or already stopped."
-                )
+        if task_data["use_systemd"]:
+            if "task_pid" in task_data:
+                pid = task_data["task_pid"]
             else:
-                logger.error(
-                    f"Failed to kill unit {unit_name} and it still seems active."
+                logger.info(f"Finding process for task {unit_name} to pause.")
+                find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
+                process = subprocess.run(find_cmd, capture_output=True, text=True)
+                result = re.search(
+                    rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout
                 )
-                kill_message += " | Failed to confirm kill via systemctl."
+                if not result:
+                    logger.error(
+                        f"Failed to find process for task {task_id}."
+                        f"\nOutput: {process.stdout}"
+                    )
+                    raise Exception(
+                        f"Failed to find process for task {task_id}.\nOutput: {process.stdout}"
+                    )
+                pid = result.group(1)
+                logger.info(f"Found process {pid} for task {task_id}.")
+            logger.info(
+                f"Attempting to stop/kill systemd unit {unit_name} for task {task_id}"
+            )
+            # Use kill directly to ensure we stop the unit
+            kill_cmd_task = ["sudo", "kill", "-s", "SIGKILL", str(pid)]
+            kill_result_task = subprocess.run(
+                kill_cmd_task, capture_output=True, text=True, check=False
+            )
+            kill_cmd = ["sudo", "kill", "-s", "SIGKILL", str(process.pid)]
+            kill_result = subprocess.run(
+                kill_cmd, capture_output=True, text=True, check=False
+            )
+
+            if kill_result.returncode == 0 and kill_result_task.returncode == 0:
+                logger.info(f"Successfully sent kill signal to unit {unit_name}.")
+            else:
+                # Maybe it already stopped? Or permission error?
+                logger.warning(
+                    f"kill {unit_name} failed (rc={kill_result.returncode}): {kill_result.stderr.strip()}. Unit might be stopped already."
+                )
+                # Check if it's inactive
+                status_cmd = ["sudo", "systemctl", "is-active", unit_name]
+                status_result = subprocess.run(
+                    status_cmd, capture_output=True, text=True, check=False
+                )
+                if status_result.stdout.strip() != "active":
+                    logger.info(
+                        f"Unit {unit_name} is not active, assuming kill effective or already stopped."
+                    )
+                else:
+                    logger.error(
+                        f"Failed to kill unit {unit_name} and it still seems active."
+                    )
+                    kill_message += " | Failed to confirm kill via systemctl."
+        else:
+            kill_cmd = ["docker", "kill", f"hakuriver-task-{task_id}"]
+            docker_utils._run_command(kill_cmd, check=True, timeout=1)
+            logger.info(
+                f"Successfully sent kill signal to Docker container for task {task_id}."
+            )
 
         # Remove from tracking immediately
         if task_id in running_processes:
@@ -791,14 +925,6 @@ async def kill_task_endpoint(body: dict = Body(...)):
         if task_id in running_processes:
             del running_processes[task_id]  # Ensure removal on error too
 
-    # Report final status back to host (optional here, could rely on heartbeat)
-    # await report_status_to_host(
-    #     TaskStatusUpdate(
-    #         task_id=task_id, status=status, exit_code=exit_code,
-    #         message=kill_message, completed_at=completion_time
-    #     )
-    # )
-
     return {
         "message": f"Kill processed for task {task_id}. Final status will be reported via heartbeat."
     }
@@ -810,6 +936,27 @@ async def startup_event():
         f"Runner starting up on {RunnerConfig.RUNNER_HOSTNAME} "
         f"({runner_ip}:{RunnerConfig.RUNNER_PORT})"
     )
+
+    logger.info("Checking for Docker access...")
+    try:
+        docker_utils._run_command(["docker", "info"], capture_output=True, check=True)
+        logger.info("Docker daemon accessible.")
+    except Exception as e:
+        logger.warning(f"Docker check failed: {e}. Docker tasks may fail.")
+
+    # checking directories
+    if not os.path.isdir(RunnerConfig.SHARED_DIR):
+        logger.error(
+            f"Shared directory '{RunnerConfig.SHARED_DIR}' "
+            f"not found or not a directory. Runner may not function correctly."
+        )
+    if not os.path.isdir(RunnerConfig.LOCAL_TEMP_DIR):
+        os.makedirs(
+            RunnerConfig.LOCAL_TEMP_DIR, exist_ok=True
+        )  # Create if it doesn't exist
+    if not os.path.isdir(os.path.join(RunnerConfig.SHARED_DIR, "shared_data")):
+        os.makedirs(os.path.join(RunnerConfig.SHARED_DIR, "shared_data"), exist_ok=True)
+
     # Detect topology *before* first registration attempt
     logger.info("Detecting NUMA topology...")
     numa_topology = detect_numa_topology()
