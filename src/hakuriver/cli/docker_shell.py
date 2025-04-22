@@ -6,31 +6,10 @@ import json
 import toml
 import asyncio
 import websockets
-import threading  # For running input() in a separate thread
 
 # HakuRiver imports (assume they exist in the package)
-from hakuriver.core.client import client_config, update_config as update_client_config
+from hakuriver.core.client import CLIENT_CONFIG
 from hakuriver.utils.logger import logger
-
-# Use a queue to communicate input from the blocking input() thread to the async WebSocket task
-input_queue = asyncio.Queue()
-
-
-def input_thread_worker():
-    """Reads lines from stdin and puts them into the input_queue."""
-    logger.debug("Input thread started.")
-    try:
-        while True:
-            # input() is blocking, so run it in a separate thread
-            line = input()  # Reads until newline
-            # Add newline back as terminals typically send it
-            asyncio.run_coroutine_threadsafe(
-                input_queue.put(line + "\r"), asyncio.get_event_loop()
-            )
-    except EOFError:
-        logger.debug("Input thread received EOF.")
-    except Exception as e:
-        logger.error(f"Input thread error: {e}")
 
 
 async def receive_messages(websocket):
@@ -71,7 +50,13 @@ async def send_input(websocket):
     logger.debug("Send task started.")
     try:
         while True:
-            line = await input_queue.get()
+            line = await asyncio.to_thread(input)
+            line = line.rstrip("\n") + "\n"  # Ensure newline is added for terminal input
+            if line == "exit\n" or line == "quit\n":
+                logger.info("Exit command received. Closing WebSocket.")
+                await websocket.close()
+                break
+            # Send the input line to the WebSocket
             message = {"type": "input", "data": line}
             await websocket.send(json.dumps(message))
     except Exception as e:
@@ -113,21 +98,18 @@ async def main_shell():
             sys.exit(1)
 
     if custom_config_data:
-        update_client_config(client_config, custom_config_data)
+        for key, value in custom_config_data.items():
+            CLIENT_CONFIG.update_setting(key, value)
 
     # --- Construct WebSocket URL ---
     # Assuming Host is running on ws:// or wss:// based on its configuration/setup
     # Current HakuRiver doesn't have TLS config, so assume ws://
     ws_protocol = "ws"  # Or "wss" if Host is configured for TLS
-    ws_url = f"{ws_protocol}://{client_config.host_address}:{client_config.host_port}/docker/host/containers/{args.container_name}/terminal"
+    ws_url = f"{ws_protocol}://{CLIENT_CONFIG.host_address}:{CLIENT_CONFIG.host_port}/docker/host/containers/{args.container_name}/terminal"
 
     logger.info(
         f"Connecting to WebSocket terminal for container '{args.container_name}' at {ws_url}"
     )
-
-    # --- Start Input Thread ---
-    input_thread = threading.Thread(target=input_thread_worker, daemon=True)
-    input_thread.start()
 
     # --- Connect WebSocket and Manage I/O ---
     try:
@@ -145,7 +127,7 @@ async def main_shell():
                 # Add a task to monitor the input thread/queue if needed for graceful exit
             )
 
-    except websockets.exceptions.ConnectionRefused as e:
+    except websockets.exceptions.ConnectionClosed as e:
         logger.error(
             f"Connection refused by host: {e}. Is the Host running and the container name correct?"
         )
@@ -163,8 +145,6 @@ async def main_shell():
         logger.info("WebSocket session ended.")
         sys.stdout.write("\r\nDisconnected.\r\n")
         sys.stdout.flush()
-        # Signal input thread to stop if necessary (more complex with simple input())
-        # For now, rely on daemon=True or Ctrl+C interrupting everything
 
 
 def main():

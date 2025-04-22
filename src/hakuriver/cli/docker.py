@@ -7,7 +7,7 @@ import toml
 import httpx
 
 # HakuRiver imports (assume they exist in the package)
-from hakuriver.core.client import client_config, update_config as update_client_config
+from hakuriver.core.client import CLIENT_CONFIG
 from hakuriver.utils.logger import logger
 
 
@@ -130,11 +130,12 @@ def main():
             sys.exit(1)
 
     if custom_config_data:
-        update_client_config(client_config, custom_config_data)
+        for key, val in custom_config_data.items():
+            CLIENT_CONFIG.update_setting(key, val)
 
     # --- Execute Command ---
-    host_url = client_config.host_url
-    timeout = client_config.default_timeout  # Use default timeout
+    host_url = CLIENT_CONFIG.host_url
+    timeout = CLIENT_CONFIG.default_timeout  # Use default timeout
 
     try:
         with httpx.Client(base_url=host_url, timeout=timeout) as client:
