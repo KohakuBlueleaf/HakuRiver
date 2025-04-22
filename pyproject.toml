@@ -32,6 +32,8 @@ Repository = "https://github.com/KohakuBlueleaf/HakuRiver"
 "hakuriver.client" = "hakuriver.cli.client:main"
 "hakuriver.runner" = "hakuriver.cli.runner:main"
 "hakuriver.init" = "hakuriver.cli.init:main"
+"hakuriver.docker" = "hakuriver.cli.docker:main"
+"hakuriver.docker-shell" = "hakuriver.cli.docker_shell:main"
 "hakurun" = "hakurun.run:runner"
 
 [tool.setuptools]
