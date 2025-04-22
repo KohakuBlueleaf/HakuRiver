@@ -30,14 +30,17 @@ try:
         ADDITIONAL_MOUNTS = settings["docker"].get(
             "additional_mounts", []
         )  # Use .get for safety
+
 except Exception as e:
     logger.warning(f"Failed to load config for host")
     logger.debug(f"Error: {e}", exc_info=True)
+
     class HostConfig:
         pass
 
 
 try:
+
     class RunnerConfig:
         # This needs to happen before setting up logging if log filename includes hostname
         RUNNER_HOSTNAME = socket.gethostname()
@@ -55,19 +58,26 @@ try:
         )  # Default to system PATH
         # Timing
         HEARTBEAT_INTERVAL_SECONDS = settings["timing"]["heartbeat_interval"]
-        TASK_CHECK_INTERVAL_SECONDS = settings["timing"].get("resource_check_interval", 1)
-        RUNNER_USER = settings.get("environment", {}).get("runner_user", getpass.getuser())
+        TASK_CHECK_INTERVAL_SECONDS = settings["timing"].get(
+            "resource_check_interval", 1
+        )
+        RUNNER_USER = settings.get("environment", {}).get(
+            "runner_user", getpass.getuser()
+        )
         CONTAINER_TAR_DIR = os.path.join(
             settings["paths"]["shared_dir"], settings["docker"]["container_dir"]
         )
+
 except Exception as e:
     logger.warning(f"Failed to load config for runner")
     logger.debug(f"Error: {e}", exc_info=True)
+
     class RunnerConfig:
         pass
 
 
 try:
+
     class ClientConfig:
         """Holds client-specific configuration, potentially modifiable."""
 
@@ -106,13 +116,17 @@ try:
         def update_setting(self, key: str, value: any):
             """Allows updating a configuration value 'on the fly' (use with caution)."""
             if hasattr(self, key):
-                print(f"Updating config '{key}' from '{getattr(self, key)}' to '{value}'")
+                print(
+                    f"Updating config '{key}' from '{getattr(self, key)}' to '{value}'"
+                )
                 setattr(self, key, value)
             else:
                 print(f"Warning: Config key '{key}' not found.", file=sys.stderr)
+
 except Exception as e:
     logger.warning(f"Failed to load config for client")
     logger.debug(f"Error: {e}", exc_info=True)
+
     class ClientConfig:
         pass
 

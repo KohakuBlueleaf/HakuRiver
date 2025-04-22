@@ -51,7 +51,9 @@ async def send_input(websocket):
     try:
         while True:
             line = await asyncio.to_thread(input)
-            line = line.rstrip("\n") + "\n"  # Ensure newline is added for terminal input
+            line = (
+                line.rstrip("\n") + "\n"
+            )  # Ensure newline is added for terminal input
             if line == "exit\n" or line == "quit\n":
                 logger.info("Exit command received. Closing WebSocket.")
                 await websocket.close()

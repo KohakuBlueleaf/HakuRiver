@@ -30,7 +30,7 @@ async def list_host_containers():
             cmd,
             True,
             True,
-            False
+            False,
         )
 
         containers = []
