@@ -55,7 +55,6 @@ class RunnerConfig:
     )
 
 
-
 class ClientConfig:
     """Holds client-specific configuration, potentially modifiable."""
 

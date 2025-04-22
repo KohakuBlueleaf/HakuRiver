@@ -304,4 +304,3 @@ async def terminal_websocket_endpoint(
             await websocket.close(code=1000)  # Normal closure
         except:
             pass  # Ignore if already closed
-

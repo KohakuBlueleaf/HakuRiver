@@ -300,4 +300,3 @@ async def list_docker_tars():
 
     logger.info(f"Found {len(results)} container types in shared directory.")
     return results
-

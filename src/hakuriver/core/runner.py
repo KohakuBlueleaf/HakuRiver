@@ -928,7 +928,9 @@ async def startup_event():
             RUNNER_CONFIG.LOCAL_TEMP_DIR, exist_ok=True
         )  # Create if it doesn't exist
     if not os.path.isdir(os.path.join(RUNNER_CONFIG.SHARED_DIR, "shared_data")):
-        os.makedirs(os.path.join(RUNNER_CONFIG.SHARED_DIR, "shared_data"), exist_ok=True)
+        os.makedirs(
+            os.path.join(RUNNER_CONFIG.SHARED_DIR, "shared_data"), exist_ok=True
+        )
 
     # Detect topology *before* first registration attempt
     logger.info("Detecting NUMA topology...")

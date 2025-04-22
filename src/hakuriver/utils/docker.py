@@ -149,8 +149,11 @@ def delete_container(container_name: str) -> bool:
         logger.error("Docker command not found.")
         return False
     except Exception as e:
-        logger.exception(f"An unexpected error occurred during deletion of '{container_name}'.")
+        logger.exception(
+            f"An unexpected error occurred during deletion of '{container_name}'."
+        )
         return False
+
 
 def stop_container(container_name: str) -> bool:
     """
@@ -167,19 +170,23 @@ def stop_container(container_name: str) -> bool:
         # Use check=False because docker stop returns 1 if container is already stopped
         result = _run_command(["docker", "stop", container_name], check=False)
         if result.returncode == 0:
-             logger.info(f"Container '{container_name}' stopped successfully.")
-             return True
+            logger.info(f"Container '{container_name}' stopped successfully.")
+            return True
         elif "is already stopped" in result.stderr or "is not running" in result.stderr:
-             logger.warning(f"Container '{container_name}' was already stopped.")
-             return True # Consider it successful if it's already in the desired state
+            logger.warning(f"Container '{container_name}' was already stopped.")
+            return True  # Consider it successful if it's already in the desired state
         else:
-             logger.error(f"Failed to stop container '{container_name}'. Stderr: {result.stderr.strip()}")
-             return False
+            logger.error(
+                f"Failed to stop container '{container_name}'. Stderr: {result.stderr.strip()}"
+            )
+            return False
     except FileNotFoundError:
         logger.error("Docker command not found.")
         return False
     except Exception as e:
-        logger.exception(f"An unexpected error occurred during stopping of '{container_name}'.")
+        logger.exception(
+            f"An unexpected error occurred during stopping of '{container_name}'."
+        )
         return False
 
 
@@ -205,7 +212,9 @@ def start_container(container_name: str) -> bool:
         logger.error("Docker command not found.")
         return False
     except Exception as e:
-        logger.exception(f"An unexpected error occurred during starting of '{container_name}'.")
+        logger.exception(
+            f"An unexpected error occurred during starting of '{container_name}'."
+        )
         return False
 
 

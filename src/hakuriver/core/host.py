@@ -122,6 +122,7 @@ app = FastAPI(title="HakuRiver Cluster Manager")
 # Include the Docker HTTP router
 app.include_router(docker_host_router, prefix="/docker", tags=["Docker (Host)"])
 
+
 # Register the Docker terminal WebSocket endpoint
 @app.websocket("/docker/host/containers/{container_name}/terminal")
 async def websocket_endpoint_wrapper(websocket, container_name: str = Path(...)):
