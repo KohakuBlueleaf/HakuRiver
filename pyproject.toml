@@ -18,9 +18,10 @@ dependencies = [
     "httpx",
     "psutil",
     "toml",
-    "uvicorn",
+    "uvicorn[standard]",
     "snowflake-id",
     "docker",
+    "websockets",
 ]
 
 [project.urls]
