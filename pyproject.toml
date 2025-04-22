@@ -19,7 +19,8 @@ dependencies = [
     "psutil",
     "toml",
     "uvicorn",
-    "snowflake-id"
+    "snowflake-id",
+    "docker",
 ]
 
 [project.urls]
