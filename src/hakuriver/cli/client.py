@@ -152,6 +152,26 @@ def main():
         default=[],
     )
 
+    parser.add_argument(
+        "--container",
+        type=str,
+        default=None,
+        metavar="NAME",
+        help='HakuRiver container name (e.g., "myenv"). Uses default if not specified. Use "NULL" to disable Docker.',
+    )
+    parser.add_argument(
+        "--privileged",
+        action="store_true",
+        help="Run container with --privileged flag (overrides default).",
+    )
+    parser.add_argument(
+        "--mount",
+        action="append",
+        metavar="HOST_PATH:CONTAINER_PATH",
+        default=[],
+        help="Additional host directories to mount into the container (repeatable). Overrides default mounts.",
+    )
+
     parser.add_argument("--wait", action="store_true", help="Wait for submitted task.")
     parser.add_argument(
         "--poll-interval",
@@ -259,10 +279,20 @@ def main():
 
             env_vars = parse_key_value(args.env)
 
+            # Map CLI args to TaskRequest optional fields (None means use host default)
+            # --privileged flag is present -> True, absent -> None
+            privileged_override = True if args.privileged else None
+            # --mount list is empty -> None, non-empty -> list
+            additional_mounts_override = args.mount if args.mount else None
+
             logger.info(
                 f"Submitting command '{command_to_run}' "
                 f"with args {command_arguments} "
-                f"to targets: {', '.join(args.target)}"
+                f"to targets: {', '.join(args.target)}. "
+                f"Cores: {args.cores}, Memory: {args.memory}. "
+                f"Container: {args.container if args.container else 'default'}, "
+                f"Privileged: {privileged_override if privileged_override is not None else 'default'}, "
+                f"Mounts: {additional_mounts_override if additional_mounts_override is not None else 'default'}."
             )
 
             # Call the updated core function
@@ -273,6 +303,9 @@ def main():
                 cores=args.cores,
                 memory_bytes=memory_bytes,
                 targets=args.target,  # Pass the list of targets
+                container_name=args.container, # Pass the specified container name (or None)
+                privileged=privileged_override, # Pass True or None
+                additional_mounts=additional_mounts_override, # Pass list or None
             )
 
             if not task_ids:

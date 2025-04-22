@@ -52,6 +52,9 @@ def submit_task(
     cores: int,
     memory_bytes: int | None,
     targets: list[str],  # Changed from individual target/sandbox flags
+    container_name: str | None = None, # Matches TaskRequest model field
+    privileged: bool | None = None, # Matches TaskRequest model field
+    additional_mounts: list[str] | None = None, # Matches TaskRequest model field
 ) -> list[str] | None:  # Returns list of task IDs
     """Submits a task potentially to multiple targets."""
     url = f"{CLIENT_CONFIG.host_url}/submit"
@@ -63,6 +66,9 @@ def submit_task(
         "required_cores": cores,
         "required_memory_bytes": memory_bytes,
         "targets": targets,  # Pass the list of target strings
+        "container_name": container_name,
+        "privileged": privileged,
+        "additional_mounts": additional_mounts,
     }
     print(payload)
     if targets:
