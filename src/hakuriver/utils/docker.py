@@ -125,6 +125,90 @@ def create_container(image_name: str, container_name: str) -> bool:
         return False
 
 
+def delete_container(container_name: str) -> bool:
+    """
+    Deletes a Docker container (forcefully).
+
+    Args:
+        container_name: The name of the container to delete.
+
+    Returns:
+        True if deletion was successful, False otherwise.
+    """
+    logger.info(f"Attempting to delete container '{container_name}'...")
+    try:
+        # Use -f (force) to stop and remove the container
+        _run_command(["docker", "rm", "--force", container_name], check=True)
+        logger.info(f"Container '{container_name}' deleted successfully.")
+        return True
+    except subprocess.CalledProcessError as e:
+        # Specific error logging is handled by _run_command check=True
+        logger.error(f"Failed to delete container '{container_name}'.")
+        return False
+    except FileNotFoundError:
+        logger.error("Docker command not found.")
+        return False
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred during deletion of '{container_name}'.")
+        return False
+
+def stop_container(container_name: str) -> bool:
+    """
+    Stops a running Docker container.
+
+    Args:
+        container_name: The name of the container to stop.
+
+    Returns:
+        True if stopping was successful, False otherwise.
+    """
+    logger.info(f"Attempting to stop container '{container_name}'...")
+    try:
+        # Use check=False because docker stop returns 1 if container is already stopped
+        result = _run_command(["docker", "stop", container_name], check=False)
+        if result.returncode == 0:
+             logger.info(f"Container '{container_name}' stopped successfully.")
+             return True
+        elif "is already stopped" in result.stderr or "is not running" in result.stderr:
+             logger.warning(f"Container '{container_name}' was already stopped.")
+             return True # Consider it successful if it's already in the desired state
+        else:
+             logger.error(f"Failed to stop container '{container_name}'. Stderr: {result.stderr.strip()}")
+             return False
+    except FileNotFoundError:
+        logger.error("Docker command not found.")
+        return False
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred during stopping of '{container_name}'.")
+        return False
+
+
+def start_container(container_name: str) -> bool:
+    """
+    Starts a stopped Docker container.
+
+    Args:
+        container_name: The name of the container to start.
+
+    Returns:
+        True if starting was successful, False otherwise.
+    """
+    logger.info(f"Attempting to start container '{container_name}'...")
+    try:
+        _run_command(["docker", "start", container_name], check=True)
+        logger.info(f"Container '{container_name}' started successfully.")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to start container '{container_name}'.")
+        return False
+    except FileNotFoundError:
+        logger.error("Docker command not found.")
+        return False
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred during starting of '{container_name}'.")
+        return False
+
+
 def create_container_tar(
     source_container_name: str, hakuriver_container_name: str, container_tar_dir: str
 ) -> str | None:

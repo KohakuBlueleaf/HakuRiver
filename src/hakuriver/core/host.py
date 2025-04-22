@@ -14,37 +14,13 @@ from pydantic import BaseModel, Field, field_validator
 
 from hakuriver.utils.snowflake import Snowflake
 from hakuriver.utils.logger import logger
-from hakuriver.utils.config_loader import settings
 from hakuriver.db.models import db, Node, Task, initialize_database
 from hakuriver.utils import docker as docker_utils
+from hakuriver.core.config import HOST_CONFIG
+from .docker.host_api import router as docker_host_router
+from .docker.host_terminal import terminal_websocket_endpoint
 
 
-# --- Configuration from settings ---
-class HostConfig:
-    # Network
-    HOST_BIND_IP = settings["network"]["host_bind_ip"]
-    HOST_PORT = settings["network"]["host_port"]
-    # Paths
-    SHARED_DIR = settings["paths"]["shared_dir"]
-    # Database
-    DB_FILE = settings["database"]["db_file"]
-    # Timing
-    HEARTBEAT_INTERVAL_SECONDS = settings["timing"]["heartbeat_interval"]
-    HEARTBEAT_TIMEOUT_FACTOR = settings["timing"]["heartbeat_timeout_factor"]
-    CLEANUP_CHECK_INTERVAL_SECONDS = settings["timing"]["cleanup_check_interval"]
-    # Docker
-    CONTAINER_DIR = os.path.join(
-        settings["paths"]["shared_dir"], settings["docker"]["container_dir"]
-    )
-    DEFAULT_CONTAINER_NAME = settings["docker"]["default_container_name"]
-    INITIAL_BASE_IMAGE = settings["docker"]["initial_base_image"]
-    TASKS_PRIVILEGED = settings["docker"]["tasks_privileged"]
-    ADDITIONAL_MOUNTS = settings["docker"].get(
-        "additional_mounts", []
-    )  # Use .get for safety
-
-
-HostConfig = HostConfig()  # Create an instance of the dataclass
 snowflake = Snowflake()
 
 
@@ -143,6 +119,13 @@ docker_lock = asyncio.Lock()
 
 # --- FastAPI App ---
 app = FastAPI(title="HakuRiver Cluster Manager")
+# Include the Docker HTTP router
+app.include_router(docker_host_router, prefix="/docker", tags=["Docker (Host)"])
+
+# Register the Docker terminal WebSocket endpoint
+@app.websocket("/docker/host/containers/{container_name}/terminal")
+async def websocket_endpoint_wrapper(websocket, container_name: str = Path(...)):
+    await terminal_websocket_endpoint(websocket, container_name=container_name)
 
 
 # --- Helper Functions (Logic remains the same, just use logger) ---
@@ -240,10 +223,10 @@ def get_secure_log_path(task: Task, log_type: str) -> str | None:
     Returns None if the path is invalid or outside the expected directory.
     """
     if log_type == "stdout":
-        base_dir = os.path.join(HostConfig.SHARED_DIR, "task_outputs")
+        base_dir = os.path.join(HOST_CONFIG.SHARED_DIR, "task_outputs")
         db_path = task.stdout_path
     elif log_type == "stderr":
-        base_dir = os.path.join(HostConfig.SHARED_DIR, "task_errors")
+        base_dir = os.path.join(HOST_CONFIG.SHARED_DIR, "task_errors")
         db_path = task.stderr_path
     else:
         return None
@@ -381,7 +364,7 @@ async def receive_heartbeat(
                 time_since_submit = now - task.submitted_at
                 # Increase suspicion if assigning for too long without confirmation
                 if time_since_submit > datetime.timedelta(
-                    seconds=HostConfig.HEARTBEAT_INTERVAL_SECONDS * 3
+                    seconds=HOST_CONFIG.HEARTBEAT_INTERVAL_SECONDS * 3
                 ):  # Example threshold
                     if task.assignment_suspicion_count < 2:
                         task.assignment_suspicion_count += 1
@@ -561,14 +544,14 @@ async def submit_task(req: TaskRequest):
     current_batch_id = None
     first_task_id_for_batch = None
 
-    output_dir = os.path.join(HostConfig.SHARED_DIR, "task_outputs")
-    errors_dir = os.path.join(HostConfig.SHARED_DIR, "task_errors")
+    output_dir = os.path.join(HOST_CONFIG.SHARED_DIR, "task_outputs")
+    errors_dir = os.path.join(HOST_CONFIG.SHARED_DIR, "task_errors")
     try:
         os.makedirs(output_dir, exist_ok=True)
         os.makedirs(errors_dir, exist_ok=True)
     except OSError as e:
         logger.error(
-            f"Cannot create output/error directories in {HostConfig.SHARED_DIR}: {e}"
+            f"Cannot create output/error directories in {HOST_CONFIG.SHARED_DIR}: {e}"
         )
         raise HTTPException(
             status_code=500,
@@ -578,13 +561,13 @@ async def submit_task(req: TaskRequest):
     if req.container_name == "NULL":
         task_container_name = None
     else:
-        task_container_name = req.container_name or HostConfig.DEFAULT_CONTAINER_NAME
+        task_container_name = req.container_name or HOST_CONFIG.DEFAULT_CONTAINER_NAME
     task_docker_image_tag = f"hakuriver/{task_container_name}:base"
     task_privileged = (
-        HostConfig.TASKS_PRIVILEGED if req.privileged is None else req.privileged
+        HOST_CONFIG.TASKS_PRIVILEGED if req.privileged is None else req.privileged
     )
     task_additional_mounts = (
-        HostConfig.ADDITIONAL_MOUNTS
+        HOST_CONFIG.ADDITIONAL_MOUNTS
         if req.additional_mounts is None
         else req.additional_mounts
     )
@@ -1150,214 +1133,6 @@ async def get_cluster_health(
         )
 
 
-## --- Docker Container Management Endpoints --- ##
-
-
-class CreateContainerRequest(BaseModel):
-    image_name: str = Field(
-        ..., description="The public Docker image to use (e.g., 'ubuntu:latest')"
-    )
-    container_name: str = Field(
-        ..., description="The desired name for the persistent container on the Host"
-    )
-
-
-@app.post("/docker/create", status_code=201)  # Use 201 Created
-async def create_docker_container(req: CreateContainerRequest):
-    """
-    Creates a persistent Docker container on the Host machine.
-    This container can be manually modified by users with access to the Host's Docker daemon.
-    Use /docker/create_tar/{container_name} afterwards to make it available to Runners.
-    """
-    logger.info(
-        f"Received request to create persistent container '{req.container_name}' from image '{req.image_name}'."
-    )
-
-    # Ensure Host has Docker access (basic check, docker_utils handles actual errors)
-    try:
-        docker_utils._run_command(["docker", "info"], capture_output=True, check=True)
-    except Exception as e:
-        logger.error(f"Host does not appear to have Docker access: {e}")
-        raise HTTPException(
-            status_code=503, detail="Host Docker daemon is not accessible or running."
-        )
-
-    async with docker_lock:
-        success = await asyncio.get_event_loop().run_in_executor(
-            None,
-            docker_utils.create_container,
-            req.image_name,
-            req.container_name,
-        )
-
-    if success:
-        logger.info(
-            f"Persistent container '{req.container_name}' created or already exists."
-        )
-        return {
-            "message": f"Persistent container '{req.container_name}' created or already exists on Host."
-        }
-    else:
-        detail = (
-            f"Failed to create persistent container '{req.container_name}' on Host."
-        )
-        logger.error(detail)
-        raise HTTPException(status_code=500, detail=detail)
-
-
-@app.post("/docker/create_tar/{container_name}")
-async def create_container_tar_endpoint(
-    container_name: str = Path(
-        ...,
-        description="The name of the *existing* container on the Host to commit and create a tarball from.",
-    )
-):
-    """
-    Creates a new container tarball in the shared container directory by committing
-    from an *existing* Docker container on the Host with the same name.
-    This makes the container's current state available for Runners to sync.
-    """
-    logger.info(
-        f"Received request to create/refresh container tar for '{container_name}'."
-    )
-
-    # Use the configured container tar directory
-    container_tar_dir = HostConfig.CONTAINER_DIR
-
-    # Ensure container tar directory exists (docker_utils also checks, but good practice here too)
-    if not os.path.isdir(container_tar_dir):
-        logger.info(
-            f"Container tar directory '{container_tar_dir}' not found on host. Creating..."
-        )
-        try:
-            os.makedirs(container_tar_dir, exist_ok=True)
-        except OSError as e:
-            detail = (
-                f"Failed to create container tar directory '{container_tar_dir}': {e}"
-            )
-            logger.error(detail)
-            raise HTTPException(status_code=500, detail=detail)
-
-    # Ensure Host has Docker access
-    try:
-        docker_utils._run_command(["docker", "info"], capture_output=True, check=True)
-    except Exception as e:
-        logger.error(f"Host does not appear to have Docker access: {e}")
-        raise HTTPException(
-            status_code=503, detail="Host Docker daemon is not accessible or running."
-        )
-
-    # The 'source_container_name' is the one existing on the Host
-    source_container_name = container_name
-
-    async with docker_lock:
-        tarball_path = await asyncio.get_event_loop().run_in_executor(
-            None,
-            docker_utils.create_container_tar,
-            source_container_name,
-            container_name,  # Use the same name for HakuRiver convention
-            container_tar_dir,
-        )
-
-    if tarball_path:
-        logger.info(
-            f"Successfully created/refreshed container tar for '{container_name}' at {tarball_path}"
-        )
-        return {
-            "message": f"Container tarball created/refreshed successfully.",
-            "tarball_path": tarball_path,
-        }
-    else:
-        detail = f"Failed to create/refresh container tar for '{container_name}'. Ensure container '{source_container_name}' exists on Host and Host has Docker access."
-        logger.error(detail)
-        raise HTTPException(status_code=500, detail=detail)
-
-
-@app.post("/docker/refresh/{container_name}")
-async def refresh_container_tar(container_name: str):
-    """
-    Creates a new container tarball in the shared directory by committing
-    from an *existing* Docker container with the same name.
-    """
-    logger.info(f"Received request to refresh container tar for '{container_name}'.")
-
-    # Ensure shared directory exists
-    if not os.path.isdir(HostConfig.CONTAINER_DIR):
-        detail = f"Shared directory '{HostConfig.CONTAINER_DIR}' not found on host. Cannot create tarball."
-        logger.error(detail)
-        raise HTTPException(status_code=500, detail=detail)
-
-    # The 'source_container_name' is assumed to be the same as 'container_name'
-    # that the user has prepared on the Host machine.
-    source_container_name = container_name
-
-    async with docker_lock:
-        tarball_path = await asyncio.get_event_loop().run_in_executor(
-            None,
-            docker_utils.create_container_tar,
-            source_container_name,
-            container_name,
-            HostConfig.CONTAINER_DIR,
-        )
-
-    if tarball_path:
-        logger.info(
-            f"Successfully created/refreshed container tar for '{container_name}' at {tarball_path}"
-        )
-        return {
-            "message": f"Container tarball refreshed successfully.",
-            "tarball_path": tarball_path,
-        }
-    else:
-        detail = f"Failed to refresh container tar for '{container_name}'. Ensure container '{source_container_name}' exists and Host has Docker access."
-        logger.error(detail)
-        raise HTTPException(status_code=500, detail=detail)
-
-
-@app.get("/docker/list")
-async def list_docker_tars():
-    """
-    Lists all available HakuRiver container tarballs in the shared directory.
-    """
-    logger.debug("Received request to list Docker container tarballs.")
-    if not os.path.isdir(HostConfig.CONTAINER_DIR):
-        detail = f"Shared container directory '{HostConfig.CONTAINER_DIR}' not found on host. Cannot list tarballs."
-        logger.error(detail)
-        raise HTTPException(status_code=500, detail=detail)
-
-    # List all unique container names based on tarball filenames
-    container_names = set()
-    pattern = re.compile(r"^([a-zA-Z0-9.-]+)-(\d+)\.tar$")
-    try:
-        for filename in os.listdir(HostConfig.CONTAINER_DIR):
-            match = pattern.match(filename)
-            if match:
-                container_names.add(match.group(1))
-    except Exception as e:
-        logger.exception(
-            f"Error scanning shared directory {HostConfig.CONTAINER_DIR}: {e}"
-        )
-        raise HTTPException(status_code=500, detail="Error scanning shared directory.")
-
-    results = {}
-    for name in sorted(list(container_names)):
-        tars = docker_utils.list_shared_container_tars(HostConfig.CONTAINER_DIR, name)
-        if tars:
-            latest_timestamp, latest_path = tars[0]
-            results[name] = {
-                "latest_timestamp": latest_timestamp,
-                "latest_tarball": os.path.basename(
-                    latest_path
-                ),  # Return just the filename
-                "all_versions": [
-                    {"timestamp": ts, "tarball": os.path.basename(p)} for ts, p in tars
-                ],
-            }
-
-    logger.info(f"Found {len(results)} container types in shared directory.")
-    return results
-
-
 # --- Background Tasks (Logic same, use logger) ---
 health_datas = []
 
@@ -1413,11 +1188,11 @@ async def collate_health_data():
 
 async def check_dead_runners():
     while True:
-        await asyncio.sleep(HostConfig.CLEANUP_CHECK_INTERVAL_SECONDS)
+        await asyncio.sleep(HOST_CONFIG.CLEANUP_CHECK_INTERVAL_SECONDS)
         # Calculate timeout threshold based on current time
         timeout_threshold = datetime.datetime.now() - datetime.timedelta(
-            seconds=HostConfig.HEARTBEAT_INTERVAL_SECONDS
-            * HostConfig.HEARTBEAT_TIMEOUT_FACTOR
+            seconds=HOST_CONFIG.HEARTBEAT_INTERVAL_SECONDS
+            * HOST_CONFIG.HEARTBEAT_TIMEOUT_FACTOR
         )
 
         # Find nodes marked 'online' whose last heartbeat is older than the threshold
@@ -1459,14 +1234,14 @@ async def check_dead_runners():
 
 async def startup_event():
     # Initialize DB using path from config BEFORE starting app
-    initialize_database(HostConfig.DB_FILE)
+    initialize_database(HOST_CONFIG.DB_FILE)
     logger.info("Host server starting up.")
 
     # refresh default Container
 
-    default_container_name = HostConfig.DEFAULT_CONTAINER_NAME
-    container_tar_dir = HostConfig.CONTAINER_DIR
-    initial_base_image = HostConfig.INITIAL_BASE_IMAGE
+    default_container_name = HOST_CONFIG.DEFAULT_CONTAINER_NAME
+    container_tar_dir = HOST_CONFIG.CONTAINER_DIR
+    initial_base_image = HOST_CONFIG.INITIAL_BASE_IMAGE
     print(container_tar_dir)
 
     if not os.path.isdir(container_tar_dir):
@@ -1505,21 +1280,21 @@ async def startup_event():
         logger.info(
             f"Found existing shared tarball for default container '{default_container_name}' "
         )
-    tarball_path = docker_utils.create_container_tar(
-        source_container_name=default_container_name,
-        hakuriver_container_name=default_container_name,
-        container_tar_dir=container_tar_dir,
-    )
-    if tarball_path:
-        logger.info(
-            f"Default container tarball created successfully at {tarball_path}. "
-            "Runners can now sync this base image."
-        )
-    else:
-        logger.error(
-            f"Failed to create default container tarball from '{initial_base_image}'. "
-            "Runners may not be able to fetch the base image."
-        )
+    # tarball_path = docker_utils.create_container_tar(
+    #     source_container_name=default_container_name,
+    #     hakuriver_container_name=default_container_name,
+    #     container_tar_dir=container_tar_dir,
+    # )
+    # if tarball_path:
+    #     logger.info(
+    #         f"Default container tarball created successfully at {tarball_path}. "
+    #         "Runners can now sync this base image."
+    #     )
+    # else:
+    #     logger.error(
+    #         f"Failed to create default container tarball from '{initial_base_image}'. "
+    #         "Runners may not be able to fetch the base image."
+    #     )
 
     # Start background task AFTER app starts running
     asyncio.create_task(check_dead_runners())
