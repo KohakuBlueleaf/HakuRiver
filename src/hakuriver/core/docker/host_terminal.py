@@ -162,6 +162,12 @@ async def terminal_websocket_endpoint(
                             type="output", data=output.decode("utf-8", errors="replace")
                         ).model_dump()
                     )
+                except TimeoutError:
+                    # Handle timeout if needed (e.g., log it)
+                    logger.debug(
+                        f"Timeout while reading from container socket for '{container_name}'."
+                    )
+                    continue  # Continue reading
                 except (BrokenPipeError, OSError) as e:
                     logger.info(
                         f"Container socket error (output) for '{container_name}': {e}. Assuming disconnect."

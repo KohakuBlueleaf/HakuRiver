@@ -8,7 +8,7 @@ from typing import Iterable
 
 import peewee
 import httpx
-from fastapi import FastAPI, HTTPException, Query, Path
+from fastapi import FastAPI, HTTPException, Query, Path, WebSocket
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -125,7 +125,7 @@ app.include_router(docker_host_router, prefix="/docker", tags=["Docker (Host)"])
 
 # Register the Docker terminal WebSocket endpoint
 @app.websocket("/docker/host/containers/{container_name}/terminal")
-async def websocket_endpoint_wrapper(websocket, container_name: str = Path(...)):
+async def websocket_endpoint_wrapper(websocket: WebSocket, container_name: str = Path(...)):
     await terminal_websocket_endpoint(websocket, container_name=container_name)
 
 

@@ -28,9 +28,9 @@ async def list_host_containers():
             None,
             docker_utils._run_command,  # Use the utility function
             cmd,
-            capture_output=True,
-            text=True,
-            check=True,
+            True,
+            True,
+            False
         )
 
         containers = []
