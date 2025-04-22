@@ -138,7 +138,12 @@ def main():
     timeout = CLIENT_CONFIG.default_timeout  # Use default timeout
 
     try:
-        with httpx.Client(base_url=host_url, timeout=timeout) as client:
+        # some command require longer execution time
+        with httpx.Client(
+            base_url=host_url,
+            timeout=timeout
+            + 180 * (args.command in {"create-container", "create-tar"}),
+        ) as client:
             if args.command == "list-containers":
                 logger.info(
                     f"Listing Host containers from {host_url}/docker/host/containers..."
