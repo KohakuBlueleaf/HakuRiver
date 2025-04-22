@@ -190,35 +190,10 @@ def main():
             )
             sys.exit(1)
 
-    # --- Import Core Client Logic ---
-    # This import triggers default config loading via config_loader
-    # AND makes client_config and API functions available.
-    try:
-        import hakuriver.core.client as client_core
-
-        if not hasattr(client_core, "client_config"):
-            raise ImportError(
-                "Core client module does not expose 'client_config' instance."
-            )
-        if not hasattr(client_core, "submit_task"):
-            raise ImportError(
-                "Core client module does not expose expected API functions."
-            )
-    except ImportError as e:
-        print(
-            f"Error: Failed to import or initialize core client module: {e}",
-            file=sys.stderr,
-        )
-        print(
-            "Make sure HakuRiver is installed or accessible in PYTHONPATH.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
     # --- Apply Custom Config Overrides (if custom config was loaded) ---
     if custom_config_data:
         # Pass the instance from the imported module to the update function
-        update_config(client_core.client_config, custom_config_data)
+        update_config(client_core.CLIENT_CONFIG, custom_config_data)
 
     # --- Determine Action and Dispatch ---
     action_taken = False

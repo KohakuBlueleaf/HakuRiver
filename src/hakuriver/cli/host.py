@@ -4,6 +4,7 @@ import sys
 
 import toml
 import uvicorn
+import hakuriver.core.host as host_core
 
 
 def update_config(config_instance, custom_config_data):
@@ -18,7 +19,7 @@ def update_config(config_instance, custom_config_data):
     if not config_instance or not isinstance(custom_config_data, dict):
         return
 
-    log_prefix = f"{type(config_instance).__name__}"  # e.g., "HostConfig"
+    log_prefix = f"{type(config_instance).__name__}"  # e.g., "HOST_CONFIG"
 
     for key, value in custom_config_data.items():
         # Handle nested TOML sections mapping to potentially flat config attributes
@@ -89,40 +90,18 @@ def main():
             )
             sys.exit(1)
 
-    # --- Import Core Logic ---
-    # This import triggers default config loading via config_loader
-    # AND makes the `app` and `HostConfig` instance available.
-    try:
-        import hakuriver.core.host as host_core
-
-        # Verify necessary components are exposed by the core module
-        if not hasattr(host_core, "app"):
-            raise ImportError("Core host module does not expose 'app' instance.")
-        if not hasattr(host_core, "HostConfig"):
-            raise ImportError("Core host module does not expose 'HostConfig' instance.")
-    except ImportError as e:
-        print(
-            f"Error: Failed to import or initialize core host module: {e}",
-            file=sys.stderr,
-        )
-        print(
-            "Make sure HakuRiver is installed or accessible in PYTHONPATH.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
     # --- Apply Custom Config Overrides ---
     if custom_config_data:
         print("Applying custom configuration overrides...")
-        update_config(host_core.HostConfig, custom_config_data)
+        update_config(host_core.HOST_CONFIG, custom_config_data)
         print("Custom configuration applied.")
         # NOTE: If logging setup depends heavily on config values that were
         # just overridden, the logging might not reflect the overrides
         # unless re-initialized here. Assumes basic setup is okay.
 
     # --- Execute: Run Uvicorn ---
-    host_ip = host_core.HostConfig.HOST_BIND_IP
-    host_port = host_core.HostConfig.HOST_PORT
+    host_ip = host_core.HOST_CONFIG.HOST_BIND_IP
+    host_port = host_core.HOST_CONFIG.HOST_PORT
     print(f"Starting HakuRiver Host server on {host_ip}:{host_port}...")
     try:
         uvicorn.run(

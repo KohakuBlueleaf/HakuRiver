@@ -15,35 +15,8 @@ from pydantic import BaseModel, Field
 
 # Load configuration FIRST
 from hakuriver.utils.logger import logger
-from hakuriver.utils.config_loader import settings
 from hakuriver.utils import docker as docker_utils
-
-
-class RunnerConfig:
-    # This needs to happen before setting up logging if log filename includes hostname
-    RUNNER_HOSTNAME = socket.gethostname()
-    # Network
-    HOST_ADDRESS = settings["network"]["host_reachable_address"]
-    HOST_PORT = settings["network"]["host_port"]
-    RUNNER_ADDRESS = settings["network"]["runner_address"]
-    RUNNER_PORT = settings["network"]["runner_port"]
-    HOST_URL = f"http://{HOST_ADDRESS}:{HOST_PORT}"
-    # Paths
-    SHARED_DIR = settings["paths"]["shared_dir"]
-    LOCAL_TEMP_DIR = settings["paths"]["local_temp_dir"]
-    NUMACTL_PATH = (
-        settings["paths"]["numactl_path"] or "numactl"
-    )  # Default to system PATH
-    # Timing
-    HEARTBEAT_INTERVAL_SECONDS = settings["timing"]["heartbeat_interval"]
-    TASK_CHECK_INTERVAL_SECONDS = settings["timing"].get("resource_check_interval", 1)
-    RUNNER_USER = settings.get("environment", {}).get("runner_user", getpass.getuser())
-    CONTAINER_TAR_DIR = os.path.join(
-        settings["paths"]["shared_dir"], settings["docker"]["container_dir"]
-    )
-
-
-RunnerConfig = RunnerConfig()
+from hakuriver.core.config import RUNNER_CONFIG
 
 
 class TaskInfo(BaseModel):
@@ -93,8 +66,8 @@ running_processes = (
 )  # task_id -> {'unit': str, 'process': asyncio.Process | None, 'memory_limit': int | None, 'pid': int | None}
 paused_processes = {}
 docker_lock = asyncio.Lock()  # Lock for Docker image sync operations
-runner_ip = RunnerConfig.RUNNER_ADDRESS
-runner_url = f"http://{runner_ip}:{RunnerConfig.RUNNER_PORT}"
+runner_ip = RUNNER_CONFIG.RUNNER_ADDRESS
+runner_url = f"http://{runner_ip}:{RUNNER_CONFIG.RUNNER_PORT}"
 total_cores = os.cpu_count()
 if not total_cores:
     logger.warning("Could not determine CPU count, defaulting to 4.")
@@ -106,11 +79,11 @@ numa_topology: dict[int, dict] = {}
 # --- Helper Functions (Logic same, use logger) ---
 def detect_numa_topology() -> dict | None:
     """Detects NUMA topology by parsing `numactl --hardware` output."""
-    if not RunnerConfig.NUMACTL_PATH:
+    if not RUNNER_CONFIG.NUMACTL_PATH:
         logger.info("numactl path not configured, skipping NUMA detection.")
         return None
     try:
-        cmd = [RunnerConfig.NUMACTL_PATH, "-H"]
+        cmd = [RUNNER_CONFIG.NUMACTL_PATH, "-H"]
         result = subprocess.run(
             cmd, capture_output=True, text=True, check=True, encoding="utf-8"
         )
@@ -133,7 +106,7 @@ def detect_numa_topology() -> dict | None:
 
         if not node_cpu_match:
             logger.warning(
-                f"`{RunnerConfig.NUMACTL_PATH} --hardware` output did not contain expected CPU info."
+                f"`{RUNNER_CONFIG.NUMACTL_PATH} --hardware` output did not contain expected CPU info."
             )
             return None  # No NUMA nodes detected based on CPU info
 
@@ -176,12 +149,12 @@ def detect_numa_topology() -> dict | None:
 
     except FileNotFoundError:
         logger.error(
-            f"`{RunnerConfig.NUMACTL_PATH}` command not found. Cannot detect NUMA topology."
+            f"`{RUNNER_CONFIG.NUMACTL_PATH}` command not found. Cannot detect NUMA topology."
         )
         return None
     except subprocess.CalledProcessError as e:
         logger.error(
-            f"Error running `{RunnerConfig.NUMACTL_PATH} --hardware`: {e.stderr}"
+            f"Error running `{RUNNER_CONFIG.NUMACTL_PATH} --hardware`: {e.stderr}"
         )
         return None
     except Exception as e:
@@ -197,7 +170,7 @@ async def report_status_to_host(update_data: TaskStatusUpdate):
         # Use a slightly longer timeout for potentially busy host
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{RunnerConfig.HOST_URL}/update",
+                f"{RUNNER_CONFIG.HOST_URL}/update",
                 json=update_data.model_dump(mode="json"),
                 timeout=15.0,
             )
@@ -205,11 +178,11 @@ async def report_status_to_host(update_data: TaskStatusUpdate):
         logger.debug(f"Host acknowledged status update for {update_data.task_id}")
     except httpx.RequestError as e:
         logger.error(
-            f"Failed to report status for task {update_data.task_id} to host {RunnerConfig.HOST_URL}: {e}. Update lost."
+            f"Failed to report status for task {update_data.task_id} to host {RUNNER_CONFIG.HOST_URL}: {e}. Update lost."
         )
     except httpx.HTTPStatusError as e:
         logger.error(
-            f"Host {RunnerConfig.HOST_URL} rejected status update for task {update_data.task_id}: {e.response.status_code} - {e.response.text}"
+            f"Host {RUNNER_CONFIG.HOST_URL} rejected status update for task {update_data.task_id}: {e.response.status_code} - {e.response.text}"
         )
     except Exception as e:
         logger.exception(
@@ -229,7 +202,7 @@ async def run_task_background(task_info: TaskInfo):
             started_at=start_time,
         )
     )
-    working_dir = os.path.join(RunnerConfig.SHARED_DIR, "shared_data")
+    working_dir = os.path.join(RUNNER_CONFIG.SHARED_DIR, "shared_data")
 
     if task_info.docker_image_name not in {None, "", "NULL"}:
         use_systemd = False
@@ -240,7 +213,7 @@ async def run_task_background(task_info: TaskInfo):
             0
         ]  # Extract 'myenv' from 'hakuriver/myenv:base'
         container_tar_dir = (
-            RunnerConfig.CONTAINER_TAR_DIR
+            RUNNER_CONFIG.CONTAINER_TAR_DIR
         )  # Use runner's configured path
 
         try:
@@ -300,7 +273,7 @@ async def run_task_background(task_info: TaskInfo):
             mount_dirs=task_info.docker_additional_mounts
             + [
                 f"{working_dir}:/shared",
-                f"{RunnerConfig.LOCAL_TEMP_DIR}:/local_temp",
+                f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
             ],
             working_dir="/shared",
             cpu_cores=task_info.required_cores,
@@ -322,7 +295,7 @@ async def run_task_background(task_info: TaskInfo):
             "systemd-run",
             "--scope",  # Run as a transient scope unit
             "--collect",  # Garbage collect unit when process exits
-            f"--property=User={RunnerConfig.RUNNER_USER}",  # Run as the current user (or specify another user)
+            f"--property=User={RUNNER_CONFIG.RUNNER_USER}",  # Run as the current user (or specify another user)
             f"--unit={unit_name}",
             # Basic description
             f"--description=HakuRiver Task {task_id}: {shlex.quote(task_info.command)}",
@@ -348,8 +321,8 @@ async def run_task_background(task_info: TaskInfo):
         process_env = os.environ.copy()  # Start with runner's environment
         process_env.update(task_info.env_vars)
         process_env["HAKURIVER_TASK_ID"] = str(task_id)  # Use HAKURIVER_ prefix
-        process_env["HAKURIVER_LOCAL_TEMP_DIR"] = RunnerConfig.LOCAL_TEMP_DIR
-        process_env["HAKURIVER_SHARED_DIR"] = RunnerConfig.SHARED_DIR
+        process_env["HAKURIVER_LOCAL_TEMP_DIR"] = RUNNER_CONFIG.LOCAL_TEMP_DIR
+        process_env["HAKURIVER_SHARED_DIR"] = RUNNER_CONFIG.SHARED_DIR
         if task_info.target_numa_node_id is not None:
             process_env["HAKURIVER_TARGET_NUMA_NODE"] = str(
                 task_info.target_numa_node_id
@@ -381,8 +354,8 @@ async def run_task_background(task_info: TaskInfo):
                 privileged=task_info.docker_privileged,
                 mount_dirs=task_info.docker_additional_mounts
                 + [
-                    f"{RunnerConfig.SHARED_DIR}/shared_data:/shared",
-                    f"{RunnerConfig.LOCAL_TEMP_DIR}:/local_temp",
+                    f"{RUNNER_CONFIG.SHARED_DIR}/shared_data:/shared",
+                    f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
                 ],
                 working_dir="/shared",
             )
@@ -392,7 +365,7 @@ async def run_task_background(task_info: TaskInfo):
         numactl_prefix = ""
         if task_info.target_numa_node_id is not None and numa_topology is not None:
             if (
-                RunnerConfig.NUMACTL_PATH
+                RUNNER_CONFIG.NUMACTL_PATH
                 and numa_topology
                 and task_info.target_numa_node_id in numa_topology
             ):
@@ -400,9 +373,9 @@ async def run_task_background(task_info: TaskInfo):
                 numa_id = task_info.target_numa_node_id
                 # Use --interleave=all as a fallback if specific binds cause issues,
                 # or fine-tune with --physcpubind= based on numa_topology[numa_id]['cores']
-                numactl_prefix = f"{shlex.quote(RunnerConfig.NUMACTL_PATH)} --cpunodebind={numa_id} --membind={numa_id} "
+                numactl_prefix = f"{shlex.quote(RUNNER_CONFIG.NUMACTL_PATH)} --cpunodebind={numa_id} --membind={numa_id} "
                 logger.info(f"Task {task_id}: Applying NUMA binding to node {numa_id}.")
-            elif not RunnerConfig.NUMACTL_PATH:
+            elif not RUNNER_CONFIG.NUMACTL_PATH:
                 logger.warning(
                     f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but numactl path is not configured. Ignoring NUMA binding."
                 )
@@ -550,7 +523,7 @@ async def run_task_background(task_info: TaskInfo):
 
 async def send_heartbeat():
     while True:
-        await asyncio.sleep(RunnerConfig.HEARTBEAT_INTERVAL_SECONDS)
+        await asyncio.sleep(RUNNER_CONFIG.HEARTBEAT_INTERVAL_SECONDS)
 
         # --- Gather Data ---
         current_running_ids = list(running_processes.keys())
@@ -576,11 +549,11 @@ async def send_heartbeat():
             memory_total_bytes=node_mem_info.total,
         )
 
-        # logger.debug(f"Sending heartbeat to {RunnerConfig.HOST_URL}")
+        # logger.debug(f"Sending heartbeat to {RUNNER_CONFIG.HOST_URL}")
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.put(
-                    f"{RunnerConfig.HOST_URL}/heartbeat/{RunnerConfig.RUNNER_HOSTNAME}",
+                    f"{RUNNER_CONFIG.HOST_URL}/heartbeat/{RUNNER_CONFIG.RUNNER_HOSTNAME}",
                     json=heartbeat_payload.model_dump(mode="json"),
                     timeout=10.0,
                 )
@@ -590,7 +563,7 @@ async def send_heartbeat():
 
         except httpx.RequestError as e:
             logger.warning(
-                f"Failed to send heartbeat to host {RunnerConfig.HOST_URL}: {e}"
+                f"Failed to send heartbeat to host {RUNNER_CONFIG.HOST_URL}: {e}"
             )
             # Failure: Put the killed tasks back to be reported next time
             if killed_payload:
@@ -600,7 +573,7 @@ async def send_heartbeat():
                 )
         except httpx.HTTPStatusError as e:
             logger.warning(
-                f"Host {RunnerConfig.HOST_URL} rejected heartbeat: {e.response.status_code} - {e.response.text}"
+                f"Host {RUNNER_CONFIG.HOST_URL} rejected heartbeat: {e.response.status_code} - {e.response.text}"
             )
             if e.response.status_code == 404:
                 logger.warning("Node seems unregistered, attempting to re-register...")
@@ -627,30 +600,30 @@ async def register_with_host():
         numa_topology = detect_numa_topology()
 
     register_data = {
-        "hostname": RunnerConfig.RUNNER_HOSTNAME,
+        "hostname": RUNNER_CONFIG.RUNNER_HOSTNAME,
         "total_cores": total_cores,
         "total_ram_bytes": psutil.virtual_memory().total,
         "runner_url": runner_url,
         "numa_topology": numa_topology,  # Add the detected topology
     }
     logger.info(
-        f"Attempting to register with host {RunnerConfig.HOST_URL} "
-        f"as {RunnerConfig.RUNNER_HOSTNAME} "
+        f"Attempting to register with host {RUNNER_CONFIG.HOST_URL} "
+        f"as {RUNNER_CONFIG.RUNNER_HOSTNAME} "
         f"({register_data['total_cores']} cores, NUMA: {'Detected' if numa_topology else 'N/A'}) at {runner_url}"
     )
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{RunnerConfig.HOST_URL}/register", json=register_data, timeout=15.0
+                f"{RUNNER_CONFIG.HOST_URL}/register", json=register_data, timeout=15.0
             )
             response.raise_for_status()
         logger.info("Successfully registered/updated with host.")
         return True
     except httpx.RequestError as e:
-        logger.error(f"Failed to register with host {RunnerConfig.HOST_URL}: {e}")
+        logger.error(f"Failed to register with host {RUNNER_CONFIG.HOST_URL}: {e}")
     except httpx.HTTPStatusError as e:
         logger.error(
-            f"Host {RunnerConfig.HOST_URL} rejected registration: "
+            f"Host {RUNNER_CONFIG.HOST_URL} rejected registration: "
             f"{e.response.status_code} - {e.response.text}"
         )
     except Exception as e:
@@ -659,7 +632,7 @@ async def register_with_host():
 
 
 # --- FastAPI App ---
-app = FastAPI(title=f"Runner - {RunnerConfig.RUNNER_HOSTNAME}")
+app = FastAPI(title=f"Runner - {RUNNER_CONFIG.RUNNER_HOSTNAME}")
 
 
 @app.post("/run")
@@ -675,14 +648,14 @@ async def accept_task(task_info: TaskInfo, background_tasks: BackgroundTasks):
             detail=f"Task {task_id} is already running/tracked on this node.",
         )
 
-    if not os.path.isdir(RunnerConfig.LOCAL_TEMP_DIR):
+    if not os.path.isdir(RUNNER_CONFIG.LOCAL_TEMP_DIR):
         logger.error(
-            f"Local temp directory '{RunnerConfig.LOCAL_TEMP_DIR}' "
+            f"Local temp directory '{RUNNER_CONFIG.LOCAL_TEMP_DIR}' "
             f"not found or not a directory. Rejecting task {task_id}."
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Configuration error: LOCAL_TEMP_DIR '{RunnerConfig.LOCAL_TEMP_DIR}' missing on node.",
+            detail=f"Configuration error: LOCAL_TEMP_DIR '{RUNNER_CONFIG.LOCAL_TEMP_DIR}' missing on node.",
         )
 
     logger.info(
@@ -933,8 +906,8 @@ async def kill_task_endpoint(body: dict = Body(...)):
 async def startup_event():
     global numa_topology
     logger.info(
-        f"Runner starting up on {RunnerConfig.RUNNER_HOSTNAME} "
-        f"({runner_ip}:{RunnerConfig.RUNNER_PORT})"
+        f"Runner starting up on {RUNNER_CONFIG.RUNNER_HOSTNAME} "
+        f"({runner_ip}:{RUNNER_CONFIG.RUNNER_PORT})"
     )
 
     logger.info("Checking for Docker access...")
@@ -945,17 +918,17 @@ async def startup_event():
         logger.warning(f"Docker check failed: {e}. Docker tasks may fail.")
 
     # checking directories
-    if not os.path.isdir(RunnerConfig.SHARED_DIR):
+    if not os.path.isdir(RUNNER_CONFIG.SHARED_DIR):
         logger.error(
-            f"Shared directory '{RunnerConfig.SHARED_DIR}' "
+            f"Shared directory '{RUNNER_CONFIG.SHARED_DIR}' "
             f"not found or not a directory. Runner may not function correctly."
         )
-    if not os.path.isdir(RunnerConfig.LOCAL_TEMP_DIR):
+    if not os.path.isdir(RUNNER_CONFIG.LOCAL_TEMP_DIR):
         os.makedirs(
-            RunnerConfig.LOCAL_TEMP_DIR, exist_ok=True
+            RUNNER_CONFIG.LOCAL_TEMP_DIR, exist_ok=True
         )  # Create if it doesn't exist
-    if not os.path.isdir(os.path.join(RunnerConfig.SHARED_DIR, "shared_data")):
-        os.makedirs(os.path.join(RunnerConfig.SHARED_DIR, "shared_data"), exist_ok=True)
+    if not os.path.isdir(os.path.join(RUNNER_CONFIG.SHARED_DIR, "shared_data")):
+        os.makedirs(os.path.join(RUNNER_CONFIG.SHARED_DIR, "shared_data"), exist_ok=True)
 
     # Detect topology *before* first registration attempt
     logger.info("Detecting NUMA topology...")

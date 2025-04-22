@@ -4,6 +4,7 @@ import sys
 
 import toml
 import uvicorn
+import hakuriver.core.runner as runner_core
 
 
 def update_config(config_instance, custom_config_data):
@@ -18,7 +19,7 @@ def update_config(config_instance, custom_config_data):
     if not config_instance or not isinstance(custom_config_data, dict):
         return
 
-    log_prefix = f"{type(config_instance).__name__}"  # e.g., "RunnerConfig"
+    log_prefix = f"{type(config_instance).__name__}"  # e.g., "RUNNER_CONFIG"
 
     for key, value in custom_config_data.items():
         if isinstance(value, dict):
@@ -86,38 +87,16 @@ def main():
             )
             sys.exit(1)
 
-    # --- Import Core Logic ---
-    try:
-        import hakuriver.core.runner as runner_core
-
-        # Verify necessary components are exposed
-        if not hasattr(runner_core, "app"):
-            raise ImportError("Core runner module does not expose 'app' instance.")
-        if not hasattr(runner_core, "RunnerConfig"):  # Assuming you created this
-            raise ImportError(
-                "Core runner module does not expose 'RunnerConfig' instance."
-            )
-    except ImportError as e:
-        print(
-            f"Error: Failed to import or initialize core runner module: {e}",
-            file=sys.stderr,
-        )
-        print(
-            "Make sure HakuRiver is installed or accessible in PYTHONPATH.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
     # --- Apply Custom Config Overrides ---
     if custom_config_data:
         print("Applying custom configuration overrides...")
-        update_config(runner_core.RunnerConfig, custom_config_data)
+        update_config(runner_core.RUNNER_CONFIG, custom_config_data)
         print("Custom configuration applied.")
 
     # --- Execute: Run Uvicorn ---
     # Runner typically binds to 0.0.0.0
     runner_bind_ip = "0.0.0.0"
-    runner_port = runner_core.RunnerConfig.RUNNER_PORT
+    runner_port = runner_core.RUNNER_CONFIG.RUNNER_PORT
     print(f"Starting HakuRiver Runner agent on {runner_bind_ip}:{runner_port}...")
     try:
         uvicorn.run(
