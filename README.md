@@ -1,4 +1,4 @@
-# HakuRiver - Lightweight Docker-Powered Cluster Manager
+# HakuRiver - Shared Container Cluster
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
