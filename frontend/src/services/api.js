@@ -87,8 +87,4 @@ export default {
   getTarballs() {
     return apiClient.get('/docker/list');
   },
-  // Note: Backend endpoint for deleting specific tarball is needed
-  // deleteTarball(containerName, timestamp) {
-  //   return apiClient.delete(`/docker/tar/${containerName}/${timestamp}`);
-  // }
 };

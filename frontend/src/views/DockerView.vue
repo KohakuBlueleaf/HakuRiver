@@ -448,24 +448,6 @@ const setActionLoading = (containerName, action, isLoading) => {
   actionLoading[containerName][action] = isLoading;
 };
 
-// Placeholder for tarball delete (backend needed)
-// const handleDeleteTarball = (containerName, timestamp) => {
-//    ElMessageBox.confirm(`Are you sure you want to delete the tarball for '${containerName}' version ${formatUnixTimestamp(timestamp)}?`, 'Confirm Delete Tarball', {
-//         confirmButtonText: 'Delete',
-//         cancelButtonText: 'Cancel',
-//         type: 'warning',
-//         draggable: true,
-//       })
-//         .then(() => {
-//           // Call API to delete tarball
-//           // api.deleteTarball(containerName, timestamp).then(...)
-//           ElMessage({ message: 'Tarball deletion backend not implemented.', type: 'info' });
-//         })
-//         .catch(() => {
-//           ElMessage({ type: 'info', message: 'Delete cancelled.' });
-//         });
-// }
-
 // --- Lifecycle Hooks ---
 onMounted(() => {
   fetchContainers();

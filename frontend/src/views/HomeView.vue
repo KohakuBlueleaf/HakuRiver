@@ -281,10 +281,6 @@ const { width: cpuChartContainerWidth } = useElementSize(cpuChartContainerRef, {
 // Get the reactive width of the Memory chart container. Default to 300.
 const { width: memoryChartContainerWidth } = useElementSize(memoryChartContainerRef, { width: 300 }, { box: 'content-box' });
 
-// Use these reactive widths directly or create computeds if you need padding adjustments
-// For simplicity, let's use them directly now. Assuming the container has minimal padding.
-// You could refine this like: const cpuChartWidth = computed(() => Math.max(50, cpuChartContainerWidth.value - 20)); // Example with min width and padding subtraction
-
 // --- Health State & Polling ---
 const aggregatedHealthStats = ref(null);
 const isLoadingHealth = ref(false);
