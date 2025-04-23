@@ -1,8 +1,7 @@
 # HakuRiver - Shared Container Cluster
 
-| English (You are here) | 中文 |
+| [English (You are here)](./README.md) | [中文](./README.zh.md) |
 | :------ | :--- |
-| [English](./README.md) | [中文](./README.zh.md) |
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 

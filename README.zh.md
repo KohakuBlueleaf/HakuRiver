@@ -1,8 +1,7 @@
 # HakuRiver - 共享容器叢集
 
-| English | 中文 (你在這) |
+| [English](./README.md) | [中文 (你在這)](./README.zh.md) |
 | :------ | :--- |
-| [English](./README.md) | [中文](./README.zh.md) |
 
 [![授權](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
