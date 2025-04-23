@@ -157,7 +157,7 @@ OTHER_VAR=123"
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column prop="required_cores" label="Cores" sortable width="90"/>
+      <el-table-column prop="required_cores" label="Cores" sortable width="90" />
       <el-table-column prop="status" label="Status" sortable width="100">
         <template #default="scope">
           <el-tag :type="getTaskStatusType(scope.row.status)">

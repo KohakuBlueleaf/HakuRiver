@@ -204,7 +204,6 @@
         <!-- Memory History Chart -->
         <el-card shadow="hover" class="info-card">
           <template #header>Cluster Memory Usage History (%)</template>
-          <!-- Add ref="memoryChartContainerRef" here -->
           <div ref="memoryChartContainerRef" v-loading="isLoadingHealth" class="history-chart-container">
             <Chart
               v-if="!isLoadingHealth && !healthError && memoryHistory.length > 1"
@@ -263,7 +262,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { Chart, Pie, Line, Grid, Tooltip } from 'vue3-charts';
 import { useElementSize } from '@vueuse/core'; // Import useElementSize
 import api from '@/services/api';
-import { fetchHealthData, calculateAggregatedStats, formatBytesToGB } from '@/utils/health';
+import { calculateAggregatedStats, formatBytesToGB } from '@/utils/health';
 import { Warning, CircleClose, RefreshRight, Link as LinkIcon } from '@element-plus/icons-vue';
 
 // --- Config ---

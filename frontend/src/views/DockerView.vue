@@ -189,13 +189,8 @@
 import { ref, reactive, onMounted, computed } from 'vue';
 import api from '@/services/api';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { RefreshRight, Box } from '@element-plus/icons-vue'; // Import icons
-import {
-  formatContainerStatus,
-  getContainerStatusType,
-  formatUnixTimestamp,
-  parseTimestampFromTarballFilename, // Unused but good practice to import
-} from '@/utils/docker'; // Import new utils
+import { RefreshRight } from '@element-plus/icons-vue'; // Import icons
+import { formatContainerStatus, getContainerStatusType, formatUnixTimestamp } from '@/utils/docker'; // Import new utils
 
 // Import the TerminalModal component (assuming it exists)
 import TerminalModal from '@/components/TerminalModal.vue'; // Adjust path as needed
@@ -209,7 +204,7 @@ const isLoadingContainers = ref(false);
 const containerError = ref(null);
 
 // Tarballs tab state
-const sharedTarballs = ref({}); // { containerName: { latest_timestamp, latest_tarball, all_versions } }
+const sharedTarballs = ref({});
 const isLoadingTarballs = ref(false);
 const tarballError = ref(null);
 
@@ -481,9 +476,4 @@ onMounted(() => {
 .el-table :deep(.el-table__cell) {
   vertical-align: top;
 }
-
-/* Optional: Style for expandable row content */
-/* .docker-table .el-table__expanded-cell {
-    background-color: var(--el-fill-color-lighter) !important;
-} */
 </style>

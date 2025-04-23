@@ -193,8 +193,6 @@
                   <el-descriptions-item label="Memory">
                     {{ formatBytesForNuma(numaInfo.memory_bytes) }}
                   </el-descriptions-item>
-                  <!-- Optional: Add allocated resources per NUMA node later -->
-                  <!-- <el-descriptions-item label="Allocated Cores">{{ getAllocatedCoresForNuma(numaId) }}</el-descriptions-item> -->
                 </el-descriptions>
               </div>
               <el-empty v-else description="No NUMA topology reported by this node." :image-size="60" />

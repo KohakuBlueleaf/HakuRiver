@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, computed, onBeforeUnmount, nextTick } from 'vue';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css'; // Import Xterm.js CSS
@@ -231,10 +231,6 @@ onBeforeUnmount(() => {
 
 <style>
 .terminal-modal .el-dialog__body {
-  /* padding-top: 0;
-  padding-bottom: 0;
-  display: flex;
-  flex-direction: column; */
   height: calc(100% - 4.5rem);
 }
 </style>

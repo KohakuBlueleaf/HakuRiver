@@ -82,7 +82,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { House, Cpu, Tickets, Setting, Menu, ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
+import { House, Cpu, Tickets, Menu, ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
 
 // Responsive sidebar state
 const sidebarVisible = ref(true);
