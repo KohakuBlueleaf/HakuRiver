@@ -144,7 +144,7 @@ OTHER_VAR=123"
       highlight-current-row
       class="task-table"
     >
-      <el-table-column prop="task_id" label="Task ID" sortable />
+      <el-table-column prop="task_id" label="Task ID" sortable width="170" />
       <el-table-column prop="command" label="Command" show-overflow-tooltip />
       <el-table-column prop="arguments" label="Arguments">
         <template #default="scope">
@@ -157,8 +157,8 @@ OTHER_VAR=123"
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column prop="required_cores" label="Cores" sortable />
-      <el-table-column prop="status" label="Status" sortable>
+      <el-table-column prop="required_cores" label="Cores" sortable width="90"/>
+      <el-table-column prop="status" label="Status" sortable width="100">
         <template #default="scope">
           <el-tag :type="getTaskStatusType(scope.row.status)">
             {{ scope.row.status }}
@@ -167,14 +167,14 @@ OTHER_VAR=123"
         </template>
       </el-table-column>
       <el-table-column prop="assigned_node" label="Assigned Node" sortable />
-      <el-table-column prop="target_numa_node_id" label="Target NUMA" sortable width="130">
+      <el-table-column prop="target_numa_node_id" label="Target NUMA" sortable width="140">
         <template #default="scope">{{ scope.row.target_numa_node_id ?? 'Node Wide' }}</template>
       </el-table-column>
-      <el-table-column prop="submitted_at" label="Submitted" sortable>
+      <el-table-column prop="submitted_at" label="Submitted" sortable width="120">
         <template #default="scope">{{ formatDateTime(scope.row.submitted_at) }}</template>
       </el-table-column>
       <!-- Removed Started/Completed from main table for brevity -->
-      <el-table-column label="Actions" fixed="right">
+      <el-table-column label="Actions" fixed="right" width="100">
         <template #default="scope">
           <div class="action-buttons">
             <!-- Stop propagation to prevent row click when clicking buttons -->
