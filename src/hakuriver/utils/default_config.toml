@@ -53,7 +53,7 @@ default_container_name = "hakuriver-base"
 
 # The name of the initial Docker image to use if the default container tar
 # does not exist when the host starts. Ignored if the tar exists.
-initial_base_image = "python:3.12.10-bookworm"
+initial_base_image = "python:3.12.10-alpine3.21"
 
 # Whether tasks should run with --privileged flag inside Docker. Use with caution.
 tasks_privileged = false
