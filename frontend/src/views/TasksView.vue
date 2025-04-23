@@ -74,8 +74,10 @@ OTHER_VAR=123"
             loading-text="Loading available containers..."
             no-data-text="No container tarballs found"
           >
-            <el-option label="[Use Host Default]" value="" /> <!-- Empty string means use host default -->
-            <el-option label="[Systemd Fallback - No Docker]" value="NULL" /> <!-- Special value for systemd -->
+            <el-option label="[Use Host Default]" value="" />
+            <!-- Empty string means use host default -->
+            <el-option label="[Systemd Fallback - No Docker]" value="NULL" />
+            <!-- Special value for systemd -->
             <el-option
               v-for="containerName in availableContainerNames"
               :key="containerName"
@@ -83,7 +85,9 @@ OTHER_VAR=123"
               :value="containerName"
             />
           </el-select>
-            <el-text size="small" type="info">Select the Docker environment tarball to use. Default is configured on the Host.</el-text>
+          <el-text size="small" type="info"
+            >Select the Docker environment tarball to use. Default is configured on the Host.</el-text
+          >
         </el-form-item>
 
         <!-- ... (existing Target Node selection) ... -->
@@ -103,7 +107,6 @@ OTHER_VAR=123"
           </el-select>
           <el-text size="small" type="info">Select one or more nodes. Suffix :N targets NUMA node N.</el-text>
         </el-form-item>
-
       </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -666,7 +669,7 @@ const resetForm = () => {
   taskForm.env_vars_text = '';
   taskForm.memory_limit_str = '';
   taskForm.selectedTargets = [];
-  taskForm.container_name = ''; 
+  taskForm.container_name = '';
   taskForm.privileged = false;
   taskForm.additional_mounts = [];
 };

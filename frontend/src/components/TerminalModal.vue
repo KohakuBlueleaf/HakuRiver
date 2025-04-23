@@ -9,7 +9,7 @@
     @open="handleOpen"
     @closed="handleClosed"
     class="terminal-modal"
-    style="height: 90vh; max-height: 100vh;"
+    style="height: 90vh; max-height: 100vh"
   >
     <div ref="terminalContainer" class="terminal-container"></div>
 
@@ -240,7 +240,6 @@ onBeforeUnmount(() => {
 </style>
 
 <style scoped>
-
 .terminal-container {
   flex-grow: 1;
   /* Override default background if needed, or let xterm theme handle it */
