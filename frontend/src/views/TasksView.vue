@@ -518,7 +518,10 @@ const fetchAvailableContainers = async () => {
   try {
     const response = await api.getTarballs(); // Assuming api.getTarballs exists from previous step
     // The response data is an object like { "containerName1": {...}, "containerName2": {...} }
-    availableContainerNames.value = Object.keys(response.data).sort(); // Get keys (names) and sort them
+    availableContainerNames.value = Object.keys(response.data).sort((a, b) => {
+      // Sort based on latest update time
+      return response.data[b].latest_timestamp - response.data[a].latest_timestamp;
+    });
   } catch (error) {
     console.error('Error fetching available containers:', error);
     containerOptionsError.value = error.response?.data?.detail || error.message || 'Failed to load available containers.';
