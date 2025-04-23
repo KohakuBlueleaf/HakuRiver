@@ -23,16 +23,15 @@ def import_function(import_string):
     module_name, *function_name_parts = import_string.split(":")
     try:
         module = importlib.import_module(module_name)
-    except ImportError as e:
-        # Take import_string as general scritps:
+    except ImportError:
         return import_string
 
     if not function_name_parts:
         return None
 
     function_name = function_name_parts[0]
-    function = getattr(module, function_name)
-    return function
+    func = getattr(module, function_name)
+    return func
 
 
 def parse_spanning(arg_str):

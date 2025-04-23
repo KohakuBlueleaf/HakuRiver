@@ -58,9 +58,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Command: list (containers on Host)
-    parser_list_containers = subparsers.add_parser(
-        "list-containers", help="List Docker containers on the Host."
-    )
+    subparsers.add_parser("list-containers", help="List Docker containers on the Host.")
 
     # Command: create (container on Host)
     parser_create_container = subparsers.add_parser(
@@ -98,7 +96,7 @@ def main():
     )
 
     # Command: list-tars (tarballs in shared dir)
-    parser_list_tars = subparsers.add_parser(
+    subparsers.add_parser(
         "list-tars",
         help="List available HakuRiver container tarballs in the shared directory.",
     )

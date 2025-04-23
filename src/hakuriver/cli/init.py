@@ -120,9 +120,7 @@ def _main():
     subparsers = parser.add_subparsers(dest="command")
 
     # Config subcommand - handles the existing functionality
-    config_parser = subparsers.add_parser(
-        "config", help="Initialize default configuration"
-    )
+    subparsers.add_parser("config", help="Initialize default configuration")
 
     # Service subcommand - new functionality
     service_parser = subparsers.add_parser(
@@ -185,7 +183,7 @@ def _main():
             if result.returncode == 0:
                 logger.info("Service files moved to /etc/systemd/system/")
             else:
-                logger.error(f"Failed to move service files.")
+                logger.error("Failed to move service files.")
                 return 1
         systemctl_cmd = ["sudo", "systemctl", "daemon-reload"]
         result = subprocess.run(systemctl_cmd)
@@ -210,11 +208,9 @@ def main():
     _main()
     result1 = result2 = 0
     if os.path.exists("hakuriver-host.service"):
-        clean_cmd1 = ["rm", "hakuriver-host.service"]
-        result1 = subprocess.run(clean_cmd1).returncode
+        result1 = subprocess.run(["rm hakuriver-host.service"]).returncode
     if os.path.exists("hakuriver-runner.service"):
-        clean_cmd2 = ["rm", "hakuriver-runner.service"]
-        result2 = subprocess.run(clean_cmd2).returncode
+        result2 = subprocess.run(["rm hakuriver-runner.service"]).returncode
     if not any([result1, result2]):
         logger.info("Temporary service files cleaned up.")
     else:
