@@ -61,6 +61,8 @@ It provides resource allocation (CPU/memory limits), multi-node/NUMA task submis
 1.  **Install HakuRiver** (on Host, Runners, and Client machine):
     ```bash
     # Using pip (recommended)
+    python -m pip install hakuriver
+    # Or install from source (latest version)
     python -m pip install git+https://github.com/KohakuBlueleaf/HakuRiver.git
     # Or clone and install locally
     # git clone https://github.com/KohakuBlueleaf/HakuRiver.git

@@ -61,6 +61,8 @@
 1. **安裝 HakuRiver**（在中央管理機、運行機和客戶端機器上）：
    ```bash
    # 使用 pip（推薦）
+   python -m pip install hakuriver
+   # 使用 pip 從 GitHub 安裝（最新版本）
    python -m pip install git+https://github.com/KohakuBlueleaf/HakuRiver.git
    # 或克隆並本地安裝
    # git clone https://github.com/KohakuBlueleaf/HakuRiver.git
