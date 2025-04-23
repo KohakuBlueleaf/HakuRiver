@@ -10,6 +10,49 @@
 
 It provides resource allocation (CPU/memory limits), multi-node/NUMA task submission, and status tracking, making it ideal for research labs, small-to-medium teams, home labs, or development environments needing simple, reproducible distributed task execution without the overhead of complex HPC schedulers.
 
+## Introduction to HakuRiver
+
+### Problem Statement
+
+Researchers and small teams often face a challenging middle ground when working with a modest number of compute nodes (typically 3-8 machines). This creates an awkward situation:
+
+- **Too many machines** to manage manually with SSH and shell scripts
+- **Too few machines** to justify the overhead of complex HPC schedulers like Slurm
+- **Unsuitable complexity** of container orchestration systems like Kubernetes for simple task distribution
+
+You have these powerful compute resources at your disposal, but no efficient way to utilize them as a unified computing resource without significant operational overhead.
+
+### Core Concept: Your Nodes as One Big Computer
+
+HakuRiver addresses this problem by letting you treat your small cluster as a single powerful computer, with these key design principles:
+
+- **Lightweight Resource Management**: Distribute command-line tasks across your nodes with minimal setup
+- **Environment Consistency**: Use Docker containers as portable virtual environments, not as complex application deployments
+- **Seamless Synchronization**: Automatically distribute container environments to runners without manual setup on each node
+- **Familiar Workflow**: Submit tasks through a simple interface that feels like running a command on your local machine
+
+> Docker in HakuRiver functions as a virtual environment that can be dynamically adjusted and automatically synchronized. You can run dozens of tasks using the same container environment, but execute them on completely different nodes.
+
+### How It Works
+
+1. **Environment Management**: Create and customize Docker containers on the Host node through interactive shells
+2. **Package & Distribute**: The environment is packaged as a tarball and stored in shared storage
+3. **Automatic Synchronization**: Runner nodes automatically fetch the required environment before executing tasks
+4. **Parallel Execution**: Submit single commands or batches to run across multiple nodes, with each task isolated in its own container instance
+
+This approach aligns with the philosophy that:
+
+> For a small local cluster, you should prioritize solutions that are "lightweight, simple, and just sufficient." You shouldn't need to package every command into a complex Dockerfile - Docker's purpose here is environment management and synchronization.
+
+HakuRiver is built on the assumption that in small local clusters:
+
+- Nodes can easily establish network communication
+- Shared storage is readily available
+- Doesn't require autehntication or the complexity can be minimized
+- High availability and fault tolerance are less critical at this scale
+
+By focusing on these practical realities of small-scale computing, HakuRiver provides a "just right" solution for multi-node task execution without the administrative burden of enterprise-grade systems.
+
 ---
 
 ## 🤔 What HakuRiver Is (and Isn't)
