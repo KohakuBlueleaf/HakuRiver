@@ -32,9 +32,9 @@ export default {
       required_cores: taskData.required_cores,
       required_memory_bytes: taskData.required_memory_bytes,
       targets: taskData.targets,
-      container_name: taskData.container_name, // Add container_name to payload
-      privileged: taskData.privileged, // Add privileged to payload
-      additional_mounts: taskData.additional_mounts, // Add additional_mounts to payload
+      container_name: taskData.container_name,
+      privileged: taskData.privileged,
+      additional_mounts: taskData.additional_mounts,
     };
     Object.keys(payload).forEach((key) => payload[key] == null && delete payload[key]);
     return apiClient.post('/submit', payload).then((response) => response.data);
@@ -57,7 +57,7 @@ export default {
     return logClient.get(`/task/${taskId}/stdout`);
   },
   getTaskStderr(taskId) {
-    return logClient.get(`/task/{taskId}/stderr`);
+    return logClient.get(`/task/${taskId}/stderr`);
   },
   getHealth(hostname = null) {
     const params = hostname ? { hostname } : {};
