@@ -3,13 +3,13 @@
   <el-dialog
     v-model="dialogVisible"
     :title="`Shell: ${containerName}`"
-    width="80%"
+    width="90vw"
     top="5vh"
     :close-on-click-modal="false"
     @open="handleOpen"
     @closed="handleClosed"
-    draggable
     class="terminal-modal"
+    style="height: 90vh; max-height: 100vh;"
   >
     <div ref="terminalContainer" class="terminal-container"></div>
 
@@ -227,31 +227,26 @@ const sendResizeMessage = () => {
 onBeforeUnmount(() => {
   disposeTerminal();
 });
-
-// Optionally re-initialize if containerName changes while modal is open
-// watch(() => props.containerName, (newName) => {
-//     if (dialogVisible.value && newName) {
-//          handleOpen(); // Reconnect to new container
-//     } else if (!newName) {
-//          dialogVisible.value = false; // Close if container name becomes null
-//     }
-// });
 </script>
 
-<style scoped>
-.terminal-modal :deep(.el-dialog__body) {
-  padding-top: 0;
+<style>
+.terminal-modal .el-dialog__body {
+  /* padding-top: 0;
   padding-bottom: 0;
-  min-height: 400px; /* Ensure terminal has some height */
   display: flex;
-  flex-direction: column;
+  flex-direction: column; */
+  height: calc(100% - 4.5rem);
 }
+</style>
+
+<style scoped>
 
 .terminal-container {
   flex-grow: 1;
   /* Override default background if needed, or let xterm theme handle it */
   background-color: var(--el-color-black); /* Dark background for terminal area */
   position: relative; /* Needed for absolute positioning of overlay */
+  height: 100%;
 }
 
 /* Overlay for loading/error */
