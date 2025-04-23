@@ -369,7 +369,6 @@ const targetOptions = computed(() => {
   return options;
 });
 
-
 const validateMemoryString = (rule, value, callback) => {
   if (!value) {
     callback(); // Optional field
