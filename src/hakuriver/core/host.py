@@ -1245,7 +1245,6 @@ async def startup_event():
     default_container_name = HOST_CONFIG.DEFAULT_CONTAINER_NAME
     container_tar_dir = HOST_CONFIG.CONTAINER_DIR
     initial_base_image = HOST_CONFIG.INITIAL_BASE_IMAGE
-    print(container_tar_dir)
 
     if not os.path.isdir(container_tar_dir):
         logger.warning(
@@ -1278,26 +1277,26 @@ async def startup_event():
             image_name=initial_base_image,
             container_name=default_container_name,
         )
+        tarball_path = docker_utils.create_container_tar(
+            source_container_name=default_container_name,
+            hakuriver_container_name=default_container_name,
+            container_tar_dir=container_tar_dir,
+        )
+        if tarball_path:
+            logger.info(
+                f"Default container tarball created successfully at {tarball_path}. "
+                "Runners can now sync this base image."
+            )
+        else:
+            logger.error(
+                f"Failed to create default container tarball from '{initial_base_image}'. "
+                "Runners may not be able to fetch the base image."
+            )
     else:
         latest_timestamp, latest_path = shared_tars[0]
         logger.info(
             f"Found existing shared tarball for default container '{default_container_name}' "
         )
-    # tarball_path = docker_utils.create_container_tar(
-    #     source_container_name=default_container_name,
-    #     hakuriver_container_name=default_container_name,
-    #     container_tar_dir=container_tar_dir,
-    # )
-    # if tarball_path:
-    #     logger.info(
-    #         f"Default container tarball created successfully at {tarball_path}. "
-    #         "Runners can now sync this base image."
-    #     )
-    # else:
-    #     logger.error(
-    #         f"Failed to create default container tarball from '{initial_base_image}'. "
-    #         "Runners may not be able to fetch the base image."
-    #     )
 
     # Start background task AFTER app starts running
     asyncio.create_task(check_dead_runners())
