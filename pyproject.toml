@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hakuriver"
-version = "0.0.1"
-description = "A multi-node resource management tool with CPU core as unit."
+version = "0.1.0"
+description = "A lightweight clustering tool with Docker container as virtual env."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
