@@ -1257,10 +1257,6 @@ async def startup_event():
             logger.critical(
                 f"FATAL: Cannot create shared directory '{container_tar_dir}': {e}. Host cannot start."
             )
-            # Exit or prevent startup? For now, log critical and hope manual fix happens.
-            # Raising an exception here would prevent uvicorn start.
-            # Consider alternative: run server but disable features requiring container_tar_dir?
-            pass  # Continue starting, but features may fail
 
     # Check if any tarball for the default container name exists
     shared_tars = docker_utils.list_shared_container_tars(

@@ -165,14 +165,7 @@ def list_nodes():
             response = client.get(url)
             response.raise_for_status()
             logger.info("--- Nodes Status ---")
-            # print_response can dump the full JSON including numa_topology
             print_response(response)
-            # Optional: Add custom formatting here later if print_response isn't sufficient
-            # nodes_data = response.json()
-            # for node in nodes_data:
-            #     print(f"Hostname: {node['hostname']}, Status: {node['status']}, Cores: {node['total_cores']}...")
-            #     if node.get('numa_topology'):
-            #         print(f"  NUMA Topology: {json.dumps(node['numa_topology'], indent=4)}")
 
     except httpx.HTTPStatusError as e:
         logger.error("--- Error ---")
