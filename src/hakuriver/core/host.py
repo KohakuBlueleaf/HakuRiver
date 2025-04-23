@@ -65,7 +65,7 @@ class TaskRequest(BaseModel):
     @classmethod
     def validate_targets_format(cls, v):
         if v is None:
-            return v
+            return None
         pattern = r"^[a-zA-Z0-9.-]+(:[0-9]+)?$"  # hostname[:numa_id]
         for target in v:
             if not re.match(pattern, target):
@@ -447,7 +447,7 @@ async def get_task_stderr(task_id: int):
     logger.debug(f"Request received for stderr of task {task_id}")
     task = Task.get_or_none(Task.task_id == task_id)
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail="Task entry not found")
 
     log_path = get_secure_log_path(task, "stderr")
     if not log_path:
@@ -813,7 +813,7 @@ async def get_task_status(task_id: int):
     )
 
     if not query:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail="Task id not found")
     task: Task = query  # The query itself is the Task object here
 
     response = {
@@ -1034,7 +1034,7 @@ async def send_command_to_task(task_id: int, command: str):
     task: Task = Task.get_or_none(Task.task_id == task_id)
     if not task:
         logger.warning(f"Received command for unknown task ID: {task_id}. Ignoring.")
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail="Task id not found")
     match (command, task.status):
         case ("pause", "running"):
             unit_name = task.systemd_unit_name
