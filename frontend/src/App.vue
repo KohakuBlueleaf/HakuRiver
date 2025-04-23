@@ -44,9 +44,7 @@
               <template #title>Tasks</template>
             </el-menu-item>
             <el-menu-item index="/docker">
-              <!-- New menu item -->
-              <el-icon><Box /></el-icon>
-              <!-- Assuming Box icon from Element Plus icons -->
+              <el-icon><Cellphone /></el-icon>
               <template #title>Docker</template>
             </el-menu-item>
           </el-menu>
