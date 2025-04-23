@@ -22,6 +22,7 @@
         label-position="top"
         @submit.prevent="handleTaskSubmit"
       >
+        <!-- ... (existing Command, Arguments, Env Vars items) ... -->
         <el-form-item label="Command" prop="command">
           <el-input v-model="taskForm.command" placeholder="e.g., /path/to/shared/scripts/my_script.sh or python" />
         </el-form-item>
@@ -63,6 +64,30 @@ OTHER_VAR=123"
           </el-col>
         </el-row>
 
+        <!-- Container Selection (NEW) -->
+         <el-form-item label="Container Environment" prop="container_name">
+            <el-select
+              v-model="taskForm.container_name"
+              clearable
+              placeholder="Select container or use default"
+              style="width: 100%"
+              :loading="isLoadingContainerOptions"
+              loading-text="Loading available containers..."
+              no-data-text="No container tarballs found"
+            >
+              <el-option label="[Use Host Default]" value="" /> <!-- Empty string means use host default -->
+              <el-option label="[Systemd Fallback - No Docker]" value="NULL" /> <!-- Special value for systemd -->
+              <el-option
+                v-for="containerName in availableContainerNames"
+                :key="containerName"
+                :label="containerName"
+                :value="containerName"
+              />
+            </el-select>
+             <el-text size="small" type="info">Select the Docker environment tarball to use. Default is configured on the Host.</el-text>
+          </el-form-item>
+
+        <!-- ... (existing Target Node selection) ... -->
         <el-form-item label="Target Node(s) / NUMA Node(s)" prop="selectedTargets">
           <el-select
             v-model="taskForm.selectedTargets"
@@ -79,6 +104,7 @@ OTHER_VAR=123"
           </el-select>
           <el-text size="small" type="info">Select one or more nodes. Suffix :N targets NUMA node N.</el-text>
         </el-form-item>
+
       </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -330,11 +356,18 @@ const taskForm = reactive({
   required_cores: 0,
   memory_limit_str: '', // Input as string (e.g., "512M")
   selectedTargets: [], // Holds the array of selected target strings, e.g., ["host1:0", "host2"]
+  container_name: '', // Holds the selected container name
+  privileged: false, // Checkbox for privileged mode
+  additional_mounts: [], // Array of additional mounts
 });
 
 const availableNodes = ref([]); // Raw node data from API
 const isLoadingNodes = ref(false);
 const nodesError = ref(null);
+
+const availableContainerNames = ref([]); // Just the list of names (strings)
+const isLoadingContainerOptions = ref(false);
+const containerOptionsError = ref(null);
 
 const targetOptions = computed(() => {
   const options = [];
@@ -476,6 +509,22 @@ const fetchAvailableNodes = async () => {
   }
 };
 
+const fetchAvailableContainers = async () => {
+  isLoadingContainerOptions.value = true;
+  containerOptionsError.value = null;
+  availableContainerNames.value = [];
+  try {
+    const response = await api.getTarballs(); // Assuming api.getTarballs exists from previous step
+    // The response data is an object like { "containerName1": {...}, "containerName2": {...} }
+    availableContainerNames.value = Object.keys(response.data).sort(); // Get keys (names) and sort them
+  } catch (error) {
+    console.error('Error fetching available containers:', error);
+    containerOptionsError.value = error.response?.data?.detail || error.message || 'Failed to load available containers.';
+  } finally {
+    isLoadingContainerOptions.value = false;
+  }
+};
+
 const submitTaskApi = async (formData) => {
   isSubmitting.value = true;
   try {
@@ -603,6 +652,7 @@ const fetchStderr = async () => {
 // --- Dialog and Form Handling ---
 const openSubmitDialog = () => {
   fetchAvailableNodes();
+  fetchAvailableContainers();
   submitDialogVisible.value = true;
 };
 
@@ -614,6 +664,9 @@ const resetForm = () => {
   taskForm.env_vars_text = '';
   taskForm.memory_limit_str = '';
   taskForm.selectedTargets = [];
+  taskForm.container_name = ''; 
+  taskForm.privileged = false;
+  taskForm.additional_mounts = [];
 };
 
 const handleTaskSubmit = async () => {
