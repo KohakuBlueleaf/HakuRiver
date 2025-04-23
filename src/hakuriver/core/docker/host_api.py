@@ -23,7 +23,7 @@ async def list_host_containers():
     try:
         # Use docker ps with JSON format for easy parsing
         # -a includes stopped containers which might be relevant for persistent ones
-        cmd = ["docker", "ps", "-a", "--format", "{{json .}}"]
+        cmd = ["docker", "ps", "-a", "--format", "{{json .}}", "--size=false"]
         result = await asyncio.get_event_loop().run_in_executor(
             None,
             docker_utils._run_command,  # Use the utility function
