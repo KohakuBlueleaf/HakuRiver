@@ -43,6 +43,12 @@
               <el-icon><Tickets /></el-icon>
               <template #title>Tasks</template>
             </el-menu-item>
+            <el-menu-item index="/docker">
+              <!-- New menu item -->
+              <el-icon><Box /></el-icon>
+              <!-- Assuming Box icon from Element Plus icons -->
+              <template #title>Docker</template>
+            </el-menu-item>
           </el-menu>
         </el-scrollbar>
       </el-aside>
@@ -106,8 +112,7 @@ const currentPageTitle = computed(() => {
   if (path === '/') return 'Dashboard';
   if (path === '/nodes') return 'Nodes';
   if (path === '/tasks') return 'Tasks';
-  if (path.startsWith('/settings/general')) return 'General Settings';
-  if (path.startsWith('/settings/profile')) return 'Profile Settings';
+  if (path === '/docker') return 'Docker'; // New page title
   // Add more cases as needed
   return 'HakuRiver';
 });

@@ -20,7 +20,11 @@ const routes = [
     // Lazy-loaded component
     component: () => import('../views/TasksView.vue'),
   },
-  // Add other routes as needed
+  {
+    path: '/docker',
+    name: 'docker',
+    component: () => import('../views/DockerView.vue'), // Assuming DockerView.vue will be the main view
+  },
 ];
 
 const router = createRouter({
