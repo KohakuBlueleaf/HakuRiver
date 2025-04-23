@@ -9,6 +9,10 @@ import api from '@/services/api';
 export async function fetchHealthData(hostname = null) {
   // No error handling here, let the caller handle it.
   const response = await api.getHealth(hostname);
+  if(!hostname){
+    const newStats = response.data.nodes;
+    return newStats[newStats.length - 1]
+  }
   return response.data || []; // Ensure we return an array
 }
 

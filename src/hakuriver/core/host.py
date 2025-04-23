@@ -1161,6 +1161,7 @@ async def collate_health_data():
         }
         for node in Node.select():
             new_node_health[node.hostname] = {
+                "hostname": node.hostname,
                 "status": node.status,
                 "last_heartbeat": (
                     node.last_heartbeat.isoformat() if node.last_heartbeat else None
@@ -1170,6 +1171,7 @@ async def collate_health_data():
                 "memory_used_bytes": node.memory_used_bytes,
                 "memory_total_bytes": node.memory_total_bytes,
                 "total_cores": node.total_cores,
+                "numa_topology": json.loads(node.numa_topology),  # Parse JSON from DB
             }
             aggregate_health["totalNodes"] += 1
             if node.status == "online":
