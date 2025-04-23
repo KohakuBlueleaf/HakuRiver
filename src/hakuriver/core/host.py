@@ -66,7 +66,7 @@ class TaskRequest(BaseModel):
     def validate_targets_format(cls, v):
         if v is None:
             return None
-        pattern = r"^[a-zA-Z0-9.-]+(:[0-9]+)?$"  # hostname[:numa_id]
+        pattern = r"^[a-zA-Z0-9.-]+(:\d+)?$"  # hostname[:numa_id]
         for target in v:
             if not re.match(pattern, target):
                 raise ValueError(
@@ -183,8 +183,6 @@ async def send_task_to_runner(runner_url: str, task_info: TaskInfoForRunner):
         if task and task.status == "assigning":
             # Keep as assigning until runner confirms start
             pass
-            # task.status = 'running' # Optimistic - Reverted
-            # task.save()
     except httpx.RequestError as e:
         logger.error(f"Failed to contact runner {runner_url} for task {task_id}: {e}")
 
@@ -544,7 +542,6 @@ async def submit_task(req: TaskRequest):
     """Accepts a task request and dispatches it to one or more target nodes/NUMA nodes."""
     created_task_ids = []
     failed_targets = []
-    current_batch_id = None
     first_task_id_for_batch = None
 
     output_dir = os.path.join(HOST_CONFIG.SHARED_DIR, "task_outputs")
@@ -1014,7 +1011,7 @@ async def request_kill_task(task_id: int):
     ):
         runner_url = task.assigned_node.url
         logger.info(
-            f"Requesting kill confirmation from runner "
+            "Requesting kill confirmation from runner "
             f"{task.assigned_node.hostname} for task {task_id}"
         )
         asyncio.create_task(send_kill_to_runner(runner_url, task_id, unit_name))
@@ -1291,7 +1288,6 @@ async def startup_event():
                 "Runners may not be able to fetch the base image."
             )
     else:
-        latest_timestamp, latest_path = shared_tars[0]
         logger.info(
             f"Found existing shared tarball for default container '{default_container_name}' "
         )

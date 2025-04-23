@@ -168,7 +168,7 @@ async def terminal_websocket_endpoint(
                         f"Timeout while reading from container socket for '{container_name}'."
                     )
                     continue  # Continue reading
-                except (BrokenPipeError, OSError) as e:
+                except BrokenPipeError as e:
                     logger.info(
                         f"Container socket error (output) for '{container_name}': {e}. Assuming disconnect."
                     )
@@ -187,7 +187,7 @@ async def terminal_websocket_endpoint(
                                 data=f"\r\nError reading from container: {e}\r\n",
                             ).model_dump()
                         )
-                    except:
+                    except Exception as e:
                         pass
                     break  # Stop this task on error
 
@@ -250,7 +250,7 @@ async def terminal_websocket_endpoint(
         output_task = asyncio.create_task(handle_output())
 
         # Wait for either task to complete (e.g., socket closes, WebSocket disconnects)
-        done, pending = await asyncio.wait(
+        _, pending = await asyncio.wait(
             [input_task, output_task], return_when=asyncio.FIRST_COMPLETED
         )
 
@@ -277,7 +277,7 @@ async def terminal_websocket_endpoint(
                     type="error", data=f"Docker API Error: {e}\r\n"
                 ).model_dump()
             )
-        except:
+        except Exception as e:
             pass  # Ignore send error if websocket is already closed
     except Exception as e:
         logger.exception(
@@ -290,7 +290,7 @@ async def terminal_websocket_endpoint(
                     type="error", data=f"Unexpected Server Error: {e}\r\n"
                 ).model_dump()
             )
-        except:
+        except Exception as e:
             pass  # Ignore send error if websocket is already closed
     finally:
         logger.info(
@@ -308,5 +308,5 @@ async def terminal_websocket_endpoint(
         # Ensure WebSocket is closed from server-side if not already
         try:
             await websocket.close(code=1000)  # Normal closure
-        except:
+        except Exception as e:
             pass  # Ignore if already closed

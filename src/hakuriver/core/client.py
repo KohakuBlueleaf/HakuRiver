@@ -1,7 +1,6 @@
 import json
 import sys
 import httpx
-from hakuriver.utils.config_loader import settings
 from hakuriver.utils.logger import logger
 from hakuriver.core.config import CLIENT_CONFIG
 
@@ -94,13 +93,10 @@ def submit_task(
                 )
                 return None
     except httpx.HTTPStatusError as e:
-        logger.error("--- Submission Error ---")
         print_response(e.response)  # Print detailed error from host
     except httpx.RequestError as e:
-        logger.error(f"--- Connection Error ---")
         logger.error(f"Error connecting to host at {url}: {e}")
     except Exception as e:
-        logger.error("--- Unexpected Error ---")
         logger.exception(
             f"An unexpected error occurred during submission: {e}"
         )  # Use logger.exception
@@ -124,13 +120,10 @@ def check_status(task_id: str) -> str | None:
                 print("Warning: Could not parse status from response.", file=sys.stderr)
                 return None
     except httpx.HTTPStatusError as e:
-        print("--- Error ---")
         print_response(e.response)
     except httpx.RequestError as e:
-        print("--- Connection Error ---")
         print(f"Error connecting to host at {url}: {e}")
     except Exception as e:
-        print("--- Unexpected Error ---")
         print(f"An unexpected error occurred: {e}")
     return None
 
@@ -146,13 +139,10 @@ def kill_task(task_id: str):
             print("--- Kill Request Response ---")
             print_response(response)
     except httpx.HTTPStatusError as e:
-        print("--- Error ---")
         print_response(e.response)
     except httpx.RequestError as e:
-        print("--- Connection Error ---")
         print(f"Error connecting to host at {url}: {e}")
     except Exception as e:
-        print("--- Unexpected Error ---")
         print(f"An unexpected error occurred: {e}")
 
 
@@ -168,13 +158,10 @@ def list_nodes():
             print_response(response)
 
     except httpx.HTTPStatusError as e:
-        logger.error("--- Error ---")
         print_response(e.response)
     except httpx.RequestError as e:
-        logger.error(f"--- Connection Error ---")
         logger.error(f"Error connecting to host at {url}: {e}")
     except Exception as e:
-        logger.error("--- Unexpected Error ---")
         logger.exception(f"An unexpected error occurred: {e}")  # Use logger.exception
 
 
@@ -198,11 +185,8 @@ def get_health(hostname: str | None = None):
             # Optional: Add custom formatting here later
 
     except httpx.HTTPStatusError as e:
-        logger.error("--- Error ---")
         print_response(e.response)
     except httpx.RequestError as e:
-        logger.error(f"--- Connection Error ---")
         logger.error(f"Error connecting to host at {url}: {e}")
     except Exception as e:
-        logger.error("--- Unexpected Error ---")
         logger.exception(f"An unexpected error occurred: {e}")  # Use logger.exception

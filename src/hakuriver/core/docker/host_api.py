@@ -60,15 +60,12 @@ async def list_host_containers():
         return containers
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to list Host containers: {e.stderr}")
         raise HTTPException(
             status_code=500, detail=f"Docker command failed: {e.stderr}"
         )
     except FileNotFoundError:
-        logger.error("Docker command not found on Host.")
-        raise HTTPException(status_code=503, detail="Docker not found on Host.")
+        raise HTTPException(status_code=503)
     except Exception as e:
-        logger.exception("Unexpected error listing Host containers.")
         raise HTTPException(
             status_code=500, detail="Unexpected error listing containers."
         )
@@ -126,8 +123,7 @@ async def delete_host_container(container_name: str = Path(...)):
                 detail=f"Failed to delete container '{container_name}'. Check Host logs.",
             )
     except FileNotFoundError:
-        logger.error("Docker command not found on Host.")
-        raise HTTPException(status_code=503, detail="Docker not found on Host.")
+        raise HTTPException(status_code=503)
     except Exception as e:
         logger.exception(
             f"Unexpected error deleting host container '{container_name}'."
@@ -153,8 +149,7 @@ async def stop_host_container(container_name: str = Path(...)):
                 detail=f"Failed to stop container '{container_name}'. Check Host logs.",
             )
     except FileNotFoundError:
-        logger.error("Docker command not found on Host.")
-        raise HTTPException(status_code=503, detail="Docker not found on Host.")
+        raise HTTPException(status_code=503)
     except Exception as e:
         logger.exception(
             f"Unexpected error stopping host container '{container_name}'."
@@ -182,8 +177,7 @@ async def start_host_container(container_name: str = Path(...)):
                 detail=f"Failed to start container '{container_name}'. Check Host logs.",
             )
     except FileNotFoundError:
-        logger.error("Docker command not found on Host.")
-        raise HTTPException(status_code=503, detail="Docker not found on Host.")
+        raise HTTPException(status_code=503)
     except Exception as e:
         logger.exception(
             f"Unexpected error starting host container '{container_name}'."
@@ -247,8 +241,7 @@ async def create_container_tar_endpoint(
             logger.error(detail)
             raise HTTPException(status_code=500, detail=detail)
     except FileNotFoundError:
-        logger.error("Docker command not found on Host.")
-        raise HTTPException(status_code=503, detail="Docker not found on Host.")
+        raise HTTPException(status_code=503)
     except Exception as e:
         logger.exception(
             f"Unexpected error during tar creation for '{container_name}'."

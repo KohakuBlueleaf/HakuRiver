@@ -143,10 +143,9 @@ def delete_container(container_name: str) -> bool:
         return True
     except subprocess.CalledProcessError as e:
         # Specific error logging is handled by _run_command check=True
-        logger.error(f"Failed to delete container '{container_name}'.")
+        logger.error(f"Failed to delete container '{container_name}': {e}")
         return False
     except FileNotFoundError:
-        logger.error("Docker command not found.")
         return False
     except Exception as e:
         logger.exception(
@@ -181,11 +180,10 @@ def stop_container(container_name: str) -> bool:
             )
             return False
     except FileNotFoundError:
-        logger.error("Docker command not found.")
         return False
     except Exception as e:
         logger.exception(
-            f"An unexpected error occurred during stopping of '{container_name}'."
+            f"An unexpected error occurred during stopping of '{container_name}': {e}."
         )
         return False
 
@@ -206,10 +204,9 @@ def start_container(container_name: str) -> bool:
         logger.info(f"Container '{container_name}' started successfully.")
         return True
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to start container '{container_name}'.")
+        logger.error(f"Failed to start container '{container_name}': {e}.")
         return False
     except FileNotFoundError:
-        logger.error("Docker command not found.")
         return False
     except Exception as e:
         logger.exception(
@@ -299,7 +296,7 @@ def create_container_tar(
         # Attempt cleanup of the HakuRiver tagged image if it was created but failed later
         try:
             _run_command(["docker", "rmi", "--force", hakuriver_image_tag], check=False)
-        except:
+        except Exception as e:
             pass  # Ignore cleanup errors here
         return None
     except Exception as e:

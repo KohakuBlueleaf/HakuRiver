@@ -32,7 +32,7 @@ try:
         )  # Use .get for safety
 
 except Exception as e:
-    logger.warning(f"Failed to load config for host")
+    logger.warning("Failed to load config for host")
     logger.debug(f"Error: {e}", exc_info=True)
 
     class HostConfig:
@@ -69,7 +69,7 @@ try:
         )
 
 except Exception as e:
-    logger.warning(f"Failed to load config for runner")
+    logger.warning("Failed to load config for runner")
     logger.debug(f"Error: {e}", exc_info=True)
 
     class RunnerConfig:
@@ -126,7 +126,7 @@ try:
                 )
 
 except Exception as e:
-    logger.warning(f"Failed to load config for client")
+    logger.warning("Failed to load config for client")
     logger.debug(f"Error: {e}", exc_info=True)
 
     class ClientConfig:

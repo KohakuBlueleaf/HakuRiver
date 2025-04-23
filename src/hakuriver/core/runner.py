@@ -431,7 +431,7 @@ async def run_task_background(task_info: TaskInfo):
         }
 
         # Wait for systemd-run command to finish
-        stdout, stderr = await systemd_process.communicate()
+        _, stderr = await systemd_process.communicate()
         exit_code = systemd_process.returncode
 
         if exit_code == 0:
@@ -703,7 +703,7 @@ async def pause_task(body: dict = Body(...)):
                         f"Failed to find process for task {task_id}."
                         f"\nOutput: {process.stdout}"
                     )
-                    raise Exception(
+                    raise RuntimeError(
                         f"Failed to find process for task {task_id}.\nOutput: {process.stdout}"
                     )
                 pid = result.group(1)
@@ -712,7 +712,7 @@ async def pause_task(body: dict = Body(...)):
             stop_cmd = ["sudo", "kill", "-s", "SIGSTOP", str(pid)]
             result = subprocess.run(stop_cmd, check=False, timeout=1)
             if result.returncode != 0:
-                raise Exception(f"Failed to pause task {task_id} using kill.")
+                raise RuntimeError(f"Failed to pause task {task_id} using kill.")
             paused_processes[task_id] = running_processes.pop(task_id)
             paused_processes[task_id]["task_pid"] = pid  # Store the paused PID
         else:
@@ -763,7 +763,7 @@ async def resume_task(body: dict = Body(...)):
             resume_cmd = ["sudo", "kill", "-s", "SIGCONT", str(task_pid)]
             result = subprocess.run(resume_cmd, check=False, timeout=1)
             if result.returncode != 0:
-                raise Exception(f"Failed to resume task {task_id} using kill.")
+                raise RuntimeError(f"Failed to resume task {task_id} using kill.")
         else:
             container_name = f"hakuriver-task-{task_id}"
             resume_cmd = ["docker", "unpause", container_name]
@@ -817,7 +817,6 @@ async def kill_task_endpoint(body: dict = Body(...)):
 
     process = task_data["process"]
     unit_name = task_data["unit"]
-    kill_message = f"Task killed by host request (Unit: {unit_name})."
 
     try:
         if task_data["use_systemd"]:
@@ -835,7 +834,7 @@ async def kill_task_endpoint(body: dict = Body(...)):
                         f"Failed to find process for task {task_id}."
                         f"\nOutput: {process.stdout}"
                     )
-                    raise Exception(
+                    raise RuntimeError(
                         f"Failed to find process for task {task_id}.\nOutput: {process.stdout}"
                     )
                 pid = result.group(1)
@@ -894,7 +893,6 @@ async def kill_task_endpoint(body: dict = Body(...)):
             f"Error during systemctl kill process for task {task_id} ({unit_name}): {e}"
         )
         kill_message = f"Error during kill via systemctl: {e}"
-        status = "killed"
         if task_id in running_processes:
             del running_processes[task_id]  # Ensure removal on error too
 
@@ -921,7 +919,7 @@ async def startup_event():
     if not os.path.isdir(RUNNER_CONFIG.SHARED_DIR):
         logger.error(
             f"Shared directory '{RUNNER_CONFIG.SHARED_DIR}' "
-            f"not found or not a directory. Runner may not function correctly."
+            "not found or not a directory. Runner may not function correctly."
         )
     if not os.path.isdir(RUNNER_CONFIG.LOCAL_TEMP_DIR):
         os.makedirs(
