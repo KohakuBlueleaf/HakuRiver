@@ -48,8 +48,8 @@ export function formatUnixTimestamp(timestamp) {
  */
 export function parseTimestampFromTarballFilename(filename) {
   if (!filename) return null;
-  const match = filename.match(/-(\d+)\.tar$/);
-  if (match && match[1]) {
+  const match = RegExp(/-(\d+)\.tar$/).exec(filename);
+  if (match?.[1]) {
     try {
       return parseInt(match[1], 10);
     } catch (e) {
