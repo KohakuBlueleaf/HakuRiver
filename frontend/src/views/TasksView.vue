@@ -64,28 +64,27 @@ OTHER_VAR=123"
           </el-col>
         </el-row>
 
-        <!-- Container Selection (NEW) -->
-         <el-form-item label="Container Environment" prop="container_name">
-            <el-select
-              v-model="taskForm.container_name"
-              clearable
-              placeholder="Select container or use default"
-              style="width: 100%"
-              :loading="isLoadingContainerOptions"
-              loading-text="Loading available containers..."
-              no-data-text="No container tarballs found"
-            >
-              <el-option label="[Use Host Default]" value="" /> <!-- Empty string means use host default -->
-              <el-option label="[Systemd Fallback - No Docker]" value="NULL" /> <!-- Special value for systemd -->
-              <el-option
-                v-for="containerName in availableContainerNames"
-                :key="containerName"
-                :label="containerName"
-                :value="containerName"
-              />
-            </el-select>
-             <el-text size="small" type="info">Select the Docker environment tarball to use. Default is configured on the Host.</el-text>
-          </el-form-item>
+        <el-form-item label="Container Environment" prop="container_name">
+          <el-select
+            v-model="taskForm.container_name"
+            clearable
+            placeholder="Select container or use default"
+            style="width: 100%"
+            :loading="isLoadingContainerOptions"
+            loading-text="Loading available containers..."
+            no-data-text="No container tarballs found"
+          >
+            <el-option label="[Use Host Default]" value="" /> <!-- Empty string means use host default -->
+            <el-option label="[Systemd Fallback - No Docker]" value="NULL" /> <!-- Special value for systemd -->
+            <el-option
+              v-for="containerName in availableContainerNames"
+              :key="containerName"
+              :label="containerName"
+              :value="containerName"
+            />
+          </el-select>
+            <el-text size="small" type="info">Select the Docker environment tarball to use. Default is configured on the Host.</el-text>
+        </el-form-item>
 
         <!-- ... (existing Target Node selection) ... -->
         <el-form-item label="Target Node(s) / NUMA Node(s)" prop="selectedTargets">
@@ -550,6 +549,9 @@ const submitTaskApi = async (formData) => {
       required_cores: formData.required_cores,
       required_memory_bytes: memoryBytes,
       targets: formData.selectedTargets, // Use the selected targets array
+      container_name: formData.container_name,
+      privileged: formData.privileged,
+      additional_mounts: formData.additional_mounts,
     };
 
     const responseData = await api.submitTask(payload); // api.js now returns response.data
