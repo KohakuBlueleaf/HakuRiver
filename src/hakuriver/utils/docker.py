@@ -344,7 +344,6 @@ def list_shared_container_tars(
         logger.exception(f"Error listing container tars in {container_tar_dir}: {e}")
         return []
 
-    print(tar_files)
     tar_files.sort(key=lambda item: item[0], reverse=True)
     return tar_files
 

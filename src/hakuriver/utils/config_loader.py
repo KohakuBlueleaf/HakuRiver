@@ -2,6 +2,8 @@ import toml
 import os
 import sys
 
+from .logger import logger
+
 
 DEFAULT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILENAME = "default_config.toml"
@@ -37,7 +39,7 @@ def load_config(config_path: str = None):
     """Loads the TOML configuration file."""
     config_path = config_path or find_config_path()
     if not config_path:
-        print(
+        logger.error(
             f"Error: Configuration file '{CONFIG_FILENAME}' not found.", file=sys.stderr
         )
         sys.exit(1)
@@ -45,13 +47,13 @@ def load_config(config_path: str = None):
     try:
         with open(config_path, "r") as f:
             config_data = toml.load(f)
-        print(f"Configuration loaded from: {config_path}")
+        logger.info(f"Configuration loaded from: {config_path}")
         return config_data
     except toml.TomlDecodeError as e:
-        print(f"Error decoding TOML file '{config_path}': {e}", file=sys.stderr)
+        logger.error(f"Error decoding TOML file '{config_path}': {e}", file=sys.stderr)
         sys.exit(1)
     except IOError as e:
-        print(f"Error reading configuration file '{config_path}': {e}", file=sys.stderr)
+        logger.error(f"Error reading configuration file '{config_path}': {e}", file=sys.stderr)
         sys.exit(1)
 
 

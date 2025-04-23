@@ -97,15 +97,15 @@ try:
                 self.nodes_timeout: float = 10.0
                 self.health_timeout: float = 15.0
             except KeyError as e:
-                print(
+                logger.error(
                     f"Error: Missing configuration key in config.toml: {e}",
                     file=sys.stderr,
                 )
-                print("Exiting.", file=sys.stderr)
+                logger.error("Exiting.", file=sys.stderr)
                 sys.exit(1)
             except Exception as e:
-                print(f"Error processing configuration: {e}", file=sys.stderr)
-                print("Exiting.", file=sys.stderr)
+                logger.error(f"Error processing configuration: {e}", file=sys.stderr)
+                logger.error("Exiting.", file=sys.stderr)
                 sys.exit(1)
 
         @property
@@ -116,12 +116,12 @@ try:
         def update_setting(self, key: str, value: any):
             """Allows updating a configuration value 'on the fly' (use with caution)."""
             if hasattr(self, key):
-                print(
+                logger.info(
                     f"Updating config '{key}' from '{getattr(self, key)}' to '{value}'"
                 )
                 setattr(self, key, value)
             else:
-                print(f"Warning: Config key '{key}' not found.", file=sys.stderr)
+                logger.warning(f"Warning: Config key '{key}' not found.", file=sys.stderr)
 
 except Exception as e:
     logger.warning(f"Failed to load config for client")
