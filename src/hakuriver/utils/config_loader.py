@@ -53,7 +53,9 @@ def load_config(config_path: str = None):
         logger.error(f"Error decoding TOML file '{config_path}': {e}", file=sys.stderr)
         sys.exit(1)
     except IOError as e:
-        logger.error(f"Error reading configuration file '{config_path}': {e}", file=sys.stderr)
+        logger.error(
+            f"Error reading configuration file '{config_path}': {e}", file=sys.stderr
+        )
         sys.exit(1)
 
 

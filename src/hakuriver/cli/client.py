@@ -303,9 +303,9 @@ def main():
                 cores=args.cores,
                 memory_bytes=memory_bytes,
                 targets=args.target,  # Pass the list of targets
-                container_name=args.container, # Pass the specified container name (or None)
-                privileged=privileged_override, # Pass True or None
-                additional_mounts=additional_mounts_override, # Pass list or None
+                container_name=args.container,  # Pass the specified container name (or None)
+                privileged=privileged_override,  # Pass True or None
+                additional_mounts=additional_mounts_override,  # Pass list or None
             )
 
             if not task_ids:

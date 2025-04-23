@@ -121,7 +121,9 @@ try:
                 )
                 setattr(self, key, value)
             else:
-                logger.warning(f"Warning: Config key '{key}' not found.", file=sys.stderr)
+                logger.warning(
+                    f"Warning: Config key '{key}' not found.", file=sys.stderr
+                )
 
 except Exception as e:
     logger.warning(f"Failed to load config for client")
