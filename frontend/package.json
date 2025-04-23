@@ -12,6 +12,8 @@
     "@headlessui/vue": "^1.7.23",
     "@heroicons/vue": "^2.2.0",
     "@vueuse/core": "^13.1.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
     "axios": "^1.8.4",
     "element-plus": "^2.9.7",
     "pinia": "^3.0.2",
