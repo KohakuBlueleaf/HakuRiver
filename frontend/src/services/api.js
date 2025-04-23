@@ -20,24 +20,24 @@ const logClient = axios.create({
 });
 
 export default {
+  // --- Existing API Calls ---
   getNodes() {
     return apiClient.get('/nodes');
   },
   submitTask(taskData) {
-    // Payload now expects 'targets' list instead of individual target info
     const payload = {
       command: taskData.command,
-      arguments: taskData.arguments, // Assume taskData provides this already parsed
-      env_vars: taskData.env_vars, // Assume taskData provides this already parsed
+      arguments: taskData.arguments,
+      env_vars: taskData.env_vars,
       required_cores: taskData.required_cores,
-      required_memory_bytes: taskData.required_memory_bytes, // Already handled bytes conversion
-      targets: taskData.targets, // Pass the array of target strings
+      required_memory_bytes: taskData.required_memory_bytes,
+      targets: taskData.targets,
+      container_name: taskData.container_name, // Add container_name to payload
+      privileged: taskData.privileged, // Add privileged to payload
+      additional_mounts: taskData.additional_mounts, // Add additional_mounts to payload
     };
-    // Filter out null/undefined optional values if necessary
     Object.keys(payload).forEach((key) => payload[key] == null && delete payload[key]);
-    // Return the whole response data, as it might contain task_ids and failed_targets
     return apiClient.post('/submit', payload).then((response) => response.data);
-    // Previous version returned only response.data.task_id
   },
   submitCommand(commandData) {
     const task_id = commandData.task_id;
@@ -45,26 +45,50 @@ export default {
     return apiClient.post(`/command/${task_id}/${command}`);
   },
   getTaskStatus(taskId) {
-    // Note: This fetches full details now via the /status endpoint
-    // The dedicated /tasks endpoint is used for the main list view
     return apiClient.get(`/status/${taskId}`);
   },
   killTask(taskId) {
     return apiClient.post(`/kill/${taskId}`);
   },
   getTasks() {
-    // Fetches the list of tasks for the table view
     return apiClient.get('/tasks');
   },
-  // --- NEW LOG FETCHING FUNCTIONS ---
   getTaskStdout(taskId) {
     return logClient.get(`/task/${taskId}/stdout`);
   },
   getTaskStderr(taskId) {
-    return logClient.get(`/task/${taskId}/stderr`);
+    return logClient.get(`/task/{taskId}/stderr`);
   },
   getHealth(hostname = null) {
     const params = hostname ? { hostname } : {};
     return apiClient.get('/health', { params });
   },
+
+  // --- New Docker/Tarball API Calls ---
+  getContainers() {
+    return apiClient.get('/docker/host/containers');
+  },
+  createContainer(imageData) {
+    return apiClient.post('/docker/host/create', imageData); // imageData: { image_name, container_name }
+  },
+  deleteContainer(containerName) {
+    return apiClient.post(`/docker/host/delete/${containerName}`);
+  },
+  stopContainer(containerName) {
+    return apiClient.post(`/docker/host/stop/${containerName}`);
+  },
+  startContainer(containerName) {
+    return apiClient.post(`/docker/host/start/${containerName}`);
+  },
+  createTarball(containerName) {
+    // This can be a long-running task, increase timeout if needed beyond default
+    return apiClient.post(`/docker/create_tar/${containerName}`, {}, { timeout: 180000 }); // 3 minutes
+  },
+  getTarballs() {
+    return apiClient.get('/docker/list');
+  },
+  // Note: Backend endpoint for deleting specific tarball is needed
+  // deleteTarball(containerName, timestamp) {
+  //   return apiClient.delete(`/docker/tar/${containerName}/${timestamp}`);
+  // }
 };
