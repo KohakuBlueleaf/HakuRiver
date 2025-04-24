@@ -54,7 +54,9 @@ def submit_task(
     container_name: str | None = None,  # Matches TaskRequest model field
     privileged: bool | None = None,  # Matches TaskRequest model field
     additional_mounts: list[str] | None = None,  # Matches TaskRequest model field
-    gpu_ids: list[list[int]] | list[int] | None = None,  # Matches TaskRequest model field
+    gpu_ids: (
+        list[list[int]] | list[int] | None
+    ) = None,  # Matches TaskRequest model field
 ) -> list[str] | None:  # Returns list of task IDs
     """Submits a task potentially to multiple targets."""
     url = f"{CLIENT_CONFIG.host_url}/submit"

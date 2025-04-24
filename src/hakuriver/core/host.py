@@ -599,7 +599,8 @@ async def submit_task(req: TaskRequest):
     if not targets:
         if req.required_gpus:
             raise HTTPException(
-                status_code=400, detail="No target node specified for GPU task is not allowed.",
+                status_code=400,
+                detail="No target node specified for GPU task is not allowed.",
             )
         targets = find_suitable_node(req.required_cores).hostname
         targets = [targets]
@@ -672,7 +673,9 @@ async def submit_task(req: TaskRequest):
         if gpu_info and target_gpus:
             # Check if the requested GPUs are valid for the node
             invalid_gpus = [
-                gpu_id for gpu_id in target_gpus if gpu_id >= len(gpu_info) or gpu_id<0
+                gpu_id
+                for gpu_id in target_gpus
+                if gpu_id >= len(gpu_info) or gpu_id < 0
             ]
             if invalid_gpus:
                 logger.warning(

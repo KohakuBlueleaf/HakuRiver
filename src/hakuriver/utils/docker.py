@@ -538,7 +538,9 @@ def modify_command_for_docker(
     if memory_limit:
         docker_cmd.extend(["--memory", memory_limit])
     if gpu_ids:
-        docker_cmd.extend(["--gpus", shlex.quote(f'"device={",".join(map(str, gpu_ids))}"')])
+        docker_cmd.extend(
+            ["--gpus", shlex.quote(f'"device={",".join(map(str, gpu_ids))}"')]
+        )
 
     # Add the container image name
     docker_cmd.append(container_image_name)
