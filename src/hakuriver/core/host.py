@@ -672,7 +672,7 @@ async def submit_task(req: TaskRequest):
         if gpu_info and target_gpus:
             # Check if the requested GPUs are valid for the node
             invalid_gpus = [
-                gpu_id for gpu_id in target_gpus if gpu_id > len(gpu_info) or gpu_id<=0
+                gpu_id for gpu_id in target_gpus if gpu_id >= len(gpu_info) or gpu_id<0
             ]
             if invalid_gpus:
                 logger.warning(
