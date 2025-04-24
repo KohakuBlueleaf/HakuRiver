@@ -57,6 +57,8 @@ class HeartbeatData(BaseModel):
     memory_percent: float | None = None
     memory_used_bytes: int | None = None
     memory_total_bytes: int | None = None
+    current_avg_temp: float | None = None
+    current_max_temp: float | None = None
 
 
 # --- Global State ---
@@ -539,6 +541,17 @@ async def send_heartbeat():
             interval=None
         )  # Get overall CPU % since last call (or boot)
         node_mem_info = psutil.virtual_memory()
+        try:
+            temperatures = [
+                i.current
+                for i in psutil.sensors_temperatures()["coretemp"]
+                if "Core" in i.label
+            ]
+            avg_temp = sum(temperatures) / len(temperatures) if temperatures else None
+            max_temp = max(temperatures) if temperatures else None
+        except Exception as e:
+            avg_temp = None
+            max_temp = None
 
         heartbeat_payload = HeartbeatData(
             running_tasks=current_running_ids,
@@ -547,6 +560,8 @@ async def send_heartbeat():
             memory_percent=node_mem_info.percent,
             memory_used_bytes=node_mem_info.used,
             memory_total_bytes=node_mem_info.total,
+            current_avg_temp=avg_temp,
+            current_max_temp=max_temp,
         )
 
         # logger.debug(f"Sending heartbeat to {RUNNER_CONFIG.HOST_URL}")

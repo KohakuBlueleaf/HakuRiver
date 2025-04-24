@@ -111,6 +111,8 @@ class HeartbeatData(BaseModel):
     memory_percent: float | None = None
     memory_used_bytes: int | None = None
     memory_total_bytes: int | None = None
+    current_avg_temp: float | None = None
+    current_max_temp: float | None = None
 
 
 # --- global state ---
@@ -312,6 +314,8 @@ async def receive_heartbeat(
     node.cpu_percent = data.cpu_percent
     node.memory_percent = data.memory_percent
     node.memory_used_bytes = data.memory_used_bytes
+    node.current_max_temp = data.current_max_temp
+    node.current_avg_temp = data.current_avg_temp
     node.save()
 
     # --- 1. Process Completed Tasks reported by Runner ---
@@ -1154,6 +1158,8 @@ async def collate_health_data():
             "usedMemBytes": 0,
             "avgCpuPercent": 0,
             "avgMemPercent": 0,
+            "maxAvgCpuTemp": 0,
+            "maxMaxCpuTemp": 0,
             "lastUpdated": datetime.datetime.now().isoformat(),
         }
         for node in Node.select():
@@ -1169,6 +1175,8 @@ async def collate_health_data():
                 "memory_total_bytes": node.memory_total_bytes,
                 "total_cores": node.total_cores,
                 "numa_topology": json.loads(node.numa_topology),  # Parse JSON from DB
+                "current_avg_temp": node.current_avg_temp,
+                "max_avg_temp": node.max_avg_temp,
             }
             aggregate_health["totalNodes"] += 1
             if node.status == "online":
@@ -1179,6 +1187,12 @@ async def collate_health_data():
             aggregate_health["avgCpuPercent"] += node.cpu_percent * node.total_cores
             if node.last_heartbeat.isoformat() > aggregate_health["lastUpdated"]:
                 aggregate_health["lastUpdated"] = node.last_heartbeat.isoformat()
+            aggregate_health["maxAvgCpuTemp"] = max(
+                aggregate_health["maxAvgCpuTemp"], node.current_avg_temp
+            )
+            aggregate_health["maxMaxCpuTemp"] = max(
+                aggregate_health["maxMaxCpuTemp"], node.max_avg_temp
+            )
         aggregate_health["avgCpuPercent"] /= max(1, aggregate_health["totalCores"])
         aggregate_health["avgMemPercent"] /= aggregate_health["usedMemBytes"] / max(
             1, aggregate_health["totalMemBytes"]

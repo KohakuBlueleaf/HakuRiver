@@ -24,6 +24,8 @@ class Node(BaseModel):
     memory_total_bytes = peewee.BigIntegerField(
         null=True
     )  # Use BigIntegerField for bytes
+    current_avg_temp = peewee.FloatField(null=True)
+    current_max_temp = peewee.FloatField(null=True)
     numa_topology = peewee.TextField(null=True)  # Store NUMA info as JSON string
 
     def get_numa_topology(self) -> dict | None:
