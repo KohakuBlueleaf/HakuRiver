@@ -14,8 +14,9 @@ from pydantic import BaseModel, Field, field_validator
 
 from hakuriver.utils.snowflake import Snowflake
 from hakuriver.utils.logger import logger
-from hakuriver.db.models import db, Node, Task, initialize_database
+from hakuriver.utils.gpu import GPUInfo
 from hakuriver.utils import docker as docker_utils
+from hakuriver.db.models import db, Node, Task, initialize_database
 from hakuriver.core.config import HOST_CONFIG
 from .docker.host_api import router as docker_host_router
 from .docker.host_terminal import terminal_websocket_endpoint
@@ -31,6 +32,7 @@ class RunnerInfo(BaseModel):
     total_ram_bytes: int
     runner_url: str
     numa_topology: dict | None = None
+    gpu_info: list[GPUInfo] | None = Field(default_factory=list)
 
 
 class TaskRequest(BaseModel):
@@ -113,6 +115,7 @@ class HeartbeatData(BaseModel):
     memory_total_bytes: int | None = None
     current_avg_temp: float | None = None
     current_max_temp: float | None = None
+    gpu_info: list[GPUInfo] = Field(default_factory=list)  # List of GPUInfo objects
 
 
 # --- global state ---
@@ -274,6 +277,11 @@ async def register_runner(info: RunnerInfo):
         "numa_topology": (
             json.dumps(info.numa_topology) if info.numa_topology else None
         ),  # Store as JSON
+        "gpu_info": (
+            json.dumps([gpu.model_dump() for gpu in info.gpu_info])
+            if info.gpu_info
+            else None
+        )
     }
     node, created = Node.get_or_create(hostname=info.hostname, defaults=defaults)
 
@@ -316,6 +324,11 @@ async def receive_heartbeat(
     node.memory_used_bytes = data.memory_used_bytes
     node.current_max_temp = data.current_max_temp
     node.current_avg_temp = data.current_avg_temp
+    node.gpu_info = (
+        json.dumps([gpu.model_dump() for gpu in data.gpu_info])
+        if data.gpu_info
+        else None
+    )
     node.save()
 
     # --- 1. Process Completed Tasks reported by Runner ---
@@ -1101,6 +1114,7 @@ async def get_nodes_status():
                     node.last_heartbeat.isoformat() if node.last_heartbeat else None
                 ),
                 "numa_topology": node.get_numa_topology(),  # Parse JSON from DB
+                "gpu_info": node.get_gpu_info(),  # Parse JSON from DB
             }
         )
     return nodes_status
@@ -1174,16 +1188,17 @@ async def collate_health_data():
                 "memory_used_bytes": node.memory_used_bytes,
                 "memory_total_bytes": node.memory_total_bytes,
                 "total_cores": node.total_cores,
-                "numa_topology": json.loads(node.numa_topology),  # Parse JSON from DB
+                "numa_topology": node.get_numa_topology(),
                 "current_avg_temp": node.current_avg_temp,
                 "current_max_temp": node.current_max_temp,
+                "gpu_info": node.get_gpu_info(),
             }
             aggregate_health["totalNodes"] += 1
             if node.status == "online":
                 aggregate_health["onlineNodes"] += 1
-            aggregate_health["totalCores"] += node.total_cores
-            aggregate_health["totalMemBytes"] += node.memory_total_bytes
-            aggregate_health["usedMemBytes"] += node.memory_used_bytes
+            aggregate_health["totalCores"] += node.total_cores or 0
+            aggregate_health["totalMemBytes"] += node.memory_total_bytes or 0
+            aggregate_health["usedMemBytes"] += node.memory_used_bytes or 0
             aggregate_health["avgCpuPercent"] += node.cpu_percent * node.total_cores
             if node.last_heartbeat.isoformat() > aggregate_health["lastUpdated"]:
                 aggregate_health["lastUpdated"] = node.last_heartbeat.isoformat()
@@ -1194,7 +1209,7 @@ async def collate_health_data():
                 aggregate_health["maxMaxCpuTemp"], node.current_max_temp
             )
         aggregate_health["avgCpuPercent"] /= max(1, aggregate_health["totalCores"])
-        aggregate_health["avgMemPercent"] /= aggregate_health["usedMemBytes"] / max(
+        aggregate_health["avgMemPercent"] = aggregate_health["usedMemBytes"] / max(
             1, aggregate_health["totalMemBytes"]
         )
         new_node_health["aggregate"] = aggregate_health

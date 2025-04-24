@@ -1,7 +1,5 @@
-import getpass
 import os
 import httpx
-import socket
 import asyncio
 import datetime
 import shlex
@@ -15,6 +13,7 @@ from pydantic import BaseModel, Field
 
 # Load configuration FIRST
 from hakuriver.utils.logger import logger
+from hakuriver.utils.gpu import get_gpu_info, GPUInfo
 from hakuriver.utils import docker as docker_utils
 from hakuriver.core.config import RUNNER_CONFIG
 
@@ -59,6 +58,7 @@ class HeartbeatData(BaseModel):
     memory_total_bytes: int | None = None
     current_avg_temp: float | None = None
     current_max_temp: float | None = None
+    gpu_info: list[GPUInfo] = Field(default_factory=list)
 
 
 # --- Global State ---
@@ -544,8 +544,7 @@ async def send_heartbeat():
         try:
             temperatures = [
                 i.current
-                for i in psutil.sensors_temperatures()["coretemp"]
-                if "Core" in i.label
+                for i in list(psutil.sensors_temperatures().values())[-1]
             ]
             avg_temp = sum(temperatures) / len(temperatures) if temperatures else None
             max_temp = max(temperatures) if temperatures else None
@@ -562,6 +561,7 @@ async def send_heartbeat():
             memory_total_bytes=node_mem_info.total,
             current_avg_temp=avg_temp,
             current_max_temp=max_temp,
+            gpu_info=get_gpu_info(),
         )
 
         # logger.debug(f"Sending heartbeat to {RUNNER_CONFIG.HOST_URL}")
@@ -620,11 +620,13 @@ async def register_with_host():
         "total_ram_bytes": psutil.virtual_memory().total,
         "runner_url": runner_url,
         "numa_topology": numa_topology,  # Add the detected topology
+        "gpu_info": [gpu_info.model_dump() for gpu_info in get_gpu_info()],
     }
     logger.info(
         f"Attempting to register with host {RUNNER_CONFIG.HOST_URL} "
         f"as {RUNNER_CONFIG.RUNNER_HOSTNAME} "
-        f"({register_data['total_cores']} cores, NUMA: {'Detected' if numa_topology else 'N/A'}) at {runner_url}"
+        f"({register_data['total_cores']} cores, "
+        f"NUMA: {'Detected' if numa_topology else 'N/A'}) at {runner_url}"
     )
     try:
         async with httpx.AsyncClient() as client:

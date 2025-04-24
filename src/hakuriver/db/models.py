@@ -27,6 +27,7 @@ class Node(BaseModel):
     current_avg_temp = peewee.FloatField(null=True)
     current_max_temp = peewee.FloatField(null=True)
     numa_topology = peewee.TextField(null=True)  # Store NUMA info as JSON string
+    gpu_info = peewee.TextField(null=True)  # Store GPU info as JSON string
 
     def get_numa_topology(self) -> dict | None:
         """Parses the stored JSON string into a dictionary."""
@@ -39,6 +40,15 @@ class Node(BaseModel):
         except json.JSONDecodeError:
             # Log this error? Maybe in the calling function.
             return None  # Return None if parsing fails
+
+    def get_gpu_info(self) -> list[dict]:
+        """Parses the stored JSON string into a list of dictionaries."""
+        if not self.gpu_info:
+            return []
+        try:
+            return json.loads(self.gpu_info)
+        except json.JSONDecodeError:
+            return []
 
     def set_numa_topology(self, topology: dict | None):
         """Stores the topology dictionary as a JSON string."""
