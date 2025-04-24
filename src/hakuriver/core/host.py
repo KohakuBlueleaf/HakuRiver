@@ -4,7 +4,7 @@ import os
 import json
 import re
 from collections import defaultdict
-from typing import Iterable
+from typing import Iterable, List
 
 import peewee
 import httpx
@@ -41,6 +41,10 @@ class TaskRequest(BaseModel):
     env_vars: dict[str, str] = Field(default_factory=dict)
     required_cores: int = Field(
         default=1, ge=0, description="Number of CPU cores required"
+    )
+    required_gpus: list[list[int]] | None = Field(
+        default=None,
+        description="List of GPU IDs required for the task for all targets (if any)",
     )
     required_memory_bytes: int | None = Field(
         default=None, ge=0, description="Memory limit in bytes"
@@ -83,6 +87,7 @@ class TaskInfoForRunner(BaseModel):
     arguments: list[str]
     env_vars: dict[str, str]
     required_cores: int
+    required_gpus: list[int] | None = None  # List of GPU IDs for this task
     stdout_path: str
     stderr_path: str
     required_memory_bytes: int | None = None
@@ -592,9 +597,16 @@ async def submit_task(req: TaskRequest):
     # --- Loop through each target specified in the request ---
     targets = req.targets
     if not targets:
+        if req.required_gpus:
+            raise HTTPException(
+                status_code=400, detail="No target node specified for GPU task is not allowed.",
+            )
         targets = find_suitable_node(req.required_cores).hostname
         targets = [targets]
-    for target_str in targets:
+
+    required_gpus = req.required_gpus or [[] for _ in targets]
+
+    for target_str, target_gpus in zip(targets, required_gpus, strict=True):
         target_numa_id: int | None = None
         parts = target_str.split(":")
         target_hostname = parts[0]
@@ -656,6 +668,24 @@ async def submit_task(req: TaskRequest):
                 continue
             # Optional: Could add NUMA-specific resource checks here later
 
+        gpu_info = node.get_gpu_info()
+        if gpu_info and target_gpus:
+            # Check if the requested GPUs are valid for the node
+            invalid_gpus = [
+                gpu_id for gpu_id in target_gpus if gpu_id > len(gpu_info) or gpu_id<=0
+            ]
+            if invalid_gpus:
+                logger.warning(
+                    f"Invalid GPU IDs {invalid_gpus} specified for target '{target_str}' on node '{target_hostname}'. Skipping."
+                )
+                failed_targets.append(
+                    {
+                        "target": target_str,
+                        "reason": f"Invalid GPU IDs: {invalid_gpus}",
+                    }
+                )
+                continue
+
         # --- Resource Check (Simple total cores on node for now) ---
         available_cores = get_node_available_cores(node)
         if available_cores < req.required_cores:
@@ -682,10 +712,12 @@ async def submit_task(req: TaskRequest):
             with db.atomic():
                 task = Task.create(
                     task_id=task_id,
+                    batch_id=current_batch_id,
                     arguments="",  # Will be set below
                     env_vars="",  # Will be set below
                     command=req.command,
                     required_cores=req.required_cores,
+                    required_gpus=json.dumps(target_gpus),
                     required_memory_bytes=req.required_memory_bytes,  # Store memory limit
                     assigned_node=node,
                     status="assigning",
@@ -726,6 +758,7 @@ async def submit_task(req: TaskRequest):
             arguments=req.arguments,
             env_vars=req.env_vars,
             required_cores=req.required_cores,
+            required_gpus=target_gpus,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
             required_memory_bytes=req.required_memory_bytes,

@@ -59,11 +59,13 @@ class Node(BaseModel):
 
 
 class Task(BaseModel):
-    task_id = peewee.IntegerField(primary_key=True)
+    task_id = peewee.BigIntegerField(primary_key=True)
+    batch_id = peewee.BigIntegerField(null=True, index=True)
     command = peewee.TextField()
     arguments = peewee.TextField()  # Store as JSON string
     env_vars = peewee.TextField()  # Store as JSON string
     required_cores = peewee.IntegerField()
+    required_gpus = peewee.TextField()  # Store as JSON string
     status = peewee.CharField(
         default="pending"
     )  # pending, assigning, running, completed, failed, killed, lost
