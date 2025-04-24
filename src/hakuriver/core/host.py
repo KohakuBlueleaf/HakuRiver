@@ -1176,7 +1176,7 @@ async def collate_health_data():
                 "total_cores": node.total_cores,
                 "numa_topology": json.loads(node.numa_topology),  # Parse JSON from DB
                 "current_avg_temp": node.current_avg_temp,
-                "max_avg_temp": node.max_avg_temp,
+                "current_max_temp": node.current_max_temp,
             }
             aggregate_health["totalNodes"] += 1
             if node.status == "online":
@@ -1191,7 +1191,7 @@ async def collate_health_data():
                 aggregate_health["maxAvgCpuTemp"], node.current_avg_temp
             )
             aggregate_health["maxMaxCpuTemp"] = max(
-                aggregate_health["maxMaxCpuTemp"], node.max_avg_temp
+                aggregate_health["maxMaxCpuTemp"], node.current_max_temp
             )
         aggregate_health["avgCpuPercent"] /= max(1, aggregate_health["totalCores"])
         aggregate_health["avgMemPercent"] /= aggregate_health["usedMemBytes"] / max(
