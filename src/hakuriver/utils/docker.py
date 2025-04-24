@@ -484,6 +484,7 @@ def modify_command_for_docker(
     working_dir: str = "/shared",  # Default working directory inside the container
     cpu_cores: int = 0,  # Default CPU cores to allocate (optional)
     memory_limit: str = "",  # Default memory limit (optional)
+    gpu_ids: list[int] = [],
 ) -> list[str]:
     """
     Wraps an original command list with a 'docker run --rm' command.
@@ -536,6 +537,8 @@ def modify_command_for_docker(
         docker_cmd.extend(["--cpus", str(cpu_cores)])
     if memory_limit:
         docker_cmd.extend(["--memory", memory_limit])
+    if gpu_ids:
+        docker_cmd.extend(["--gpus", ",".join(map(str, gpu_ids))])
 
     # Add the container image name
     docker_cmd.append(container_image_name)

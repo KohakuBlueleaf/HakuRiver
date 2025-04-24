@@ -24,6 +24,7 @@ class TaskInfo(BaseModel):
     arguments: list[str] = Field(default_factory=list)
     env_vars: dict[str, str] = Field(default_factory=dict)
     required_cores: int
+    required_gpus: list[int] | None = None  # Number of GPUs required (if any)
     stdout_path: str
     stderr_path: str
     required_memory_bytes: int | None = None
@@ -284,6 +285,7 @@ async def run_task_background(task_info: TaskInfo):
                 if task_info.required_memory_bytes
                 else None
             ),
+            gpu_ids=task_info.required_gpus,
         )
         inner_cmd_str = " ".join(docker_wrapper_cmd)
         shell_cmd = f"exec {inner_cmd_str} > {shlex.quote(task_info.stdout_path)} 2> {shlex.quote(task_info.stderr_path)}"
