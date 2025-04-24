@@ -281,7 +281,7 @@ async def register_runner(info: RunnerInfo):
             json.dumps([gpu.model_dump() for gpu in info.gpu_info])
             if info.gpu_info
             else None
-        )
+        ),
     }
     node, created = Node.get_or_create(hostname=info.hostname, defaults=defaults)
 

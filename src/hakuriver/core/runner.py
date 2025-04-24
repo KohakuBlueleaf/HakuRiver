@@ -543,8 +543,7 @@ async def send_heartbeat():
         node_mem_info = psutil.virtual_memory()
         try:
             temperatures = [
-                i.current
-                for i in list(psutil.sensors_temperatures().values())[-1]
+                i.current for i in list(psutil.sensors_temperatures().values())[-1]
             ]
             avg_temp = sum(temperatures) / len(temperatures) if temperatures else None
             max_temp = max(temperatures) if temperatures else None
