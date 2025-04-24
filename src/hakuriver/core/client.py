@@ -54,10 +54,20 @@ def submit_task(
     container_name: str | None = None,  # Matches TaskRequest model field
     privileged: bool | None = None,  # Matches TaskRequest model field
     additional_mounts: list[str] | None = None,  # Matches TaskRequest model field
+    gpu_ids: list[list[int]] | list[int] | None = None,  # Matches TaskRequest model field
 ) -> list[str] | None:  # Returns list of task IDs
     """Submits a task potentially to multiple targets."""
     url = f"{CLIENT_CONFIG.host_url}/submit"
     # Construct payload based on the Host's TaskRequest model
+    if targets:
+        target_desc = ", ".join(targets)
+        logger.info(f"Submitting task to {url} for target(s): {target_desc}")
+    elif gpu_ids:
+        logger.warning("GPU IDs provided but no targets specified. Ignored.")
+        gpu_ids = None
+    else:
+        if isinstance(gpu_ids[0], int):
+            gpu_ids = [gpu_ids] * len(targets)
     payload = {
         "command": command,
         "arguments": args,
@@ -68,11 +78,9 @@ def submit_task(
         "container_name": container_name,
         "privileged": privileged,
         "additional_mounts": additional_mounts,
+        "required_gpus": gpu_ids,
     }
     print(payload)
-    if targets:
-        target_desc = ", ".join(targets)
-        logger.info(f"Submitting task to {url} for target(s): {target_desc}")
     logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
     try:
         with httpx.Client(timeout=CLIENT_CONFIG.default_timeout) as client:

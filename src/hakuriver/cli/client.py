@@ -127,7 +127,7 @@ def main():
     parser.add_argument(
         "--target",
         action="append",  # Allow multiple targets
-        metavar="HOST[:NUMA_ID]",
+        metavar="HOST[:NUMA_ID][::GPU_ID1[,GPU_ID2,...]]",
         help="Target node or node:numa_id (repeatable for multi-node submission). Required for submission.",
         default=[],  # Start with empty list
     )
@@ -295,6 +295,21 @@ def main():
                 f"Mounts: {additional_mounts_override if additional_mounts_override is not None else 'default'}."
             )
 
+            targets = []
+            gpus = []
+            if args.target:
+                for target in args.target:
+                    if "::" in target:
+                        # Extract GPU IDs from the target string
+                        target, *gpu = target.split("::")
+                        targets.append(target)
+                        if gpu:
+                            gpu = gpu[0].split(",")
+                            gpus.append([int(g) for g in gpu])
+                    else:
+                        targets.append(target)
+                        gpus.append([])
+
             # Call the updated core function
             task_ids = client_core.submit_task(
                 command=command_to_run,
@@ -302,10 +317,11 @@ def main():
                 env=env_vars,
                 cores=args.cores,
                 memory_bytes=memory_bytes,
-                targets=args.target,  # Pass the list of targets
+                targets=targets,  # Pass the list of targets
                 container_name=args.container,  # Pass the specified container name (or None)
                 privileged=privileged_override,  # Pass True or None
                 additional_mounts=additional_mounts_override,  # Pass list or None
+                gpu_ids=gpus,  # Pass the list of GPU IDs
             )
 
             if not task_ids:
