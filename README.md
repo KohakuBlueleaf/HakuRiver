@@ -7,8 +7,6 @@
 
 ![HakuRiver logo svg](image/logo.svg)
 
-***THIS PROJECT IS EXPERIMENTAL, USE AT YOUR OWN RISK***
-
 **HakuRiver** is a lightweight, self-hosted cluster manager designed for distributing command-line tasks across compute nodes. It primarily leverages **Docker** to manage reproducible task environments, allowing users to treat containers like portable "virtual environments". HakuRiver orchestrates the creation, packaging (via tarballs), distribution, and execution of these containerized environments across your nodes.
 
 It provides resource allocation (CPU/memory/GPU limits), multi-node/NUMA/GPU task submission, and status tracking, making it ideal for research labs, small-to-medium teams, home labs, or development environments needing simple, reproducible distributed task execution without the overhead of complex HPC schedulers.
