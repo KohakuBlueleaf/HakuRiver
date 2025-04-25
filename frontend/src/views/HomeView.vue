@@ -192,10 +192,7 @@
                 <Line :dataKeys="['index', 'max']" :lineStyle="{ stroke: 'purple' }" />
               </template>
               <template #widgets>
-                <Tooltip
-                  hideLine
-                  :config="{ index: { hide: true } }"
-                />
+                <Tooltip hideLine :config="{ index: { hide: true } }" />
               </template>
             </Chart>
             <el-alert v-else-if="healthError" :title="healthError" type="error" show-icon :closable="false" />
@@ -221,10 +218,7 @@
                 <Line :dataKeys="['index', 'mem']" :lineStyle="{ stroke: 'var(--el-color-success)' }" />
               </template>
               <template #widgets>
-                <Tooltip
-                  hideLine
-                  :config="{ index: { hide: true } }"
-                />
+                <Tooltip hideLine :config="{ index: { hide: true } }" />
               </template>
             </Chart>
             <el-alert v-else-if="healthError" :title="healthError" type="error" show-icon :closable="false" />
@@ -386,7 +380,6 @@ const clusterMemoryGaugeData = computed(() => {
     { name: 'Free', value: Math.max(0, 100 - mem) },
   ];
 });
-
 
 const cpuTempHistoryData = computed(() => tempHistory.value);
 const cpuHistoryData = computed(() => cpuHistory.value);
