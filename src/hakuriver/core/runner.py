@@ -219,6 +219,29 @@ async def handle_task_error(
         )
     )
 
+async def handle_task_complete(
+    task_id: str,
+    *,
+    unit_name: str,
+    exit_code: int,
+):
+    logger.info(
+        f"systemd-run unit {unit_name} for task {task_id} "
+        "successfully executed, task is done."
+    )
+    if task_id in running_processes:
+        del running_processes[task_id]  # Remove from tracking
+    # Report running status (Host already knows it's assigning)
+    # With scope mode, systemd-run will not fork so once it's done, the task is done
+    await report_status_to_host(
+        TaskStatusUpdate(
+            task_id=task_id,
+            status="completed",
+            exit_code=exit_code,
+            completed_at=datetime.datetime.now(),
+        )
+    )
+
 async def run_task_background(task_info: TaskInfo):
     task_id = task_info.task_id
     unit_name = f"hakuriver-task-{task_id}"
@@ -457,21 +480,10 @@ async def run_task_background(task_info: TaskInfo):
         exit_code = systemd_process.returncode
 
         if exit_code == 0:
-            logger.info(
-                f"systemd-run unit {unit_name} for task {task_id} "
-                "successfully executed, task is done."
-            )
-            if task_id in running_processes:
-                del running_processes[task_id]  # Remove from tracking
-            # Report running status (Host already knows it's assigning)
-            # With scope mode, systemd-run will not fork so once it's done, the task is done
-            await report_status_to_host(
-                TaskStatusUpdate(
-                    task_id=task_id,
-                    status="completed",
-                    exit_code=exit_code,
-                    completed_at=datetime.datetime.now(),
-                )
+            await handle_task_complete(
+                task_id,
+                unit_name=unit_name,
+                exit_code=exit_code,
             )
         elif task_id in running_processes:  # not killed by host
             error_message = f"systemd-run failed with exit code {exit_code}."
