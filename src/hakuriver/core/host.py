@@ -534,6 +534,7 @@ async def get_tasks():
                     "arguments": task.get_arguments(),
                     "env_vars": task.get_env_vars(),
                     "required_cores": task.required_cores,
+                    "required_gpus": json.loads(task.required_gpus) if task.required_gpus else [],
                     "required_memory_bytes": task.required_memory_bytes,
                     "status": task.status,
                     "assigned_node": node_hostname,
@@ -873,6 +874,7 @@ async def get_task_status(task_id: int):
         "arguments": task.get_arguments(),
         "env_vars": task.get_env_vars(),
         "required_cores": task.required_cores,
+        "required_gpus": json.loads(task.required_gpus) if task.required_gpus else [],
         "required_memory_bytes": task.required_memory_bytes,
         "status": task.status,
         "assigned_node": (
@@ -1245,9 +1247,11 @@ async def collate_health_data():
                 aggregate_health["maxMaxCpuTemp"], node.current_max_temp
             )
         aggregate_health["avgCpuPercent"] /= max(1, aggregate_health["totalCores"])
-        aggregate_health["avgMemPercent"] = aggregate_health["usedMemBytes"] / max(
-            1, aggregate_health["totalMemBytes"]
-        ) * 100
+        aggregate_health["avgMemPercent"] = (
+            aggregate_health["usedMemBytes"]
+            / max(1, aggregate_health["totalMemBytes"])
+            * 100
+        )
         new_node_health["aggregate"] = aggregate_health
         health_datas.append(new_node_health)
         health_datas = health_datas[-60:]  # Keep only the last 60 seconds of data

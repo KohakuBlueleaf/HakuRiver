@@ -1,4 +1,4 @@
-// src/services/api.js
+// frontend/src/services/api.js
 import axios from 'axios';
 
 const apiClient = axios.create({
@@ -22,6 +22,7 @@ const logClient = axios.create({
 export default {
   // --- Existing API Calls ---
   getNodes() {
+    // This endpoint in core/host.py already returns gpu_info if available
     return apiClient.get('/nodes');
   },
   submitTask(taskData) {
@@ -31,11 +32,13 @@ export default {
       env_vars: taskData.env_vars,
       required_cores: taskData.required_cores,
       required_memory_bytes: taskData.required_memory_bytes,
-      targets: taskData.targets,
+      targets: taskData.targets, // This will be an array of hostnames/hostname:numa_id
+      required_gpus: taskData.required_gpus, // This will be an array of lists of gpu_ids
       container_name: taskData.container_name,
       privileged: taskData.privileged,
       additional_mounts: taskData.additional_mounts,
     };
+    // Clean up payload - remove null/undefined values
     Object.keys(payload).forEach((key) => payload[key] == null && delete payload[key]);
     return apiClient.post('/submit', payload).then((response) => response.data);
   },
@@ -64,7 +67,7 @@ export default {
     return apiClient.get('/health', { params });
   },
 
-  // --- New Docker/Tarball API Calls ---
+  // --- Docker/Tarball API Calls ---
   getContainers() {
     return apiClient.get('/docker/host/containers');
   },

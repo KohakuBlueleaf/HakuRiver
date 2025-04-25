@@ -1,3 +1,4 @@
+<!-- frontend/src/views/TasksView.vue -->
 <template>
   <div>
     <h1>Tasks</h1>
@@ -22,7 +23,6 @@
         label-position="top"
         @submit.prevent="handleTaskSubmit"
       >
-        <!-- ... (existing Command, Arguments, Env Vars items) ... -->
         <el-form-item label="Command" prop="command">
           <el-input v-model="taskForm.command" placeholder="e.g., /path/to/shared/scripts/my_script.sh or python" />
         </el-form-item>
@@ -57,9 +57,9 @@ OTHER_VAR=123"
           <el-col :span="12">
             <el-form-item label="Memory Limit (Optional)" prop="memory_limit_str">
               <el-input v-model="taskForm.memory_limit_str" placeholder="e.g., 512M, 4G" clearable>
-                <template #append>MB/GB</template>
+                <template #append>Bytes/K/M/G</template>
               </el-input>
-              <el-text size="small" type="info">Examples: 512M, 4G, 2048K. No suffix means bytes.</el-text>
+              <el-text size="small" type="info">Examples: 512M, 4G, 2048K. No suffix means bytes (1000-based units).</el-text>
             </el-form-item>
           </el-col>
         </el-row>
@@ -86,12 +86,21 @@ OTHER_VAR=123"
             />
           </el-select>
           <el-text size="small" type="info"
-            >Select the Docker environment tarball to use. Default is configured on the Host.</el-text
+            >Select the Docker environment tarball to use. Default is configured on the Host. Select '[Systemd Fallback]' to run
+            directly on the host/runner OS.</el-text
           >
         </el-form-item>
 
-        <!-- ... (existing Target Node selection) ... -->
-        <el-form-item label="Target Node(s) / NUMA Node(s)" prop="selectedTargets">
+        <!-- GPU Feature Toggle -->
+        <el-form-item label="Enable GPU Selection">
+          <el-switch v-model="gpuFeatureEnabled" />
+          <el-text size="small" type="info" style="margin-left: 10px">
+            Toggle to select specific GPUs instead of nodes/NUMA cores. Requires Docker container environment.
+          </el-text>
+        </el-form-item>
+
+        <!-- Conditional Target Selection -->
+        <el-form-item v-if="!gpuFeatureEnabled" label="Target Node(s) / NUMA Node(s)" prop="selectedTargets">
           <el-select
             v-model="taskForm.selectedTargets"
             multiple
@@ -101,11 +110,80 @@ OTHER_VAR=123"
             style="width: 100%"
             :loading="isLoadingNodes"
             loading-text="Loading available nodes..."
-            no-data-text="No nodes found or failed to load"
+            no-data-text="No online nodes found or failed to load"
           >
             <el-option v-for="item in targetOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
           <el-text size="small" type="info">Select one or more nodes. Suffix :N targets NUMA node N.</el-text>
+        </el-form-item>
+
+        <!-- GPU Selection UI (Conditional) -->
+        <el-form-item v-else label="Select Target GPUs">
+          <div v-loading="isLoadingNodes" class="gpu-selection-container">
+            <el-alert
+              v-if="nodesError"
+              :title="nodesError"
+              type="error"
+              show-icon
+              :closable="false"
+              style="margin-bottom: 10px"
+            />
+            <el-collapse v-if="availableNodesWithGpus.length > 0" v-model="expandedGpuNodes">
+              <el-collapse-item
+                v-for="node in availableNodesWithGpus"
+                :key="node.hostname"
+                :title="`${node.hostname} (${node.gpu_info.length} GPUs)`"
+                :name="node.hostname"
+              >
+                <el-checkbox-group v-model="selectedGpus[node.hostname]">
+                  <el-checkbox v-for="gpu in node.gpu_info" :key="gpu.gpu_id" :label="gpu.gpu_id" border class="gpu-checkbox">
+                    <div class="gpu-checkbox-content">
+                      GPU {{ gpu.gpu_id }}: {{ gpu.name }}
+                      <span class="gpu-stats">
+                        GPU Util: {{ gpu.gpu_utilization ?? 'N/A' }}% | Mem Util: {{ gpu.mem_utilization ?? 'N/A' }}% | Temp:
+                        {{ gpu.temperature ?? 'N/A' }}°C
+                      </span>
+                    </div>
+                  </el-checkbox>
+                </el-checkbox-group>
+              </el-collapse-item>
+            </el-collapse>
+            <el-empty v-else description="No online nodes reporting GPU information." :image-size="60" />
+          </div>
+          <el-text size="small" type="info"
+            >Select specific GPUs on available nodes. Requires selecting a Docker container environment above.</el-text
+          >
+          <el-alert
+            v-if="taskForm.container_name === 'NULL' && gpuFeatureEnabled"
+            title="GPU Selection requires a Docker Environment"
+            type="warning"
+            show-icon
+            :closable="false"
+            style="margin-top: 10px"
+            description="GPU allocation via '--gpus' flag is only supported when running tasks inside a Docker container. Please select a container environment or disable GPU Selection."
+          />
+        </el-form-item>
+
+        <!-- Optional: Additional Mounts -->
+        <el-form-item label="Additional Mounts (Optional)">
+          <el-input
+            v-model="taskForm.additional_mounts_text"
+            type="textarea"
+            :rows="2"
+            placeholder="e.g., /host/path:/container/path"
+          />
+          <el-text size="small" type="info"
+            >Each line is a mount point in 'host_path:container_path' format. Overrides default mounts configured on the
+            Host.</el-text
+          >
+        </el-form-item>
+
+        <!-- Optional: Privileged Mode -->
+        <el-form-item label="Run Privileged (Optional)">
+          <el-switch v-model="taskForm.privileged_override" />
+          <el-text size="small" type="info" style="margin-left: 10px">
+            Run the Docker container with the --privileged flag. Use with extreme caution. Overrides default configured on Host.
+          </el-text>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -158,6 +236,12 @@ OTHER_VAR=123"
         </template>
       </el-table-column>
       <el-table-column prop="required_cores" label="Cores" sortable width="90" />
+      <!-- Display required_gpus -->
+      <el-table-column label="Req GPUs" width="120">
+        <template #default="scope">
+          {{ formatRequiredGpus(scope.row.required_gpus) }}
+        </template>
+      </el-table-column>
       <el-table-column prop="status" label="Status" sortable width="100">
         <template #default="scope">
           <el-tag :type="getTaskStatusType(scope.row.status)">
@@ -218,6 +302,10 @@ OTHER_VAR=123"
           <el-descriptions-item label="Target NUMA Node">{{
             selectedTaskDetail.target_numa_node_id ?? 'Node Wide'
           }}</el-descriptions-item>
+          <el-descriptions-item label="Required GPUs">{{
+            formatRequiredGpus(selectedTaskDetail.required_gpus)
+          }}</el-descriptions-item>
+
           <el-descriptions-item label="Status">
             <el-tag :type="getTaskStatusType(selectedTaskDetail.status)">
               {{ selectedTaskDetail.status }}
@@ -231,6 +319,9 @@ OTHER_VAR=123"
               Suspect Assignment ({{ selectedTaskDetail.assignment_suspicion_count }})
             </el-tag>
           </el-descriptions-item>
+          <el-descriptions-item label="Container Name">{{
+            selectedTaskDetail.container_name || 'Host Default'
+          }}</el-descriptions-item>
 
           <el-descriptions-item label="Command" :span="2">{{ selectedTaskDetail.command }}</el-descriptions-item>
           <el-descriptions-item label="Arguments" :span="2">
@@ -243,6 +334,9 @@ OTHER_VAR=123"
           <el-descriptions-item label="Required Cores">{{ selectedTaskDetail.required_cores }}</el-descriptions-item>
           <el-descriptions-item label="Assigned Node">{{ selectedTaskDetail.assigned_node || 'N/A' }}</el-descriptions-item>
           <el-descriptions-item label="Exit Code">{{ selectedTaskDetail.exit_code ?? 'N/A' }}</el-descriptions-item>
+          <el-descriptions-item label="Required Memory">{{
+            formatBytesForTable(selectedTaskDetail.required_memory_bytes)
+          }}</el-descriptions-item>
 
           <el-descriptions-item label="Submitted At">{{
             formatDateTime(selectedTaskDetail.submitted_at)
@@ -253,6 +347,10 @@ OTHER_VAR=123"
           <el-descriptions-item label="Completed At">{{
             formatDateTime(selectedTaskDetail.completed_at)
           }}</el-descriptions-item>
+          <el-descriptions-item label="Systemd Unit">{{ selectedTaskDetail.systemd_unit_name || 'N/A' }}</el-descriptions-item>
+          <el-descriptions-item label="Error Message" :span="2">
+            <pre class="code-block">{{ selectedTaskDetail.error_message || 'None' }}</pre>
+          </el-descriptions-item>
         </el-descriptions>
 
         <el-divider />
@@ -335,7 +433,7 @@ OTHER_VAR=123"
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue';
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue';
 import api from '@/services/api';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { RefreshRight } from '@element-plus/icons-vue'; // Import icon
@@ -351,19 +449,24 @@ const backendHasGetTasks = ref(typeof api.getTasks === 'function'); // Check if 
 const submitDialogVisible = ref(false);
 const taskFormRef = ref(null); // Reference to the ElForm component
 const isSubmitting = ref(false);
+
+// State for GPU feature
+const gpuFeatureEnabled = ref(false);
+const selectedGpus = reactive({}); // { hostname1: [0, 1], hostname2: [0], ... }
+
 const taskForm = reactive({
   command: '',
   arguments_text: '',
   env_vars_text: '',
-  required_cores: 0,
+  required_cores: 0, // Default to 0 core
   memory_limit_str: '', // Input as string (e.g., "512M")
-  selectedTargets: [], // Holds the array of selected target strings, e.g., ["host1:0", "host2"]
+  selectedTargets: [], // Used when gpuFeatureEnabled is false
   container_name: '', // Holds the selected container name
-  privileged: false, // Checkbox for privileged mode
-  additional_mounts: [], // Array of additional mounts
+  privileged_override: null, // Switch state for privileged flag (null = use host default)
+  additional_mounts_text: '', // Input as string (one per line)
 });
 
-const availableNodes = ref([]); // Raw node data from API
+const availableNodes = ref([]); // Raw node data from API (including GPU info)
 const isLoadingNodes = ref(false);
 const nodesError = ref(null);
 
@@ -371,6 +474,9 @@ const availableContainerNames = ref([]); // Just the list of names (strings)
 const isLoadingContainerOptions = ref(false);
 const containerOptionsError = ref(null);
 
+// --- Computed properties for form options ---
+
+// Options for Node/NUMA selection (used when GPU feature is off)
 const targetOptions = computed(() => {
   const options = [];
   if (!availableNodes.value) return options;
@@ -386,23 +492,52 @@ const targetOptions = computed(() => {
 
       // Add options for each NUMA node if topology exists
       if (node.numa_topology && typeof node.numa_topology === 'object') {
-        Object.keys(node.numa_topology)
-          .sort((a, b) => parseInt(a) - parseInt(b))
-          .forEach((numaId) => {
-            const numaInfo = node.numa_topology[numaId];
-            const coreCount = numaInfo?.cores?.length ?? '?';
-            const memGb = numaInfo?.memory_bytes ? (numaInfo.memory_bytes / 1024 ** 3).toFixed(1) : '?';
-            options.push({
-              // e.g., host1 / NUMA 0 (8 Cores, 64.0 GB)
-              label: `  ${node.hostname} / NUMA ${numaId} (${coreCount} Cores, ${memGb} GB)`,
-              value: `${node.hostname}:${numaId}`, // Format: "hostname:numa_id"
-            });
+        // Sort NUMA keys numerically
+        const sortedNumaIds = Object.keys(node.numa_topology)
+          .map(Number)
+          .sort((a, b) => a - b);
+
+        sortedNumaIds.forEach((numaId) => {
+          const numaInfo = node.numa_topology[numaId];
+          const coreCount = numaInfo?.cores?.length ?? '?';
+          // Re-using formatBytesForTable for memory string, might need a more specific one
+          const memFormatted = numaInfo?.memory_bytes ? formatBytesForTable(numaInfo.memory_bytes) : '?';
+          options.push({
+            // e.g., host1 / NUMA 0 (8 Cores, 64.0 GB)
+            label: `  ${node.hostname} / NUMA ${numaId} (${coreCount} Cores, ${memFormatted})`,
+            value: `${node.hostname}:${numaId}`, // Format: "hostname:numa_id"
           });
+        });
       }
     }
   });
   return options;
 });
+
+// Filtered list of nodes that have GPU info for the GPU selection UI
+const availableNodesWithGpus = computed(() => {
+  if (!availableNodes.value) return [];
+  return availableNodes.value.filter((node) => node.status === 'online' && node.gpu_info && node.gpu_info.length > 0);
+});
+
+const expandedGpuNodes = ref([]); // State for expanded collapse panels
+
+// --- Validation Rules ---
+const parseMemoryToBytes = (memStr) => {
+  if (!memStr) return null;
+  const str = memStr.trim().toUpperCase();
+  // Adjusted regex to match Runner's 1000-based K, M, G
+  const match = str.match(/^(\d+)([KMG]?)$/);
+  if (!match) return null; // Invalid format already handled by validator
+
+  const val = parseInt(match[1], 10);
+  const unit = match.group(2);
+
+  if (unit === 'G') return val * 1000 * 1000 * 1000;
+  if (unit === 'M') return val * 1000 * 1000;
+  if (unit === 'K') return val * 1000;
+  return val; // Bytes
+};
 
 const validateMemoryString = (rule, value, callback) => {
   if (!value) {
@@ -414,15 +549,37 @@ const validateMemoryString = (rule, value, callback) => {
   if (!memRegex.test(value.trim())) {
     callback(new Error('Invalid format. Use numbers with optional K, M, G suffix (e.g., 512M, 4G)'));
   } else {
-    callback();
+    // Check if parsing is successful
+    if (parseMemoryToBytes(value) === null) {
+      callback(new Error('Failed to parse memory string.'));
+    } else {
+      callback();
+    }
   }
 };
 
-const taskFormRules = reactive({
-  command: [{ required: true, message: 'Command is required', trigger: 'blur' }],
-  required_cores: [{ required: false, trigger: 'blur' }],
-  memory_limit_str: [{ validator: validateMemoryString, trigger: 'blur' }],
-  selectedTargets: [{ type: 'array', min: 0, trigger: 'change' }],
+// Rules object structure adjusted for conditional validation
+const taskFormRules = computed(() => {
+  return {
+    command: [{ required: true, message: 'Command is required', trigger: 'blur' }],
+    required_cores: [{ required: false, trigger: 'blur' }], // Keep optional
+    memory_limit_str: [{ validator: validateMemoryString, trigger: 'blur' }],
+    // selectedTargets validation is only applied if gpuFeatureEnabled is FALSE
+    selectedTargets: [
+      {
+        validator: (rule, value, callback) => {
+          // If GPU feature is OFF, selectedTargets must be non-empty
+          if (!gpuFeatureEnabled.value && (!value || value.length === 0)) {
+            callback(new Error('Please select at least one target node/NUMA.'));
+          } else {
+            callback();
+          }
+        },
+        trigger: 'change',
+      },
+    ],
+    // GPU selection validation will be manual in handleTaskSubmit
+  };
 });
 
 const killingState = reactive({}); // Track loading state for individual kill buttons
@@ -438,28 +595,28 @@ const stdoutError = ref(null);
 const stderrError = ref(null);
 
 // --- Helper Functions ---
-const parseMemoryToBytes = (memStr) => {
-  if (!memStr) return null;
-  const str = memStr.trim().toUpperCase();
-  const match = str.match(/^(\d+)([KMG]?)$/);
-  if (!match) return null; // Invalid format already handled by validator, but double check
-
-  const val = parseInt(match[1], 10);
-  const unit = match[2];
-
-  if (unit === 'G') return val * 1024 * 1024 * 1024;
-  if (unit === 'M') return val * 1024 * 1024;
-  if (unit === 'K') return val * 1024;
-  return val; // Bytes
-};
 
 const formatBytesForTable = (bytes) => {
   if (bytes === null || bytes === undefined) return 'N/A';
   if (bytes === 0) return '0 B';
-  const k = 1024;
+  // Using 1000-based units for consistency with backend parsing
+  const k = 1000;
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+};
+
+const formatRequiredGpus = (requiredGpus) => {
+  if (!requiredGpus.length) return '-';
+  try {
+    const gpuList = requiredGpus.map((value)=>value)
+    console.log('GPU List:', gpuList);
+    if (!Array.isArray(gpuList) || gpuList.length === 0) return '-';
+    // Example format: [0, 1]
+    return `${gpuList.join(', ')}`;
+  } catch (e) {
+    return 'Invalid Data';
+  }
 };
 
 // --- API Functions ---
@@ -485,24 +642,38 @@ const fetchTasks = async (showLoading = false) => {
       systemd_unit_name: task.systemd_unit_name ?? null,
       target_numa_node_id: task.target_numa_node_id ?? null,
       batch_id: task.batch_id ?? null,
+      required_gpus: task.required_gpus ?? null, // Ensure required_gpus is included
     }));
   } catch (err) {
     console.error('Error fetching tasks:', err);
-    taskError.value = 'Failed to fetch task list.';
+    taskError.value = err.response?.data?.detail || err.message || 'Failed to fetch task list.';
     tasks.value = [];
   } finally {
     isLoadingTasks.value = false;
   }
 };
 
+// Modified to fetch GPU info and filter for nodes with GPUs
 const fetchAvailableNodes = async () => {
   isLoadingNodes.value = true;
   nodesError.value = null;
   availableNodes.value = []; // Clear previous list
+  // Also clear GPU selections based on previous nodes
+  Object.keys(selectedGpus).forEach((hostname) => delete selectedGpus[hostname]);
+  availableNodesWithGpus.value = []; // Clear GPU nodes
+
   try {
-    // Use getNodes which should now return numa_topology
-    const response = await api.getNodes();
+    const response = await api.getNodes(); // This now returns gpu_info from the backend
     availableNodes.value = response.data;
+
+    // Initialize selectedGpus for nodes that have GPUs
+    availableNodes.value.forEach((node) => {
+      if (node.status === 'online' && node.gpu_info && node.gpu_info.length > 0) {
+        // Initialize with empty array for each potential GPU node
+        selectedGpus[node.hostname] = [];
+      }
+    });
+    // availableNodesWithGpus computed prop will filter for display
   } catch (error) {
     console.error('Error fetching nodes for target selection:', error);
     nodesError.value = error.response?.data?.detail || error.message || 'Failed to load available nodes.';
@@ -516,11 +687,14 @@ const fetchAvailableContainers = async () => {
   containerOptionsError.value = null;
   availableContainerNames.value = [];
   try {
-    const response = await api.getTarballs(); // Assuming api.getTarballs exists from previous step
+    const response = await api.getTarballs(); // Assuming api.getTarballs exists
     // The response data is an object like { "containerName1": {...}, "containerName2": {...} }
+    // Convert to an array of names
     availableContainerNames.value = Object.keys(response.data).sort((a, b) => {
       // Sort based on latest update time
-      return response.data[b].latest_timestamp - response.data[a].latest_timestamp;
+      const timestampA = response.data[a]?.latest_timestamp ?? 0;
+      const timestampB = response.data[b]?.latest_timestamp ?? 0;
+      return timestampB - timestampA;
     });
   } catch (error) {
     console.error('Error fetching available containers:', error);
@@ -546,20 +720,80 @@ const submitTaskApi = async (formData) => {
         acc[key.trim()] = valueParts.join('=').trim();
         return acc;
       }, {});
-    const memoryBytes = parseMemoryToBytes(formData.memory_limit_str);
 
+    const additionalMountsList = formData.additional_mounts_text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l !== '');
+
+    // --- Build Payload based on GPU Feature Flag ---
     const payload = {
       command: formData.command,
       arguments: argsList,
       env_vars: envDict,
-      required_cores: formData.required_cores,
-      required_memory_bytes: memoryBytes,
-      targets: formData.selectedTargets, // Use the selected targets array
-      container_name: formData.container_name,
-      privileged: formData.privileged,
-      additional_mounts: formData.additional_mounts,
+      required_cores: formData.required_cores, // Always include core request
+      container_name: formData.container_name === '' ? null : formData.container_name, // '' maps to null (Host default)
+      privileged: formData.privileged_override === null ? null : formData.privileged_override, // null=Host default, true/false=override
+      additional_mounts: additionalMountsList.length > 0 ? additionalMountsList : null,
     };
 
+    if (gpuFeatureEnabled.value) {
+      // GPU targeting mode:
+      const taskTargets = [];
+      const taskGpus = [];
+      let totalGpusSelected = 0;
+
+      // Iterate through nodes that *have* GPUs and check if any were selected
+      availableNodesWithGpus.value.forEach((node) => {
+        const selectedGpusOnNode = selectedGpus[node.hostname] || [];
+        if (selectedGpusOnNode.length > 0) {
+          taskTargets.push(node.hostname); // Target is just the hostname
+          taskGpus.push(selectedGpusOnNode.sort((a, b) => a - b)); // Add array of selected GPU IDs (sorted)
+          totalGpusSelected += selectedGpusOnNode.length;
+        }
+      });
+
+      if (taskTargets.length === 0) {
+        ElMessage({ message: 'Please select at least one GPU.', type: 'warning' });
+        isSubmitting.value = false;
+        return; // Stop submission
+      }
+      if (payload.container_name === 'NULL') {
+        ElMessage({
+          message: 'GPU selection requires a Docker environment. Please select a container or disable GPU selection.',
+          type: 'warning',
+        });
+        isSubmitting.value = false;
+        return; // Stop submission
+      }
+
+      payload.targets = taskTargets; // List of hostnames
+      payload.required_gpus = taskGpus; // List of lists of GPU IDs
+      // When GPU is enabled, cores/memory might be secondary or enforced via Docker
+      // Keep user-specified cores/memory in payload if they provided them, otherwise leave as default/null
+      if (formData.memory_limit_str) {
+        payload.required_memory_bytes = parseMemoryToBytes(formData.memory_limit_str);
+      } else {
+        payload.required_memory_bytes = null;
+      }
+    } else {
+      // CPU/NUMA targeting mode:
+      if (!formData.selectedTargets || formData.selectedTargets.length === 0) {
+        ElMessage({ message: 'Please select at least one target node/NUMA.', type: 'warning' });
+        isSubmitting.value = false;
+        return; // Stop submission
+      }
+
+      payload.targets = formData.selectedTargets; // Array of hostname or hostname:numa_id strings
+      payload.required_gpus = null; // Explicitly null when not using GPU targeting
+      if (formData.memory_limit_str) {
+        payload.required_memory_bytes = parseMemoryToBytes(formData.memory_limit_str);
+      } else {
+        payload.required_memory_bytes = null;
+      }
+    }
+
+    // --- Send to API ---
     const responseData = await api.submitTask(payload); // api.js now returns response.data
 
     let message = `Batch submitted. Tasks created: ${responseData.task_ids?.join(', ') || 'None'}`;
@@ -659,8 +893,8 @@ const fetchStderr = async () => {
 
 // --- Dialog and Form Handling ---
 const openSubmitDialog = () => {
-  fetchAvailableNodes();
-  fetchAvailableContainers();
+  fetchAvailableNodes(); // Fetch nodes (now includes GPU info)
+  fetchAvailableContainers(); // Fetch container tarballs
   submitDialogVisible.value = true;
 };
 
@@ -668,31 +902,65 @@ const resetForm = () => {
   if (taskFormRef.value) {
     taskFormRef.value.resetFields();
   }
+  // Manually reset fields not covered by resetFields (like textareas and new state)
   taskForm.arguments_text = '';
   taskForm.env_vars_text = '';
   taskForm.memory_limit_str = '';
   taskForm.selectedTargets = [];
   taskForm.container_name = '';
-  taskForm.privileged = false;
-  taskForm.additional_mounts = [];
+  taskForm.privileged_override = null; // Reset privileged override
+  taskForm.additional_mounts_text = ''; // Reset mounts text
+
+  gpuFeatureEnabled.value = false; // Reset GPU feature toggle
+  // Reset selectedGpus object - clear all properties
+  Object.keys(selectedGpus).forEach((hostname) => delete selectedGpus[hostname]);
+  // Re-initialize for nodes currently online with GPUs (in case node list changed)
+  availableNodes.value.forEach((node) => {
+    if (node.status === 'online' && node.gpu_info && node.gpu_info.length > 0) {
+      selectedGpus[node.hostname] = [];
+    }
+  });
+
+  expandedGpuNodes.value = []; // Collapse all panels
 };
 
 const handleTaskSubmit = async () => {
   if (!taskFormRef.value) return;
-  await taskFormRef.value.validate((valid, fields) => {
-    if (valid) {
-      submitTaskApi(taskForm);
-    } else {
-      console.log('Form validation failed:', fields);
-      ElMessage({ message: 'Please fill in all required fields correctly.', type: 'warning' });
+
+  // Perform validation
+  await taskFormRef.value.validate(); // This will validate 'command', 'required_cores', 'memory_limit_str', and 'selectedTargets' (if GPU feature is off)
+
+  // Manual validation for GPU selection if feature is enabled
+  if (gpuFeatureEnabled.value) {
+    let anyGpuSelected = false;
+    for (const hostname in selectedGpus) {
+      if (selectedGpus[hostname] && selectedGpus[hostname].length > 0) {
+        anyGpuSelected = true;
+        break;
+      }
     }
-  });
+    if (!anyGpuSelected) {
+      ElMessage({ message: 'Please select at least one GPU when GPU selection is enabled.', type: 'warning' });
+      return; // Stop submission
+    }
+    if (taskForm.container_name === 'NULL') {
+      ElMessage({
+        message: 'GPU selection requires a Docker environment. Please select a container or disable GPU selection.',
+        type: 'warning',
+      });
+      return; // Stop submission
+    }
+  } else {
+    // If GPU feature is off, ensure at least one standard target is selected (handled by selectedTargets rule)
+    // If validation passed this point, the rule for selectedTargets must have succeeded.
+  }
+
+  // If validation passes (automatic and manual)
+  submitTaskApi(taskForm); // Call the API function with the form data
 };
 
 // --- Detail Dialog Handling ---
 const handleRowClick = (row) => {
-  // Assuming the /tasks endpoint now provides enough detail
-  // Alternatively, fetch fresh details: api.getTaskStatus(row.task_id).then(...)
   selectedTaskDetail.value = { ...row }; // Make a copy
   resetDetailView(); // Clear logs from previous view
   detailDialogVisible.value = true;
@@ -737,7 +1005,6 @@ const handlePauseResume = (taskId, status) => {
     draggable: true,
   })
     .then(() => {
-      // Placeholder for pause/resume logic
       api
         .submitCommand({
           task_id: taskId,
@@ -768,6 +1035,19 @@ const isPauseResumeable = (status) => {
   return ['running', 'paused'].includes(status?.toLowerCase());
 };
 
+// --- Watchers ---
+// Watch for changes in gpuFeatureEnabled to potentially clear selections
+watch(gpuFeatureEnabled, (newValue) => {
+  if (newValue) {
+    // Clearing non-GPU targets when GPU feature is enabled
+    taskForm.selectedTargets = [];
+  } else {
+    // Clearing GPU selections when GPU feature is disabled
+    Object.keys(selectedGpus).forEach((hostname) => (selectedGpus[hostname] = []));
+    expandedGpuNodes.value = []; // Collapse all panels
+  }
+});
+
 // --- Lifecycle Hooks ---
 onMounted(() => {
   fetchTasks(); // Initial fetch
@@ -782,7 +1062,7 @@ onUnmounted(() => {
   }
 });
 
-// --- Helper Functions ---
+// --- General Helper Functions ---
 const formatDateTime = (isoString) => {
   if (!isoString) return '-';
   try {
@@ -802,35 +1082,42 @@ const getTaskStatusType = (status) => {
   if (status === 'completed') return 'success';
   if (status === 'running') return ''; // Default blue
   if (status === 'pending' || status === 'assigning') return 'warning';
-  if (status === 'failed' || status === 'lost' || status === 'killed') return 'danger';
+  if (status === 'failed' || status === 'lost' || status === 'killed' || status === 'killed_oom') return 'danger';
+  if (status === 'paused') return 'info';
   return 'info'; // Default for unknown states
 };
 
 const isKillable = (status) => {
   status = status?.toLowerCase();
-  return ['pending', 'assigning', 'running'].includes(status);
+  return ['pending', 'assigning', 'running', 'paused'].includes(status);
 };
 
 const formatArgsPreview = (args) => {
   if (!args || args.length === 0) return '-';
-  const joined = args.join(' ');
+  // Ensure it's an array before joining
+  const argsArray = Array.isArray(args) ? args : [];
+  const joined = argsArray.join(' ');
   return joined.substring(0, 50) + (joined.length > 50 ? '...' : '');
 };
 
 const formatArgsTooltip = (args) => {
   if (!args || args.length === 0) return null;
-  return args.join(' ');
+  // Ensure it's an array before joining
+  const argsArray = Array.isArray(args) ? args : [];
+  return argsArray.join(' ');
 };
 
 const formatEnvVars = (envVars) => {
   if (!envVars || Object.keys(envVars).length === 0) return 'None';
-  return Object.entries(envVars)
+  // Ensure it's an object before iterating
+  const envObject = typeof envVars === 'object' && envVars !== null && !Array.isArray(envVars) ? envVars : {};
+  return Object.entries(envObject)
     .map(([key, value]) => `${key}=${value}`)
     .join('\n');
 };
 
-// Placeholder for max cores hint
-const maxCoresHint = ref(32); // Default value
+// Placeholder for max cores hint (not used in this version)
+// const maxCoresHint = ref(32);
 </script>
 
 <style scoped>
@@ -876,7 +1163,7 @@ const maxCoresHint = ref(32); // Default value
   border-radius: 4px;
   font-family: monospace;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: break-word; /* Changed from break-all to break-word */
   font-size: 0.9em;
   color: var(--el-text-color-regular);
 }
@@ -884,6 +1171,9 @@ const maxCoresHint = ref(32); // Default value
 .el-descriptions .code-block {
   max-height: 150px; /* Limit height */
   overflow-y: auto;
+}
+.el-descriptions-item__container .el-descriptions-item__content {
+  word-break: break-word; /* Also apply to non-pre blocks */
 }
 
 .log-scrollbar {
@@ -913,5 +1203,49 @@ const maxCoresHint = ref(32); // Default value
 .action-buttons .el-button {
   width: 100%; /* Full width for buttons */
   margin: 0;
+}
+
+/* GPU Selection Styles */
+.gpu-selection-container {
+  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+  padding: 10px;
+  min-height: 100px; /* Ensure some height even when empty */
+  max-height: 400px; /* Limit height and enable scroll */
+  overflow-y: auto;
+  width: 100%;
+}
+.el-collapse {
+  border-top: none; /* Remove default top border */
+  border-bottom: none; /* Remove default bottom border */
+}
+.el-collapse-item {
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.el-collapse-item__header {
+  font-size: 0.9em;
+  font-weight: 500;
+  padding: 0 10px;
+}
+.el-collapse-item__content {
+  padding: 10px;
+}
+.gpu-checkbox-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+.gpu-stats {
+  font-size: 0.75em;
+  color: var(--el-text-color-secondary);
+}
+.gpu-checkbox {
+  margin-right: 10px !important; /* Add spacing between checkboxes */
+  margin-bottom: 5px;
+}
+.el-checkbox.is-bordered.el-checkbox--small {
+  padding: 8px 10px !important; /* Adjust padding for border+small */
 }
 </style>
