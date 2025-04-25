@@ -242,6 +242,11 @@ async def handle_task_complete(
         )
     )
 
+def prepare_task_env(task_info: TaskInfo):
+    # Ensure output directories exist before starting
+    os.makedirs(os.path.dirname(task_info.stdout_path), exist_ok=True)
+    os.makedirs(os.path.dirname(task_info.stderr_path), exist_ok=True)
+
 async def run_task_background(task_info: TaskInfo):
     task_id = task_info.task_id
     unit_name = f"hakuriver-task-{task_id}"
@@ -449,9 +454,7 @@ async def run_task_background(task_info: TaskInfo):
     systemd_process = None
 
     try:
-        # Ensure output directories exist before starting
-        os.makedirs(os.path.dirname(task_info.stdout_path), exist_ok=True)
-        os.makedirs(os.path.dirname(task_info.stderr_path), exist_ok=True)
+        prepare_task_env(task_info)
 
         # Run systemd-run itself
         systemd_process = await asyncio.create_subprocess_exec(
