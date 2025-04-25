@@ -152,6 +152,28 @@ def get_node_available_cores(node: Node) -> int:
     return node.total_cores - running_tasks_cores
 
 
+def get_node_available_memory(node: Node) -> int:
+    running_tasks_memory = (
+        Task.select(peewee.fn.SUM(Task.required_memory_bytes))
+        .where((Task.assigned_node == node) & ((Task.status == "running") | (Task.status == "pending")))
+        .scalar()
+        or 0
+    )
+    return node.memory_total_bytes - running_tasks_memory
+
+
+def get_node_available_gpus(node: Node) -> set[int]:
+    running_tasks_gpus = (
+        json.loads(task.required_gpus)
+        for task in Task.select().where((Task.assigned_node == node) & ((Task.status == "running")| (Task.status == "pending")))
+    )
+    all_used_ids = set()
+    for task_gpus in running_tasks_gpus:
+        all_used_ids.update(set(task_gpus))
+    all_ids = set(i["gpu_id"] for i in node.get_gpu_info())
+    return all_ids - all_used_ids
+
+
 def find_suitable_node(required_cores: int) -> Node | None:
     online_nodes: Node = Node.select().where(Node.status == "online")
     candidate_nodes = []
@@ -689,15 +711,39 @@ async def submit_task(req: TaskRequest):
                     }
                 )
                 continue
+            if set(target_gpus) - get_node_available_gpus(node) != set():
+                logger.warning(
+                    f"Requested GPUs {target_gpus} for target '{target_str}' on node '{target_hostname}' are not available. Skipping."
+                )
+                failed_targets.append(
+                    {
+                        "target": target_str,
+                        "reason": "Requested GPUs not available",
+                    }
+                )
+                continue
 
         # --- Resource Check (Simple total cores on node for now) ---
         available_cores = get_node_available_cores(node)
-        if available_cores < req.required_cores:
+        if req.required_cores and available_cores < req.required_cores:
             logger.warning(
                 f"Insufficient cores on node '{target_hostname}' ({available_cores} avail < {req.required_cores} req). Skipping target '{target_str}'."
             )
             failed_targets.append(
                 {"target": target_str, "reason": "Insufficient available cores"}
+            )
+            continue
+
+        available_memory = get_node_available_memory(node)
+        if req.required_memory_bytes and available_memory < req.required_memory_bytes:
+            logger.warning(
+                f"Insufficient memory on node '{target_hostname}' ({available_memory} avail < {req.required_memory_bytes} req). Skipping target '{target_str}'."
+            )
+            failed_targets.append(
+                {
+                    "target": target_str,
+                    "reason": "Insufficient available memory",
+                }
             )
             continue
 
