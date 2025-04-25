@@ -160,7 +160,7 @@ OTHER_VAR=123"
             show-icon
             :closable="false"
             style="margin-top: 10px"
-            description="GPU allocation via '--gpus' flag is only supported when running tasks inside a Docker container. Please select a container environment or disable GPU Selection."
+            description="GPU allocation via '--gpus' flag is only supported when running tasks inside a Docker container. Please select a container environment or disable GPU selection."
           />
         </el-form-item>
 
@@ -355,13 +355,13 @@ OTHER_VAR=123"
 
         <el-divider />
         <el-row :gutter="20">
-          <!-- Stdout Column -->
+          <!-- Stdout Column - ADDED Click Listener -->
           <el-col :span="12">
             <div class="log-column-content">
-              <h4>
+              <h4 @click="openLogContentModal('stdout')" class="clickable-log-header">
                 Standard Output
                 <el-button
-                  @click="fetchStdout"
+                  @click.stop="fetchStdout"
                   :loading="isLoadingStdout"
                   text
                   size="small"
@@ -382,13 +382,13 @@ OTHER_VAR=123"
               </el-scrollbar>
             </div>
           </el-col>
-          <!-- Stderr Column -->
+          <!-- Stderr Column - ADDED Click Listener -->
           <el-col :span="12">
             <div class="log-column-content">
-              <h4>
+              <h4 @click="openLogContentModal('stderr')" class="clickable-log-header">
                 Standard Error
                 <el-button
-                  @click="fetchStderr"
+                  @click.stop="fetchStderr"
                   :loading="isLoadingStderr"
                   text
                   size="small"
@@ -429,6 +429,9 @@ OTHER_VAR=123"
         </span>
       </template>
     </el-dialog>
+
+    <!-- --- NEW Log Content Modal --- -->
+    <log-content-modal v-model="logContentModalVisible" :title="logContentModalTitle" :content="logContentModalContent" />
   </div>
 </template>
 
@@ -437,6 +440,9 @@ import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue';
 import api from '@/services/api';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { RefreshRight } from '@element-plus/icons-vue'; // Import icon
+
+// Import the new Log Content Modal component
+import LogContentModal from '@/components/LogContentModal.vue';
 
 // --- State ---
 const tasks = ref([]);
@@ -594,6 +600,11 @@ const isLoadingStderr = ref(false);
 const stdoutError = ref(null);
 const stderrError = ref(null);
 
+// --- State (Log Content Modal) ---
+const logContentModalVisible = ref(false);
+const logContentModalTitle = ref('');
+const logContentModalContent = ref('');
+
 // --- Helper Functions ---
 
 const formatBytesForTable = (bytes) => {
@@ -607,14 +618,16 @@ const formatBytesForTable = (bytes) => {
 };
 
 const formatRequiredGpus = (requiredGpus) => {
-  if (!requiredGpus.length) return '-';
+  if (!requiredGpus) return '-'; // Handle null/undefined directly
+  // required_gpus is now a list of lists in the task object
+  if (!Array.isArray(requiredGpus) || requiredGpus.length === 0) return '-';
   try {
-    const gpuList = requiredGpus.map((value)=>value)
-    console.log('GPU List:', gpuList);
-    if (!Array.isArray(gpuList) || gpuList.length === 0) return '-';
-    // Example format: [0, 1]
-    return `${gpuList.join(', ')}`;
+    // Flatten the list of lists and join
+    const allGpuIds = requiredGpus.flat();
+    if (allGpuIds.length === 0) return '-';
+    return allGpuIds.join(', ');
   } catch (e) {
+    console.error('Error formatting required_gpus:', e);
     return 'Invalid Data';
   }
 };
@@ -642,7 +655,8 @@ const fetchTasks = async (showLoading = false) => {
       systemd_unit_name: task.systemd_unit_name ?? null,
       target_numa_node_id: task.target_numa_node_id ?? null,
       batch_id: task.batch_id ?? null,
-      required_gpus: task.required_gpus ?? null, // Ensure required_gpus is included
+      // Ensure required_gpus is included and default to an empty list of lists if null/undefined
+      required_gpus: task.required_gpus ?? [],
     }));
   } catch (err) {
     console.error('Error fetching tasks:', err);
@@ -660,7 +674,7 @@ const fetchAvailableNodes = async () => {
   availableNodes.value = []; // Clear previous list
   // Also clear GPU selections based on previous nodes
   Object.keys(selectedGpus).forEach((hostname) => delete selectedGpus[hostname]);
-  availableNodesWithGpus.value = []; // Clear GPU nodes
+  // availableNodesWithGpus computed prop will filter for display
 
   try {
     const response = await api.getNodes(); // This now returns gpu_info from the backend
@@ -668,12 +682,13 @@ const fetchAvailableNodes = async () => {
 
     // Initialize selectedGpus for nodes that have GPUs
     availableNodes.value.forEach((node) => {
+      // Only initialize if node is online and reports GPU info
       if (node.status === 'online' && node.gpu_info && node.gpu_info.length > 0) {
         // Initialize with empty array for each potential GPU node
-        selectedGpus[node.hostname] = [];
+        // Use Vue's reactive `set` or just direct assignment if it's a new key
+        selectedGpus[node.hostname] = selectedGpus[node.hostname] || [];
       }
     });
-    // availableNodesWithGpus computed prop will filter for display
   } catch (error) {
     console.error('Error fetching nodes for target selection:', error);
     nodesError.value = error.response?.data?.detail || error.message || 'Failed to load available nodes.';
@@ -733,7 +748,8 @@ const submitTaskApi = async (formData) => {
       env_vars: envDict,
       required_cores: formData.required_cores, // Always include core request
       container_name: formData.container_name === '' ? null : formData.container_name, // '' maps to null (Host default)
-      privileged: formData.privileged_override === null ? null : formData.privileged_override, // null=Host default, true/false=override
+      // privileged_override is boolean or null; privileged should be boolean or null
+      privileged: formData.privileged_override === null ? null : Boolean(formData.privileged_override),
       additional_mounts: additionalMountsList.length > 0 ? additionalMountsList : null,
     };
 
@@ -927,8 +943,17 @@ const resetForm = () => {
 const handleTaskSubmit = async () => {
   if (!taskFormRef.value) return;
 
-  // Perform validation
-  await taskFormRef.value.validate(); // This will validate 'command', 'required_cores', 'memory_limit_str', and 'selectedTargets' (if GPU feature is off)
+  // Perform validation. Note: selectedTargets rule is conditional.
+  let formValid = false;
+  try {
+    await taskFormRef.value.validate();
+    formValid = true;
+  } catch (validationErrors) {
+    // Validation failed, errors are shown on fields by Element Plus
+    console.log('Form validation failed:', validationErrors);
+    ElMessage({ message: 'Please fill in all required fields correctly.', type: 'warning' });
+    return;
+  }
 
   // Manual validation for GPU selection if feature is enabled
   if (gpuFeatureEnabled.value) {
@@ -940,14 +965,16 @@ const handleTaskSubmit = async () => {
       }
     }
     if (!anyGpuSelected) {
-      ElMessage({ message: 'Please select at least one GPU when GPU selection is enabled.', type: 'warning' });
+      ElMessage({ message: 'Please select at least one GPU.', type: 'warning' });
+      isSubmitting.value = false;
       return; // Stop submission
     }
-    if (taskForm.container_name === 'NULL') {
+    if (taskForm.container_name === 'NULL' || taskForm.container_name === '') {
       ElMessage({
         message: 'GPU selection requires a Docker environment. Please select a container or disable GPU selection.',
         type: 'warning',
       });
+      isSubmitting.value = false;
       return; // Stop submission
     }
   } else {
@@ -961,10 +988,13 @@ const handleTaskSubmit = async () => {
 
 // --- Detail Dialog Handling ---
 const handleRowClick = (row) => {
+  // Assuming the /tasks endpoint now provides enough detail
+  // Alternatively, fetch fresh details: api.getTaskStatus(row.task_id).then(...)
   selectedTaskDetail.value = { ...row }; // Make a copy
   resetDetailView(); // Clear logs from previous view
   detailDialogVisible.value = true;
-  fetchStdout(); // Fetch logs when opening
+  // Logs are fetched automatically when the detail dialog opens
+  fetchStdout();
   fetchStderr();
 };
 
@@ -976,6 +1006,25 @@ const resetDetailView = () => {
   isLoadingStderr.value = false;
   stdoutError.value = null;
   stderrError.value = null;
+  // Ensure log content modal is also closed if it's open
+  logContentModalVisible.value = false;
+};
+
+// --- Log Content Modal Handling ---
+const openLogContentModal = (logType) => {
+  if (!selectedTaskDetail.value) return; // Should not happen if called from detail modal
+
+  const taskId = selectedTaskDetail.value.task_id;
+  if (logType === 'stdout') {
+    logContentModalTitle.value = `Standard Output for Task ${taskId}`;
+    logContentModalContent.value = stdoutContent.value; // Use already fetched content
+  } else if (logType === 'stderr') {
+    logContentModalTitle.value = `Standard Error for Task ${taskId}`;
+    logContentModalContent.value = stderrContent.value; // Use already fetched content
+  } else {
+    return; // Invalid log type
+  }
+  logContentModalVisible.value = true;
 };
 
 // --- Kill Handling ---
@@ -1029,6 +1078,11 @@ const pauseOrResume = (status) => {
   status = status?.toLowerCase();
   if (status === 'running') return 'pause';
   else return 'resume';
+};
+
+const isKillable = (status) => {
+  status = status?.toLowerCase();
+  return ['pending', 'assigning', 'running', 'paused'].includes(status);
 };
 
 const isPauseResumeable = (status) => {
@@ -1085,11 +1139,6 @@ const getTaskStatusType = (status) => {
   if (status === 'failed' || status === 'lost' || status === 'killed' || status === 'killed_oom') return 'danger';
   if (status === 'paused') return 'info';
   return 'info'; // Default for unknown states
-};
-
-const isKillable = (status) => {
-  status = status?.toLowerCase();
-  return ['pending', 'assigning', 'running', 'paused'].includes(status);
 };
 
 const formatArgsPreview = (args) => {
@@ -1193,6 +1242,13 @@ const formatEnvVars = (envVars) => {
   color: var(--el-text-color-primary); /* Ensure readability */
   background-color: var(--el-bg-color-overlay); /* Match dialog bg */
   /* Remove max-height here, scrollbar handles it */
+}
+
+/* Make log headers clickable */
+.clickable-log-header {
+  cursor: pointer;
+  display: flex; /* Align refresh button */
+  align-items: center;
 }
 
 .action-buttons {
