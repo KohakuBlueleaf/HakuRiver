@@ -39,6 +39,12 @@
               <el-icon><Cpu /></el-icon>
               <template #title>Nodes</template>
             </el-menu-item>
+            <el-menu-item index="/gpus">
+              <!-- NEW MENU ITEM -->
+              <el-icon><Monitor /></el-icon>
+              <!-- Using Monitor icon, you might need to import it -->
+              <template #title>GPUs</template>
+            </el-menu-item>
             <el-menu-item index="/tasks">
               <el-icon><Tickets /></el-icon>
               <template #title>Tasks</template>

@@ -15,6 +15,11 @@ const routes = [
     component: () => import('../views/NodesView.vue'),
   },
   {
+    path: '/gpus', // New path for GPU view
+    name: 'gpus',
+    component: () => import('../views/GPUView.vue'), // Lazy-loaded GPU view
+  },
+  {
     path: '/tasks',
     name: 'tasks',
     // Lazy-loaded component
