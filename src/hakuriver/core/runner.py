@@ -247,6 +247,92 @@ def prepare_task_env(task_info: TaskInfo):
     os.makedirs(os.path.dirname(task_info.stdout_path), exist_ok=True)
     os.makedirs(os.path.dirname(task_info.stderr_path), exist_ok=True)
 
+async def do_run_task_background(
+    task_info: TaskInfo,
+    run_cmd: list[str],
+    *,
+    use_systemd: bool,
+    unit_name: str,
+    start_time: datetime.datetime,
+):
+    """
+    Actually runs the task by doing the following:
+    
+    1. Spawn the underlying process using given command.
+    2. Report status to host.
+    3. Update task status to "running".
+    4. Handle the execution result or error if any.
+    """
+    task_id = task_info.task_id
+    try:
+        prepare_task_env(task_info)
+
+        # Run systemd-run itself
+        systemd_process = await asyncio.create_subprocess_exec(
+            *run_cmd,
+            stdout=asyncio.subprocess.PIPE,  # Capture systemd-run's output/errors
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="running",
+                started_at=start_time,
+            )
+        )
+
+        # Store info immediately, even before systemd-run finishes
+        running_processes[task_id] = {
+            "unit": unit_name,
+            "process": systemd_process,  # Store the systemd-run process object initially
+            "pid": systemd_process.pid,  # PID will be filled by the check loop
+            "use_systemd": use_systemd,
+        }
+
+        # Wait for systemd-run command to finish
+        _, stderr = await systemd_process.communicate()
+        exit_code = systemd_process.returncode
+
+        if exit_code == 0:
+            await handle_task_complete(
+                task_id,
+                unit_name=unit_name,
+                exit_code=exit_code,
+            )
+        elif task_id in running_processes:  # not killed by host
+            error_message = f"systemd-run failed with exit code {exit_code}."
+            stderr_decoded = stderr.decode(errors="replace").strip()
+            if stderr_decoded:
+                error_message += f" Stderr: {stderr_decoded}"
+            await handle_task_error(
+                logging.ERROR,
+                f"Failed to launch task {task_id} via systemd-run: {error_message}",
+                task_id,
+                exit_code=exit_code,  # systemd-run's exit code
+                started_at=start_time,  # It attempted to start
+            )
+
+    except FileNotFoundError:
+        # This likely means systemd-run itself wasn't found
+        await handle_task_error(
+            logging.CRITICAL,
+            "systemd-run command not found. Is systemd installed and in PATH?",
+            task_id,
+        )
+    except OSError as e:
+        await handle_task_error(
+            logging.ERROR,
+            f"OS error executing systemd-run for task {task_id}: {e}",
+            task_id,
+        )
+    except Exception as e:
+        await handle_task_error(
+            logging.ERROR,
+            f"Unexpected error launching task {task_id}: {e}",
+            task_id,
+            log_exc_info=True,
+        )
+
 async def run_task_background(task_info: TaskInfo):
     task_id = task_info.task_id
     unit_name = f"hakuriver-task-{task_id}"
@@ -449,78 +535,14 @@ async def run_task_background(task_info: TaskInfo):
             f"systemd-run command: {' '.join(run_cmd)}"
         )  # Log the full command for debugging
 
-    exit_code = None
-    error_message = None
-    systemd_process = None
-
-    try:
-        prepare_task_env(task_info)
-
-        # Run systemd-run itself
-        systemd_process = await asyncio.create_subprocess_exec(
-            *run_cmd,
-            stdout=asyncio.subprocess.PIPE,  # Capture systemd-run's output/errors
-            stderr=asyncio.subprocess.PIPE,
-        )
-        await report_status_to_host(
-            TaskStatusUpdate(
-                task_id=task_id,
-                status="running",
-                started_at=start_time,
-            )
-        )
-
-        # Store info immediately, even before systemd-run finishes
-        running_processes[task_id] = {
-            "unit": unit_name,
-            "process": systemd_process,  # Store the systemd-run process object initially
-            "pid": systemd_process.pid,  # PID will be filled by the check loop
-            "use_systemd": use_systemd,
-        }
-
-        # Wait for systemd-run command to finish
-        _, stderr = await systemd_process.communicate()
-        exit_code = systemd_process.returncode
-
-        if exit_code == 0:
-            await handle_task_complete(
-                task_id,
-                unit_name=unit_name,
-                exit_code=exit_code,
-            )
-        elif task_id in running_processes:  # not killed by host
-            error_message = f"systemd-run failed with exit code {exit_code}."
-            stderr_decoded = stderr.decode(errors="replace").strip()
-            if stderr_decoded:
-                error_message += f" Stderr: {stderr_decoded}"
-            await handle_task_error(
-                logging.ERROR,
-                f"Failed to launch task {task_id} via systemd-run: {error_message}",
-                task_id,
-                exit_code=exit_code,  # systemd-run's exit code
-                started_at=start_time,  # It attempted to start
-            )
-
-    except FileNotFoundError:
-        # This likely means systemd-run itself wasn't found
-        await handle_task_error(
-            logging.CRITICAL,
-            "systemd-run command not found. Is systemd installed and in PATH?",
-            task_id,
-        )
-    except OSError as e:
-        await handle_task_error(
-            logging.ERROR,
-            f"OS error executing systemd-run for task {task_id}: {e}",
-            task_id,
-        )
-    except Exception as e:
-        await handle_task_error(
-            logging.ERROR,
-            f"Unexpected error launching task {task_id}: {e}",
-            task_id,
-            log_exc_info=True,
-        )
+    # Let's actually start the underlying process
+    await do_run_task_background(
+        task_info,
+        run_cmd,
+        use_systemd=use_systemd,
+        unit_name=unit_name,
+        start_time=start_time,
+    )
 
 
 async def send_heartbeat():
