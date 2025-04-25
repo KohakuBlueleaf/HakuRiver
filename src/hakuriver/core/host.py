@@ -1291,7 +1291,7 @@ async def collate_health_data():
             aggregate_health["totalCores"] += node.total_cores or 0
             aggregate_health["totalMemBytes"] += node.memory_total_bytes or 0
             aggregate_health["usedMemBytes"] += node.memory_used_bytes or 0
-            aggregate_health["avgCpuPercent"] += node.cpu_percent * node.total_cores
+            aggregate_health["avgCpuPercent"] += (node.cpu_percent or 0) * (node.total_cores or 0)
             if node.last_heartbeat.isoformat() > aggregate_health["lastUpdated"]:
                 aggregate_health["lastUpdated"] = node.last_heartbeat.isoformat()
             aggregate_health["maxAvgCpuTemp"] = max(

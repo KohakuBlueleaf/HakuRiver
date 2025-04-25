@@ -43,7 +43,7 @@ export function calculateAggregatedStats(nodesHealth) {
         acc.totalMemBytes += node.memory_total_bytes;
         acc.usedMemBytes += node.memory_used_bytes || 0;
       }
-      acc.avgCpuPercent += node.cpu_percent || 0; // Sum for averaging later
+      acc.avgCpuPercent += (node.cpu_percent || 0) * (node.total_cores || 0); // Sum for averaging later
       // We don't average memory percent directly anymore
       return acc;
     },
@@ -51,7 +51,7 @@ export function calculateAggregatedStats(nodesHealth) {
   );
 
   // Calculate averages/percentages
-  stats.avgCpuPercent = stats.avgCpuPercent / onlineNodes.length;
+  stats.avgCpuPercent = stats.avgCpuPercent / stats.totalCores;
   stats.avgMemPercent = stats.totalMemBytes > 0 ? (stats.usedMemBytes / stats.totalMemBytes) * 100 : 0;
 
   return stats;
