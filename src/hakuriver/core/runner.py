@@ -13,9 +13,10 @@ from pydantic import BaseModel, Field
 
 # Load configuration FIRST
 from hakuriver.utils.logger import logger
+from hakuriver.utils.binding import get_executable_and_library_mounts
 from hakuriver.utils.gpu import get_gpu_info, GPUInfo
 from hakuriver.utils import docker as docker_utils
-from hakuriver.core.config import RUNNER_CONFIG
+from hakuriver.core.config import RUNNER_CONFIG, RunnerConfig
 
 
 class TaskInfo(BaseModel):
@@ -207,6 +208,32 @@ async def run_task_background(task_info: TaskInfo):
     )
     working_dir = os.path.join(RUNNER_CONFIG.SHARED_DIR, "shared_data")
 
+    numactl_prefix = ""
+    if task_info.target_numa_node_id is not None and numa_topology is not None:
+        if (
+            RUNNER_CONFIG.NUMACTL_PATH
+            and numa_topology
+            and task_info.target_numa_node_id in numa_topology
+        ):
+            # Basic binding to both CPU and memory on the target node
+            numa_id = task_info.target_numa_node_id
+            # Use --interleave=all as a fallback if specific binds cause issues,
+            # or fine-tune with --physcpubind= based on numa_topology[numa_id]['cores']
+            numactl_prefix = f"{shlex.quote(RUNNER_CONFIG.NUMACTL_PATH)} --cpunodebind={numa_id} --membind={numa_id} "
+            logger.info(f"Task {task_id}: Applying NUMA binding to node {numa_id}.")
+        elif not RUNNER_CONFIG.NUMACTL_PATH:
+            logger.warning(
+                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but numactl path is not configured. Ignoring NUMA binding."
+            )
+        elif not numa_topology:
+            logger.warning(
+                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but NUMA topology couldn't be detected on this runner. Ignoring NUMA binding."
+            )
+        else:  # NUMA ID not found in detected topology
+            logger.warning(
+                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} not found in detected topology {list(numa_topology.keys())}. Ignoring NUMA binding."
+            )
+
     if task_info.docker_image_name not in {None, "", "NULL"}:
         use_systemd = False
         logger.info(
@@ -265,9 +292,11 @@ async def run_task_background(task_info: TaskInfo):
             )
             return  # Stop processing this task
 
-        task_command_list = [task_info.command] + [
-            shlex.quote(arg) for arg in task_info.arguments
-        ]
+        task_command_list = (
+            [numactl_prefix]
+            + [task_info.command]
+            + [shlex.quote(arg) for arg in task_info.arguments]
+        )
         docker_wrapper_cmd = docker_utils.modify_command_for_docker(
             original_command_list=task_command_list,
             container_image_name=task_info.docker_image_name,
@@ -277,7 +306,8 @@ async def run_task_background(task_info: TaskInfo):
             + [
                 f"{working_dir}:/shared",
                 f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
-            ],
+            ]
+            + get_executable_and_library_mounts(RunnerConfig.NUMACTL_PATH)[1],
             working_dir="/shared",
             cpu_cores=task_info.required_cores,
             memory_limit=(
@@ -360,37 +390,12 @@ async def run_task_background(task_info: TaskInfo):
                 + [
                     f"{RUNNER_CONFIG.SHARED_DIR}/shared_data:/shared",
                     f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
-                ],
+                ]
+                + get_executable_and_library_mounts(RunnerConfig.NUMACTL_PATH)[1],
                 working_dir="/shared",
             )
             inner_cmd_parts = docker_wrapper_cmd
         inner_cmd_str = " ".join(inner_cmd_parts)
-
-        numactl_prefix = ""
-        if task_info.target_numa_node_id is not None and numa_topology is not None:
-            if (
-                RUNNER_CONFIG.NUMACTL_PATH
-                and numa_topology
-                and task_info.target_numa_node_id in numa_topology
-            ):
-                # Basic binding to both CPU and memory on the target node
-                numa_id = task_info.target_numa_node_id
-                # Use --interleave=all as a fallback if specific binds cause issues,
-                # or fine-tune with --physcpubind= based on numa_topology[numa_id]['cores']
-                numactl_prefix = f"{shlex.quote(RUNNER_CONFIG.NUMACTL_PATH)} --cpunodebind={numa_id} --membind={numa_id} "
-                logger.info(f"Task {task_id}: Applying NUMA binding to node {numa_id}.")
-            elif not RUNNER_CONFIG.NUMACTL_PATH:
-                logger.warning(
-                    f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but numactl path is not configured. Ignoring NUMA binding."
-                )
-            elif not numa_topology:
-                logger.warning(
-                    f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but NUMA topology couldn't be detected on this runner. Ignoring NUMA binding."
-                )
-            else:  # NUMA ID not found in detected topology
-                logger.warning(
-                    f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} not found in detected topology {list(numa_topology.keys())}. Ignoring NUMA binding."
-                )
 
         shell_command = (
             f"exec {numactl_prefix}{inner_cmd_str} > {quoted_stdout} 2> {quoted_stderr}"
