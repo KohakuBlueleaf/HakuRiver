@@ -66,7 +66,6 @@ By focusing on these practical realities of small-scale computing, HakuRiver pro
 | ✅ **Conveniently submitting independent command-line tasks or batches of parallel tasks across nodes/NUMA zones/GPUs.**         | ❌ Sophisticated task dependency management or complex workflow orchestration (Use Airflow, Prefect, Snakemake, Nextflow).                     |
 | ✅ Personal, research lab, small team, or Home Lab usage needing a *simple* multi-node task management system.                     | ❌ Deploying or managing highly available, mission-critical production *services*.                                                                   |
 | ✅ Providing a lightweight system with minimal maintenance overhead for distributed task execution in controlled environments. | ❌ High-security, multi-tenant environments requiring robust built-in authentication and authorization layers.                       |
-| ✅ Using the included `hakurun` utility for local parameter sweeps *before* cluster submission.                              | ❌ Replacing `hakurun` itself with cluster submission – they serve different purposes (local execution vs distributed execution). |
 
 ---
 
@@ -76,12 +75,11 @@ By focusing on these practical realities of small-scale computing, HakuRiver pro
     *   Set up persistent base containers on the Host (`hakuriver.docker create-container`).
     *   Interact with/install software in Host containers (`hakuriver.docker-shell`).
     *   Commit and package environments into versioned tarballs (`hakuriver.docker create-tar`).
-    *   Place tarballs in shared storage for Runners.
 *   **Containerized Task Execution:** Tasks run inside specified Docker environments (managed by HakuRiver).
 *   **Automated Environment Sync:** Runners automatically check and sync the required container tarball version from shared storage before running a task.
 *   **Systemd Fallback Execution:** Option (`--container NULL`) to run tasks directly on the node using the system's service manager (`systemd-run --scope`) for system-level access or when Docker isn't needed.
 *   **CPU/RAM Resource Allocation:** Jobs request CPU cores (`--cores`) and memory limits (`--memory`) for both Docker and Systemd tasks.
-*   **NUMA Node Targeting:** Optionally bind *systemd-run* tasks to specific NUMA nodes (`--target node:numa_id`). (NUMA in Docker is TODO).
+*   **NUMA Node Targeting:** Optionally bind tasks to specific NUMA nodes (`--target node:numa_id`).
 *   **GPU Resource Allocation (New!):** Request specific GPU devices (`--target node::gpu_id1,gpu_id2...`) on target nodes for Docker tasks. Runners report available GPUs via heartbeats.
 *   **Multi-Node/NUMA/GPU Task Submission:** Submit a single request (`hakuriver.client`) to run the same command across multiple specified nodes, specific NUMA nodes, or specific GPU devices.
 *   **Persistent Task & Node Records:** Host maintains an SQLite DB of nodes (including detected NUMA topology and GPU info) and tasks (status, target, resources, logs, container used).
@@ -444,7 +442,7 @@ npm install
 
 ## 📝 Future Work / TODO
 
-*   **NUMA Awareness within Docker:** Implement mechanisms to pass NUMA binding preferences (`--cpuset-cpus`, `--cpuset-mems`) to `docker run` based on the `--target node:numa_id` syntax.
+*   **Persistant state management inside runners:** Persist task state (e.g., logs, status, etc.) inside runner node for better fault tolerance.
 *   **Basic Scheduling Strategies:** Explore other simple but useful options beyond simple "first fit" for node selection. Such as round-robin, least loaded, priority-based, etc.
 
 ## 🙏 Acknowledgement

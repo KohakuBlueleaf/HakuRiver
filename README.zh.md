@@ -66,7 +66,6 @@ HakuRiver 建立在小型本地叢集的實際假設基礎上：
 | ✅ **方便地在節點/NUMA 區域/GPU 上提交獨立的命令列任務或批次平行任務。**                                                              | ❌ 複雜的任務相依性管理或工作流程協調（請使用 Airflow、Prefect、Snakemake、Nextflow）。                                                  |
 | ✅ 個人、研究實驗室、小型團隊或家庭實驗室需要*簡單*的多節點任務管理系統。                                                          | ❌ 部署或管理高度可用、任務關鍵型的生產*服務*。                                                                                               |
 | ✅ 提供輕量級系統，在受控環境中分散式執行任務時需要最少的維護開銷。                                                            | ❌ 需要強大內建認證和授權層的高安全性、多租戶環境。                                                                                 |
-| ✅ 使用內建的 `hakurun` 工具在叢集提交*前*進行本地參數掃描。                                                                  | ❌ 用叢集提交替代 `hakurun` 本身 – 它們服務於不同目的（本地執行 vs 分散式執行）。                                                  |
 
 ---
 
@@ -76,12 +75,11 @@ HakuRiver 建立在小型本地叢集的實際假設基礎上：
     * 在主機上設置持久性基礎容器（`hakuriver.docker create-container`）。
     * 與主機容器互動/安裝軟體（`hakuriver.docker-shell`）。
     * 將環境提交並打包成版本化 tarball（`hakuriver.docker create-tar`）。
-    * 將 tarball 放置在共享儲存空間供執行節點使用。
 * **容器化任務執行：** 任務在由 HakuRiver 管理的指定 Docker 環境中執行。
 * **自動化環境同步：** 執行節點在執行任務前自動檢查並從共享儲存同步所需的容器 tarball 版本。
 * **Systemd 備用執行：** 選項（`--container NULL`）使用系統的服務管理器（`systemd-run --scope`）直接在節點上執行任務，用於系統級存取或不需要 Docker 時。
 * **CPU/RAM 資源分配：** 任務可請求 CPU 核心（`--cores`）和記憶體限制（`--memory`），適用於 Docker 和 Systemd 任務。
-* **NUMA 節點定位：** 可選擇將 *systemd-run* 任務綁定到特定 NUMA 節點（`--target node:numa_id`）。（Docker 中的 NUMA 支援仍在開發中）。
+* **NUMA 節點定位：** 可選擇將任務綁定到特定 NUMA 節點（`--target node:numa_id`）。
 * **GPU 資源分配（新功能！）：** 在目標節點上請求特定 GPU 設備（`--target node::gpu_id1,gpu_id2...`）用於 Docker 任務。執行節點通過心跳報告可用 GPU。
 * **多節點/NUMA/GPU 任務提交：** 提交單一請求（`hakuriver.client`）在多個指定節點、特定 NUMA 節點或特定 GPU 設備上執行相同命令。
 * **持久性任務和節點記錄：** 主機維護一個 SQLite 資料庫，記錄節點（包括檢測到的 NUMA 拓撲和 GPU 資訊）和任務（狀態、目標、資源、日誌、使用的容器）。
@@ -448,7 +446,7 @@ npm install
 
 ## 📝 未來工作 / 待辦事項
 
-* **Docker 內的 NUMA 感知：** 實現機制，根據 `--target node:numa_id` 語法將 NUMA 綁定偏好（`--cpuset-cpus`、`--cpuset-mems`）傳遞給 `docker run`。
+* **執行節點的狀態持久化**: 在執行端儲存任務的狀態與資訊，提供更好的容錯能力。
 * **基本排程策略：** 探索其他簡單但有用的選項，而不僅僅是簡單的「最先適合」節點選擇。例如輪詢、最低負載、基於優先級等。
 
 ## 🙏 致謝
