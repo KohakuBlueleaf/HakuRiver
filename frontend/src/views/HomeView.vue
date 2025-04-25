@@ -173,9 +173,38 @@
 
       <!-- ===== RIGHT COLUMN ===== -->
       <el-col :xs="24" :lg="12">
+        <!-- CPU Temp Chart -->
+        <el-card shadow="hover" class="info-card">
+          <template #header>Cluster CPU Temperature (℃)</template>
+          <!-- Add ref="cpuChartContainerRef" here -->
+          <div ref="cpuChartContainerRef" v-loading="isLoadingHealth" class="history-chart-container">
+            <Chart
+              v-if="!isLoadingHealth && !healthError && cpuHistory.length > 1"
+              :size="{ width: cpuChartContainerWidth || 300, height: 315 }"
+              :data="cpuTempHistoryData"
+              :margin="{ top: 5, bottom: 5, left: 0, right: 10 }"
+              :axis="temperatureAxis"
+              direction="horizontal"
+            >
+              <template #layers>
+                <Grid strokeDasharray="2,2" />
+                <Line :dataKeys="['index', 'avg']" :lineStyle="{ stroke: 'var(--el-color-primary)' }" />
+                <Line :dataKeys="['index', 'max']" :lineStyle="{ stroke: 'purple' }" />
+              </template>
+              <template #widgets>
+                <Tooltip
+                  hideLine
+                  :config="{ index: { hide: true } }"
+                />
+              </template>
+            </Chart>
+            <el-alert v-else-if="healthError" :title="healthError" type="error" show-icon :closable="false" />
+          </div>
+        </el-card>
+
         <!-- CPU History Chart -->
         <el-card shadow="hover" class="info-card">
-          <template #header>Cluster CPU Usage History (%)</template>
+          <template #header>Cluster Resource Usage History (%)</template>
           <!-- Add ref="cpuChartContainerRef" here -->
           <div ref="cpuChartContainerRef" v-loading="isLoadingHealth" class="history-chart-container">
             <Chart
@@ -188,39 +217,13 @@
             >
               <template #layers>
                 <Grid strokeDasharray="2,2" />
-                <Line :dataKeys="['index', 'value']" :lineStyle="{ stroke: 'var(--el-color-primary)' }" />
+                <Line :dataKeys="['index', 'cpu']" :lineStyle="{ stroke: 'var(--el-color-primary)' }" />
+                <Line :dataKeys="['index', 'mem']" :lineStyle="{ stroke: 'var(--el-color-success)' }" />
               </template>
               <template #widgets>
                 <Tooltip
                   hideLine
-                  :config="{ value: { name: 'CPU %', color: 'var(--el-color-primary)', format: '.1f' }, index: { hide: true } }"
-                />
-              </template>
-            </Chart>
-            <el-alert v-else-if="healthError" :title="healthError" type="error" show-icon :closable="false" />
-          </div>
-        </el-card>
-
-        <!-- Memory History Chart -->
-        <el-card shadow="hover" class="info-card">
-          <template #header>Cluster Memory Usage History (%)</template>
-          <div ref="memoryChartContainerRef" v-loading="isLoadingHealth" class="history-chart-container">
-            <Chart
-              v-if="!isLoadingHealth && !healthError && memoryHistory.length > 1"
-              :size="{ width: memoryChartContainerWidth || 300, height: 315 }"
-              :data="memoryHistoryData"
-              :margin="{ top: 5, bottom: 5, left: 0, right: 10 }"
-              :axis="historyAxis"
-              direction="horizontal"
-            >
-              <template #layers>
-                <Grid strokeDasharray="2,2" />
-                <Line :dataKeys="['index', 'value']" :lineStyle="{ stroke: 'var(--el-color-success)' }" />
-              </template>
-              <template #widgets>
-                <Tooltip
-                  hideLine
-                  :config="{ value: { name: 'Mem %', color: 'var(--el-color-success)', format: '.1f' }, index: { hide: true } }"
+                  :config="{ index: { hide: true } }"
                 />
               </template>
             </Chart>
@@ -285,6 +288,7 @@ const aggregatedHealthStats = ref(null);
 const isLoadingHealth = ref(false);
 const healthError = ref(null);
 let healthPollingInterval = null;
+const tempHistory = ref({});
 const cpuHistory = ref([]);
 const memoryHistory = ref([]);
 const historyIndex = ref(0);
@@ -298,8 +302,8 @@ const triggerFetchHealth = async (showLoading = false) => {
     const monitoringData = rawHealthData.data.aggregate;
     const newStats = rawHealthData.data.nodes;
     aggregatedHealthStats.value = calculateAggregatedStats(newStats[newStats.length - 1]);
-    cpuHistory.value = monitoringData.map((item, i) => ({ index: i, value: item.avgCpuPercent }));
-    memoryHistory.value = monitoringData.map((item, i) => ({ index: i, value: item.avgMemPercent }));
+    tempHistory.value = monitoringData.map((item, i) => ({ index: i, avg: item.maxAvgCpuTemp, max: item.maxMaxCpuTemp }));
+    cpuHistory.value = monitoringData.map((item, i) => ({ index: i, cpu: item.avgCpuPercent, mem: item.avgMemPercent }));
   } catch (err) {
     console.error('Error fetching/processing cluster health:', err);
     healthError.value = err.response?.data?.detail || err.message || 'Failed to load health data.';
@@ -383,6 +387,8 @@ const clusterMemoryGaugeData = computed(() => {
   ];
 });
 
+
+const cpuTempHistoryData = computed(() => tempHistory.value);
 const cpuHistoryData = computed(() => cpuHistory.value);
 const memoryHistoryData = computed(() => memoryHistory.value);
 
@@ -396,6 +402,10 @@ const miniGaugeStyle = ref({
 const historyAxis = ref({
   primary: { type: 'linear', hide: true },
   secondary: { type: 'linear', domain: [0, 100], ticks: 10, format: (val) => `${val}%` },
+});
+const temperatureAxis = ref({
+  primary: { type: 'linear', hide: true },
+  secondary: { type: 'linear', domain: [30, 80], ticks: 5, format: (val) => `${val}℃` },
 });
 
 // --- Lifecycle Hooks ---
