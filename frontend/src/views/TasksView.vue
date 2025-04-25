@@ -969,7 +969,7 @@ const handleTaskSubmit = async () => {
       isSubmitting.value = false;
       return; // Stop submission
     }
-    if (taskForm.container_name === 'NULL' || taskForm.container_name === '') {
+    if (taskForm.container_name === 'NULL') {
       ElMessage({
         message: 'GPU selection requires a Docker environment. Please select a container or disable GPU selection.',
         type: 'warning',
