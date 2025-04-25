@@ -1247,7 +1247,7 @@ async def collate_health_data():
         aggregate_health["avgCpuPercent"] /= max(1, aggregate_health["totalCores"])
         aggregate_health["avgMemPercent"] = aggregate_health["usedMemBytes"] / max(
             1, aggregate_health["totalMemBytes"]
-        )
+        ) * 100
         new_node_health["aggregate"] = aggregate_health
         health_datas.append(new_node_health)
         health_datas = health_datas[-60:]  # Keep only the last 60 seconds of data
