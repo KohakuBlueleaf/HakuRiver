@@ -7,6 +7,7 @@ import subprocess
 import psutil
 import json
 import re
+import logging
 
 from fastapi import FastAPI, HTTPException, Body, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -193,6 +194,31 @@ async def report_status_to_host(update_data: TaskStatusUpdate):
         )
 
 
+# Run task in background utilities
+
+async def handle_task_error(
+    log_level: int,
+    msg: str,
+    task_id: str,
+    *,
+    log_exc_info: bool = False,
+    exit_code: int | None = None,
+    started_at: datetime.datetime | None = None,
+):
+    logger.log(log_level, msg, exc_info=log_exc_info)
+    if task_id in running_processes:
+        del running_processes[task_id]  # Remove from tracking
+    await report_status_to_host(
+        TaskStatusUpdate(
+            task_id=task_id,
+            status="failed",
+            exit_code=exit_code,
+            message=msg,
+            started_at=started_at,
+            completed_at=datetime.datetime.now(),
+        )
+    )
+
 async def run_task_background(task_info: TaskInfo):
     task_id = task_info.task_id
     unit_name = f"hakuriver-task-{task_id}"
@@ -251,17 +277,10 @@ async def run_task_background(task_info: TaskInfo):
                     )
 
         except Exception as e:
-            error_message = (
-                f"Docker image sync check/load failed for task {task_id}: {e}"
-            )
-            logger.error(error_message)
-            await report_status_to_host(
-                TaskStatusUpdate(
-                    task_id=task_id,
-                    status="failed",
-                    message=error_message,
-                    completed_at=datetime.datetime.now(),
-                )
+            await handle_task_error(
+                logging.ERROR,
+                f"Docker image sync check/load failed for task {task_id}: {e}",
+                task_id,
             )
             return  # Stop processing this task
 
@@ -405,7 +424,6 @@ async def run_task_background(task_info: TaskInfo):
     exit_code = None
     error_message = None
     systemd_process = None
-    status = "failed"  # Default to failed unless successful
 
     try:
         # Ensure output directories exist before starting
@@ -460,68 +478,33 @@ async def run_task_background(task_info: TaskInfo):
             stderr_decoded = stderr.decode(errors="replace").strip()
             if stderr_decoded:
                 error_message += f" Stderr: {stderr_decoded}"
-            logger.error(
-                f"Failed to launch task {task_id} via systemd-run: {error_message}"
-            )
-            # Remove from running processes as it failed to launch
-            if task_id in running_processes:
-                del running_processes[task_id]
-            # Report failure to host
-            await report_status_to_host(
-                TaskStatusUpdate(
-                    task_id=task_id,
-                    status="failed",
-                    exit_code=exit_code,  # systemd-run's exit code
-                    message=error_message,
-                    started_at=start_time,  # It attempted to start
-                    completed_at=datetime.datetime.now(),
-                )
+            await handle_task_error(
+                logging.ERROR,
+                f"Failed to launch task {task_id} via systemd-run: {error_message}",
+                task_id,
+                exit_code=exit_code,  # systemd-run's exit code
+                started_at=start_time,  # It attempted to start
             )
 
     except FileNotFoundError:
         # This likely means systemd-run itself wasn't found
-        error_message = (
-            "systemd-run command not found. Is systemd installed and in PATH?"
-        )
-        logger.critical(error_message)
-        status = "failed"
-        if task_id in running_processes:
-            del running_processes[task_id]
-        await report_status_to_host(
-            TaskStatusUpdate(
-                task_id=task_id,
-                status=status,
-                message=error_message,
-                completed_at=datetime.datetime.now(),
-            )
+        await handle_task_error(
+            logging.CRITICAL,
+            "systemd-run command not found. Is systemd installed and in PATH?",
+            task_id,
         )
     except OSError as e:
-        error_message = f"OS error executing systemd-run for task {task_id}: {e}"
-        logger.error(error_message)
-        status = "failed"
-        if task_id in running_processes:
-            del running_processes[task_id]
-        await report_status_to_host(
-            TaskStatusUpdate(
-                task_id=task_id,
-                status=status,
-                message=error_message,
-                completed_at=datetime.datetime.now(),
-            )
+        await handle_task_error(
+            logging.ERROR,
+            f"OS error executing systemd-run for task {task_id}: {e}",
+            task_id,
         )
     except Exception as e:
-        error_message = f"Unexpected error launching task {task_id}: {e}"
-        logger.exception(error_message)
-        status = "failed"
-        if task_id in running_processes:
-            del running_processes[task_id]
-        await report_status_to_host(
-            TaskStatusUpdate(
-                task_id=task_id,
-                status=status,
-                message=error_message,
-                completed_at=datetime.datetime.now(),
-            )
+        await handle_task_error(
+            logging.ERROR,
+            f"Unexpected error launching task {task_id}: {e}",
+            task_id,
+            log_exc_info=True,
         )
 
 
