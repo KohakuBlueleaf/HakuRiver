@@ -48,8 +48,7 @@ const logContent = computed(() => props.content);
 </script>
 
 <style>
-
-.log-modal-container .el-scrollbar__view{
+.log-modal-container .el-scrollbar__view {
   height: 100%; /* Ensure scrollbar view takes full height */
 }
 </style>
