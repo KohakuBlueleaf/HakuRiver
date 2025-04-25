@@ -199,7 +199,7 @@ async def report_status_to_host(update_data: TaskStatusUpdate):
 async def handle_task_error(
     log_level: int,
     msg: str,
-    task_id: str,
+    task_id: int,
     *,
     log_exc_info: bool = False,
     exit_code: int | None = None,
@@ -220,7 +220,7 @@ async def handle_task_error(
     )
 
 async def handle_task_complete(
-    task_id: str,
+    task_id: int,
     *,
     unit_name: str,
     exit_code: int,
