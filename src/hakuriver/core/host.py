@@ -155,7 +155,10 @@ def get_node_available_cores(node: Node) -> int:
 def get_node_available_memory(node: Node) -> int:
     running_tasks_memory = (
         Task.select(peewee.fn.SUM(Task.required_memory_bytes))
-        .where((Task.assigned_node == node) & ((Task.status == "running") | (Task.status == "pending")))
+        .where(
+            (Task.assigned_node == node)
+            & ((Task.status == "running") | (Task.status == "pending"))
+        )
         .scalar()
         or 0
     )
@@ -165,7 +168,10 @@ def get_node_available_memory(node: Node) -> int:
 def get_node_available_gpus(node: Node) -> set[int]:
     running_tasks_gpus = (
         json.loads(task.required_gpus)
-        for task in Task.select().where((Task.assigned_node == node) & ((Task.status == "running")| (Task.status == "pending")))
+        for task in Task.select().where(
+            (Task.assigned_node == node)
+            & ((Task.status == "running") | (Task.status == "pending"))
+        )
     )
     all_used_ids = set()
     for task_gpus in running_tasks_gpus:
@@ -556,7 +562,9 @@ async def get_tasks():
                     "arguments": task.get_arguments(),
                     "env_vars": task.get_env_vars(),
                     "required_cores": task.required_cores,
-                    "required_gpus": json.loads(task.required_gpus) if task.required_gpus else [],
+                    "required_gpus": (
+                        json.loads(task.required_gpus) if task.required_gpus else []
+                    ),
                     "required_memory_bytes": task.required_memory_bytes,
                     "status": task.status,
                     "assigned_node": node_hostname,
