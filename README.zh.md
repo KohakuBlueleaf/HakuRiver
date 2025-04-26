@@ -398,11 +398,98 @@ HakuRiver 允許您直接在主機上管理 Docker 環境，打包它們，並�
 
 ## 🌐 使用方法 - 前端 Web UI（實驗性）
 
-| 概覽                                           | 節點列表和任務列表                                                                             | 從管理器 UI 提交任務                            |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| ![1744643963836](image/README/1744643963836.png) | ![1744643981874](image/README/1744643981874.png) ![1744643997740](image/README/1744643997740.png) | ![1744644009190](image/README/1744644009190.png) |
+HakuRiver 包含一個可選的網頁儀表板，提供圖形介面用於監控、提交和管理任務。
 
-HakuRiver 包含一個可選的 Vue.js 儀表板，用於視覺化監控和管理。
+### 首頁概覽
+
+<p align="center">
+  <img src="image/README/1745625487479.png" alt="HakuRiver Dashboard Homepage" width="700">
+</p>
+<p align="center">主儀表板提供叢集狀態和資源使用情況概覽。</p>
+
+<br>
+
+### 節點檢視
+
+<p align="center">
+  <img src="image/README/1745625516131.png" alt="HakuRiver Nodes List" width="700">
+</p>
+<p align="center">檢視已註冊節點的列表，包括其狀態、資源和已分配任務。</p>
+
+<br>
+
+### GPU 檢視
+
+<p align="center">
+  <img src="image/README/1745625528455.png" alt="HakuRiver GPU Info List" width="700">
+</p>
+<p align="center">專用檢視，顯示節點報告的 GPU 詳細資訊和使用情況。</p>
+
+<br>
+
+### 任務工作流程
+
+任務部分允許提交、列出和管理任務。
+
+<h4>任務列表</h4>
+<p align="center">
+  <img src="image/README/1745625541004.png" alt="HakuRiver Task List" width="700">
+</p>
+<p align="center">瀏覽所有任務，包括其狀態、分配的節點和基本資訊。</p>
+
+<h4>任務提交與詳情</h4>
+<table style="width: 100%; border-collapse: collapse; border: none;">
+  <thead>
+    <tr>
+      <th style="width: 50%; text-align: center; padding: 10px; border-bottom: 1px solid #ddd;">任務提交表單</th>
+      <th style="width: 50%; text-align: center; padding: 10px; border-bottom: 1px solid #ddd;">任務詳情對話框</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding: 10px; vertical-align: top; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;">
+        <p align="center">
+          <img src="image/README/1745625554460.png" alt="Task Submission Form" width="100%">
+        </p>
+        <p align="center" style="font-size: 0.9em; color: #555;">提交新任務時指定命令、參數、資源和目標（節點/NUMA/GPU）。</p>
+      </td>
+      <td style="padding: 10px; vertical-align: top; border-bottom: 1px solid #ddd;">
+        <p align="center">
+          <img src="image/README/1745625574031.png" alt="Task Details Dialog" width="100%">
+        </p>
+        <p align="center" style="font-size: 0.9em; color: #555;">檢視選定任務的詳細資訊。</p>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>任務日誌</h4>
+<p align="center">
+  <img src="image/README/1745625583209.png" alt="Task Logs Modal" width="700">
+</p>
+<p align="center">透過任務詳情中的專用模態視窗存取標準輸出和錯誤日誌。</p>
+
+<br>
+
+### Docker 工作流程
+
+在主機上管理 Docker 環境和容器 tarball。
+
+<h4>主機容器與 Tarball</h4>
+<p align="center">
+  <img src="image/README/1745625595530.png" alt="HakuRiver Docker Container List" width="700">
+</p>
+<p align="center">列出並管理主機上的持久性容器以及共享儲存中可用的 tarball。</p>
+
+<h4>互動式容器 Shell</h4>
+<p align="center">
+  <img src="image/README/1745625631904.png" alt="Docker Container Shell Terminal" height="600">
+</p>
+<p align="center">直接在執行中的主機容器中開啟一個基於網頁的終端機工作階段，用於環境設置。</p>
+
+<br>
+
+---
 
 **前置需求：**
 
