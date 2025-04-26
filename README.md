@@ -409,7 +409,7 @@ HakuRiver includes an optional web dashboard that provides a graphical interface
 ### Homepage Overview
 
 <p align="center">
-  <img src="image/README/1745625487479.png" alt="HakuRiver Dashboard Homepage" style="max-width: 700px; max-height: 450px; border: 1px solid #ccc; border-radius: 5px; display: block; margin: 0 auto;">
+  <img src="image/README/1745625487479.png" alt="HakuRiver Dashboard Homepage" width="700">
 </p>
 <p align="center">The main dashboard provides an overview of cluster status and resource usage.</p>
 
@@ -418,7 +418,7 @@ HakuRiver includes an optional web dashboard that provides a graphical interface
 ### Nodes View
 
 <p align="center">
-  <img src="image/README/1745625516131.png" alt="HakuRiver Nodes List" style="max-width: 700px; max-height: 450px; border: 1px solid #ccc; border-radius: 5px; display: block; margin: 0 auto;">
+  <img src="image/README/1745625516131.png" alt="HakuRiver Nodes List" width="700">
 </p>
 <p align="center">View a list of registered nodes with their status, resources, and allocated tasks.</p>
 
@@ -427,7 +427,7 @@ HakuRiver includes an optional web dashboard that provides a graphical interface
 ### GPU View
 
 <p align="center">
-  <img src="image/README/1745625528455.png" alt="HakuRiver GPU Info List" style="max-width: 700px; max-height: 450px; border: 1px solid #ccc; border-radius: 5px; display: block; margin: 0 auto;">
+  <img src="image/README/1745625528455.png" alt="HakuRiver GPU Info List" width="700">
 </p>
 <p align="center">Dedicated view showing details and utilization of GPUs reported by nodes.</p>
 
@@ -439,38 +439,31 @@ The Tasks section allows submitting, listing, and managing tasks.
 
 <h4>Task List</h4>
 <p align="center">
-  <img src="image/README/1745625541004.png" alt="HakuRiver Task List" style="max-width: 700px; max-height: 450px; border: 1px solid #ccc; border-radius: 5px; display: block; margin: 0 auto;">
+  <img src="image/README/1745625541004.png" alt="HakuRiver Task List" width="700">
 </p>
 <p align="center">Browse all tasks with their status, assigned node, and basic information.</p>
 
-<h4>Task Submission, Details and logs</h4>
+<h4>Task Submission and Details</h4>
 <table style="width: 100%; border-collapse: collapse; border: none;">
   <thead>
     <tr>
-      <th>Task Submission Form</th>
-      <th>Task Details Dialog</th>
-      <th>Task logs</th>
+      <th style="width: 50%; text-align: center; padding: 10px; border-bottom: 1px solid #ddd;">Task Submission Form</th>
+      <th style="width: 50%; text-align: center; padding: 10px; border-bottom: 1px solid #ddd;">Task Details Dialog</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>
-        <p>
-          <img src="image/README/1745625554460.png" alt="Task Submission Form" width="250px">
+      <td style="padding: 10px; vertical-align: top; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;">
+        <p align="center">
+          <img src="image/README/1745625554460.png" alt="Task Submission Form" width="100%">
         </p>
-        <p>Submit new tasks specifying command, arguments, resources, and targets (node/NUMA/GPU).</p>
+        <p align="center" style="font-size: 0.9em; color: #555;">Submit new tasks specifying command, arguments, resources, and targets (node/NUMA/GPU).</p>
       </td>
-      <td>
-        <p>
-          <img src="image/README/1745625574031.png" alt="Task Details Dialog" width="850px">
+      <td style="padding: 10px; vertical-align: top; border-bottom: 1px solid #ddd;">
+        <p align="center">
+          <img src="image/README/1745625574031.png" alt="Task Details Dialog" width="100%">
         </p>
-        <p>View comprehensive information about a selected task.</p>
-      </td>
-      <td>
-        <p>
-          <img src="image/README/1745625583209.png" alt="Task Logs Modal" width="850px">
-        </p>
-        <p>View comprehensive information about a selected task.</p>
+        <p align="center" style="font-size: 0.9em; color: #555;">View comprehensive information about a selected task.</p>
       </td>
     </tr>
   </tbody>
@@ -478,7 +471,7 @@ The Tasks section allows submitting, listing, and managing tasks.
 
 <h4>Task Logs</h4>
 <p align="center">
-  <img src="image/README/1745625583209.png" alt="Task Logs Modal" style="max-width: 700px; max-height: 450px; border: 1px solid #ccc; border-radius: 5px; display: block; margin: 0 auto;">
+  <img src="image/README/1745625583209.png" alt="Task Logs Modal" width="700">
 </p>
 <p align="center">Access standard output and error logs via a dedicated modal within the task details.</p>
 
@@ -490,15 +483,19 @@ Manage Docker environments and container tarballs on the Host.
 
 <h4>Host Containers and Tarballs</h4>
 <p align="center">
-  <img src="image/README/1745625595530.png" alt="HakuRiver Docker Container List" style="max-width: 700px; max-height: 450px; border: 1px solid #ccc; border-radius: 5px; display: block; margin: 0 auto;">
+  <img src="image/README/1745625595530.png" alt="HakuRiver Docker Container List" width="700">
 </p>
 <p align="center">List and manage persistent containers on the Host machine and available tarballs in shared storage.</p>
 
 <h4>Interactive Container Shell</h4>
 <p align="center">
-  <img src="image/README/1745625631904.png" alt="Docker Container Shell Terminal" style="max-width: 700px; max-height: 600px; border: 1px solid #ccc; border-radius: 5px; display: block; margin: 0 auto;">
+  <img src="image/README/1745625631904.png" alt="Docker Container Shell Terminal" height="600">
 </p>
 <p align="center">Open a web-based terminal session directly into a running Host container for environment setup.</p>
+
+<br>
+
+---
 
 
 **Prerequisites:**
