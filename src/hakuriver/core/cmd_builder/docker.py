@@ -1,19 +1,25 @@
 import shlex
 
+from hakuriver.utils.binding import get_executable_and_library_mounts
 from hakuriver.utils import docker as docker_utils
+from hakuriver.core.config import RUNNER_CONFIG, RunnerConfig
+
 from hakuriver.core.task_info import TaskInfo
-from hakuriver.core.config import RUNNER_CONFIG
 
 
 def build(
     task_info: TaskInfo,
+    *,
     working_dir: str,
+    numactl_prefix: str,
 ):
     task_id = task_info.task_id
 
-    task_command_list = [task_info.command] + [
-        shlex.quote(arg) for arg in task_info.arguments
-    ]
+    task_command_list = (
+        [numactl_prefix]
+        + [task_info.command]
+        + [shlex.quote(arg) for arg in task_info.arguments]
+    )
     docker_wrapper_cmd = docker_utils.modify_command_for_docker(
         original_command_list=task_command_list,
         container_image_name=task_info.docker_image_name,
@@ -23,7 +29,8 @@ def build(
         + [
             f"{working_dir}:/shared",
             f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
-        ],
+        ]
+        + get_executable_and_library_mounts(RunnerConfig.NUMACTL_PATH)[1],
         working_dir="/shared",
         cpu_cores=task_info.required_cores,
         memory_limit=(

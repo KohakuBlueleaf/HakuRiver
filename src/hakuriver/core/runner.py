@@ -13,12 +13,12 @@ from pydantic import BaseModel, Field
 
 # Load configuration FIRST
 from hakuriver.utils.logger import logger
-from hakuriver.utils.binding import get_executable_and_library_mounts
 from hakuriver.utils.gpu import get_gpu_info, GPUInfo
 from hakuriver.utils import docker as docker_utils
-from hakuriver.core.config import RUNNER_CONFIG, RunnerConfig
+from hakuriver.core.config import RUNNER_CONFIG
 
 from hakuriver.core.task_info import TaskInfo
+from hakuriver.core.cmd_builder.common import build_numactl_prefix
 import hakuriver.core.cmd_builder.docker as docker_cmd_builder
 import hakuriver.core.cmd_builder.systemd as systemd_cmd_builder
 
@@ -392,6 +392,7 @@ async def run_task_background(task_info: TaskInfo):
     working_dir = os.path.join(RUNNER_CONFIG.SHARED_DIR, "shared_data")
 
     # Build the command to run the task
+    numactl_prefix = build_numactl_prefix(task_info, numa_topology)
 
     if task_info.docker_image_name not in {None, "", "NULL"}:
         # Docker image specified, use Docker
@@ -405,7 +406,11 @@ async def run_task_background(task_info: TaskInfo):
                 task_id,
             )
             return  # Stop processing this task
-        run_cmd = docker_cmd_builder.build(task_info, working_dir)
+        run_cmd = docker_cmd_builder.build(
+            task_info,
+            working_dir=working_dir,
+            numactl_prefix=numactl_prefix,
+        )
     else:
         use_systemd = True
         # No docker image specified, run directly
@@ -414,7 +419,7 @@ async def run_task_background(task_info: TaskInfo):
             working_dir=working_dir,
             unit_name=unit_name,
             total_cores=total_cores,
-            numa_topology=numa_topology,
+            numactl_prefix=numactl_prefix,
         )
 
         logger.info(f"Executing task {task_id} via systemd-run unit {unit_name}")

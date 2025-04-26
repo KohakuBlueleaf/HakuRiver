@@ -1,10 +1,11 @@
 import os
 import shlex
 
-from hakuriver.utils.logger import logger
-from hakuriver.core.task_info import TaskInfo
+from hakuriver.utils.binding import get_executable_and_library_mounts
 from hakuriver.utils import docker as docker_utils
-from hakuriver.core.config import RUNNER_CONFIG
+from hakuriver.core.config import RUNNER_CONFIG, RunnerConfig
+
+from hakuriver.core.task_info import TaskInfo
 
 
 def append_resource_alloc_options(
@@ -81,52 +82,13 @@ def build_inner_cmd(
             + [
                 f"{RUNNER_CONFIG.SHARED_DIR}/shared_data:/shared",
                 f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
-            ],
+            ]
+            + get_executable_and_library_mounts(RunnerConfig.NUMACTL_PATH)[1],
             working_dir="/shared",
         )
         inner_cmd_parts = docker_wrapper_cmd
     inner_cmd_str = " ".join(inner_cmd_parts)
     return inner_cmd_str
-
-def build_numactl_prefix(
-    task_info: TaskInfo,
-    numa_topology: dict[int, dict] | None,
-):
-    """
-    Generates a numactl prefix for NUMA node binding based on task
-    configuration.
-
-    Returns an empty string if no NUMA binding can be applied, otherwise
-    returns a numactl command prefix for binding CPU and memory to the
-    specified NUMA node.
-    """
-    task_id = task_info.task_id
-    numactl_prefix = ""
-    if task_info.target_numa_node_id is not None and numa_topology is not None:
-        if (
-            RUNNER_CONFIG.NUMACTL_PATH
-            and numa_topology
-            and task_info.target_numa_node_id in numa_topology
-        ):
-            # Basic binding to both CPU and memory on the target node
-            numa_id = task_info.target_numa_node_id
-            # Use --interleave=all as a fallback if specific binds cause issues,
-            # or fine-tune with --physcpubind= based on numa_topology[numa_id]['cores']
-            numactl_prefix = f"{shlex.quote(RUNNER_CONFIG.NUMACTL_PATH)} --cpunodebind={numa_id} --membind={numa_id} "
-            logger.info(f"Task {task_id}: Applying NUMA binding to node {numa_id}.")
-        elif not RUNNER_CONFIG.NUMACTL_PATH:
-            logger.warning(
-                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but numactl path is not configured. Ignoring NUMA binding."
-            )
-        elif not numa_topology:
-            logger.warning(
-                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but NUMA topology couldn't be detected on this runner. Ignoring NUMA binding."
-            )
-        else:  # NUMA ID not found in detected topology
-            logger.warning(
-                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} not found in detected topology {list(numa_topology.keys())}. Ignoring NUMA binding."
-            )
-    return numactl_prefix
 
 def build(
     task_info: TaskInfo,
@@ -134,7 +96,7 @@ def build(
     working_dir: str,
     unit_name: str,
     total_cores: int,
-    numa_topology: dict[int, dict],
+    numactl_prefix: str,
 ):
     """
     Builds the command to run the task using systemd.
@@ -163,8 +125,6 @@ def build(
     # Command and Arguments with Redirection
     # This is complex due to shell quoting needed inside systemd-run
     inner_cmd_str = build_inner_cmd(task_info)
-
-    numactl_prefix = build_numactl_prefix(task_info, numa_topology)
 
     # Ensure stdout/stderr paths are absolute and quoted if they contain spaces
     quoted_stdout = shlex.quote(task_info.stdout_path)
