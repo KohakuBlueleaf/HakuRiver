@@ -521,15 +521,19 @@ def modify_command_for_docker(
     # Add *additional* mount directories specified by the host/task request
     if mount_dirs:
         for mount in mount_dirs:
-            parts = mount.split(":", 1)
-            if len(parts) != 2:
+            parts = mount.split(":")
+            if len(parts) < 2:
                 logger.warning(
                     f"Invalid mount format: '{mount}'. Expected 'host_path:container_path'. Skipping."
                 )
                 continue
-            host_path, container_path = parts
+            host_path, container_path, *options = parts
+            option_str = ("," + ",".join(options)) if options else ""
             docker_cmd.extend(
-                ["--mount", f"type=bind,source={host_path},target={container_path}"]
+                [
+                    "--mount",
+                    f"type=bind,source={host_path},target={container_path}{option_str}",
+                ]
             )
     if working_dir:
         docker_cmd.extend(["--workdir", working_dir])

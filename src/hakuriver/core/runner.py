@@ -13,9 +13,10 @@ from pydantic import BaseModel, Field
 
 # Load configuration FIRST
 from hakuriver.utils.logger import logger
+from hakuriver.utils.binding import get_executable_and_library_mounts
 from hakuriver.utils.gpu import get_gpu_info, GPUInfo
 from hakuriver.utils import docker as docker_utils
-from hakuriver.core.config import RUNNER_CONFIG
+from hakuriver.core.config import RUNNER_CONFIG, RunnerConfig
 
 from hakuriver.core.task_info import TaskInfo
 import hakuriver.core.cmd_builder.docker as docker_cmd_builder

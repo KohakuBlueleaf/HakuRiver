@@ -574,12 +574,7 @@ const taskFormRules = computed(() => {
     selectedTargets: [
       {
         validator: (rule, value, callback) => {
-          // If GPU feature is OFF, selectedTargets must be non-empty
-          if (!gpuFeatureEnabled.value && (!value || value.length === 0)) {
-            callback(new Error('Please select at least one target node/NUMA.'));
-          } else {
-            callback();
-          }
+          callback();
         },
         trigger: 'change',
       },
@@ -794,12 +789,6 @@ const submitTaskApi = async (formData) => {
       }
     } else {
       // CPU/NUMA targeting mode:
-      if (!formData.selectedTargets || formData.selectedTargets.length === 0) {
-        ElMessage({ message: 'Please select at least one target node/NUMA.', type: 'warning' });
-        isSubmitting.value = false;
-        return; // Stop submission
-      }
-
       payload.targets = formData.selectedTargets; // Array of hostname or hostname:numa_id strings
       payload.required_gpus = null; // Explicitly null when not using GPU targeting
       if (formData.memory_limit_str) {

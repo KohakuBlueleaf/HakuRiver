@@ -1,13 +1,11 @@
 # HakuRiver - 共享容器叢集
 
-| [English](./README.md) | [中文 (你在這裡)](./README.zh.md) |
-| :------ | :--- |
+[![en](https://img.shields.io/badge/lang-en-red.svg)](./README.md)
+[![中文](https://img.shields.io/badge/lang-%E4%B8%AD%E6%96%87-green.svg)](./README.zh.md)
 
 [![授權](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ![HakuRiver logo svg](image/logo.svg)
-
-***此專案仍處於實驗階段，使用風險自負***
 
 **HakuRiver** 是一個輕量級、自託管的叢集管理系統，專為在計算節點間分配命令列任務而設計。它主要利用 **Docker** 來管理可重現的任務環境，讓使用者能將容器視為便攜式「虛擬環境」。HakuRiver 協調這些容器化環境的建立、打包（透過 tarball）、分發和在節點間的執行。
 
@@ -68,7 +66,6 @@ HakuRiver 建立在小型本地叢集的實際假設基礎上：
 | ✅ **方便地在節點/NUMA 區域/GPU 上提交獨立的命令列任務或批次平行任務。**                                                              | ❌ 複雜的任務相依性管理或工作流程協調（請使用 Airflow、Prefect、Snakemake、Nextflow）。                                                  |
 | ✅ 個人、研究實驗室、小型團隊或家庭實驗室需要*簡單*的多節點任務管理系統。                                                          | ❌ 部署或管理高度可用、任務關鍵型的生產*服務*。                                                                                               |
 | ✅ 提供輕量級系統，在受控環境中分散式執行任務時需要最少的維護開銷。                                                            | ❌ 需要強大內建認證和授權層的高安全性、多租戶環境。                                                                                 |
-| ✅ 使用內建的 `hakurun` 工具在叢集提交*前*進行本地參數掃描。                                                                  | ❌ 用叢集提交替代 `hakurun` 本身 – 它們服務於不同目的（本地執行 vs 分散式執行）。                                                  |
 
 ---
 
@@ -78,12 +75,11 @@ HakuRiver 建立在小型本地叢集的實際假設基礎上：
     * 在主機上設置持久性基礎容器（`hakuriver.docker create-container`）。
     * 與主機容器互動/安裝軟體（`hakuriver.docker-shell`）。
     * 將環境提交並打包成版本化 tarball（`hakuriver.docker create-tar`）。
-    * 將 tarball 放置在共享儲存空間供執行節點使用。
 * **容器化任務執行：** 任務在由 HakuRiver 管理的指定 Docker 環境中執行。
 * **自動化環境同步：** 執行節點在執行任務前自動檢查並從共享儲存同步所需的容器 tarball 版本。
 * **Systemd 備用執行：** 選項（`--container NULL`）使用系統的服務管理器（`systemd-run --scope`）直接在節點上執行任務，用於系統級存取或不需要 Docker 時。
 * **CPU/RAM 資源分配：** 任務可請求 CPU 核心（`--cores`）和記憶體限制（`--memory`），適用於 Docker 和 Systemd 任務。
-* **NUMA 節點定位：** 可選擇將 *systemd-run* 任務綁定到特定 NUMA 節點（`--target node:numa_id`）。（Docker 中的 NUMA 支援仍在開發中）。
+* **NUMA 節點定位：** 可選擇將任務綁定到特定 NUMA 節點（`--target node:numa_id`）。
 * **GPU 資源分配（新功能！）：** 在目標節點上請求特定 GPU 設備（`--target node::gpu_id1,gpu_id2...`）用於 Docker 任務。執行節點通過心跳報告可用 GPU。
 * **多節點/NUMA/GPU 任務提交：** 提交單一請求（`hakuriver.client`）在多個指定節點、特定 NUMA 節點或特定 GPU 設備上執行相同命令。
 * **持久性任務和節點記錄：** 主機維護一個 SQLite 資料庫，記錄節點（包括檢測到的 NUMA 拓撲和 GPU 資訊）和任務（狀態、目標、資源、日誌、使用的容器）。
@@ -402,11 +398,98 @@ HakuRiver 允許您直接在主機上管理 Docker 環境，打包它們，並�
 
 ## 🌐 使用方法 - 前端 Web UI（實驗性）
 
-| 概覽                                           | 節點列表和任務列表                                                                             | 從管理器 UI 提交任務                            |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| ![1744643963836](image/README/1744643963836.png) | ![1744643981874](image/README/1744643981874.png) ![1744643997740](image/README/1744643997740.png) | ![1744644009190](image/README/1744644009190.png) |
+HakuRiver 包含一個可選的網頁儀表板，提供圖形介面用於監控、提交和管理任務。
 
-HakuRiver 包含一個可選的 Vue.js 儀表板，用於視覺化監控和管理。
+### 首頁概覽
+
+<p align="center">
+  <img src="image/README/1745625487479.png" alt="HakuRiver Dashboard Homepage" width="700">
+</p>
+<p align="center">主儀表板提供叢集狀態和資源使用情況概覽。</p>
+
+<br>
+
+### 節點檢視
+
+<p align="center">
+  <img src="image/README/1745625516131.png" alt="HakuRiver Nodes List" width="700">
+</p>
+<p align="center">檢視已註冊節點的列表，包括其狀態、資源和已分配任務。</p>
+
+<br>
+
+### GPU 檢視
+
+<p align="center">
+  <img src="image/README/1745625528455.png" alt="HakuRiver GPU Info List" width="700">
+</p>
+<p align="center">專用檢視，顯示節點報告的 GPU 詳細資訊和使用情況。</p>
+
+<br>
+
+### 任務工作流程
+
+任務部分允許提交、列出和管理任務。
+
+<h4>任務列表</h4>
+<p align="center">
+  <img src="image/README/1745625541004.png" alt="HakuRiver Task List" width="700">
+</p>
+<p align="center">瀏覽所有任務，包括其狀態、分配的節點和基本資訊。</p>
+
+<h4>任務提交與詳情</h4>
+<table style="width: 100%; border-collapse: collapse; border: none;">
+  <thead>
+    <tr>
+      <th style="width: 50%; text-align: center; padding: 10px; border-bottom: 1px solid #ddd;">任務提交表單</th>
+      <th style="width: 50%; text-align: center; padding: 10px; border-bottom: 1px solid #ddd;">任務詳情對話框</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding: 10px; vertical-align: top; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;">
+        <p align="center">
+          <img src="image/README/1745625554460.png" alt="Task Submission Form" width="100%">
+        </p>
+        <p align="center" style="font-size: 0.9em; color: #555;">提交新任務時指定命令、參數、資源和目標（節點/NUMA/GPU）。</p>
+      </td>
+      <td style="padding: 10px; vertical-align: top; border-bottom: 1px solid #ddd;">
+        <p align="center">
+          <img src="image/README/1745625574031.png" alt="Task Details Dialog" width="100%">
+        </p>
+        <p align="center" style="font-size: 0.9em; color: #555;">檢視選定任務的詳細資訊。</p>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>任務日誌</h4>
+<p align="center">
+  <img src="image/README/1745625583209.png" alt="Task Logs Modal" width="700">
+</p>
+<p align="center">透過任務詳情中的專用模態視窗存取標準輸出和錯誤日誌。</p>
+
+<br>
+
+### Docker 工作流程
+
+在主機上管理 Docker 環境和容器 tarball。
+
+<h4>主機容器與 Tarball</h4>
+<p align="center">
+  <img src="image/README/1745625595530.png" alt="HakuRiver Docker Container List" width="700">
+</p>
+<p align="center">列出並管理主機上的持久性容器以及共享儲存中可用的 tarball。</p>
+
+<h4>互動式容器 Shell</h4>
+<p align="center">
+  <img src="image/README/1745625631904.png" alt="Docker Container Shell Terminal" height="600">
+</p>
+<p align="center">直接在執行中的主機容器中開啟一個基於網頁的終端機工作階段，用於環境設置。</p>
+
+<br>
+
+---
 
 **前置需求：**
 
@@ -450,7 +533,7 @@ npm install
 
 ## 📝 未來工作 / 待辦事項
 
-* **Docker 內的 NUMA 感知：** 實現機制，根據 `--target node:numa_id` 語法將 NUMA 綁定偏好（`--cpuset-cpus`、`--cpuset-mems`）傳遞給 `docker run`。
+* **執行節點的狀態持久化**: 在執行端儲存任務的狀態與資訊，提供更好的容錯能力。
 * **基本排程策略：** 探索其他簡單但有用的選項，而不僅僅是簡單的「最先適合」節點選擇。例如輪詢、最低負載、基於優先級等。
 
 ## 🙏 致謝
