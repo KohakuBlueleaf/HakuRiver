@@ -2,7 +2,6 @@ import os
 import httpx
 import asyncio
 import datetime
-import shlex
 import subprocess
 import psutil
 import json
@@ -18,23 +17,9 @@ from hakuriver.utils.gpu import get_gpu_info, GPUInfo
 from hakuriver.utils import docker as docker_utils
 from hakuriver.core.config import RUNNER_CONFIG
 
-
-class TaskInfo(BaseModel):
-    task_id: int
-    command: str
-    arguments: list[str] = Field(default_factory=list)
-    env_vars: dict[str, str] = Field(default_factory=dict)
-    required_cores: int
-    required_gpus: list[int] | None = None  # Number of GPUs required (if any)
-    stdout_path: str
-    stderr_path: str
-    required_memory_bytes: int | None = None
-    target_numa_node_id: int | None = Field(
-        default=None, description="Target NUMA node ID for execution"
-    )
-    docker_image_name: str  # Image tag to use (e.g., hakuriver/myenv:base)
-    docker_privileged: bool
-    docker_additional_mounts: list[str]  # ONLY additional mounts specified by host/task
+from hakuriver.core.task_info import TaskInfo
+import hakuriver.core.cmd_builder.docker as docker_cmd_builder
+import hakuriver.core.cmd_builder.systemd as systemd_cmd_builder
 
 
 class TaskStatusUpdate(BaseModel):
@@ -245,253 +230,52 @@ async def handle_task_complete(
         )
     )
 
-async def build_run_task_cmd_docker(
-    task_info: TaskInfo,
-    working_dir: str,
+async def sync_docker_image(
+    task_id: int,
+    docker_image_name: str,
 ):
-    task_id = task_info.task_id
+    """
+    Synchronizes a Docker image for a given task if necessary.
+    """
     logger.info(
-        f"Task {task_id}: Checking Docker image sync status for '{task_info.docker_image_name}'."
+        f"Task {task_id}: Checking Docker image sync status for '{docker_image_name}'."
     )
-    container_name_from_tag = task_info.docker_image_name.split("/")[1].split(":")[
+    container_name_from_tag = docker_image_name.split("/")[1].split(":")[
         0
     ]  # Extract 'myenv' from 'hakuriver/myenv:base'
     container_tar_dir = (
         RUNNER_CONFIG.CONTAINER_TAR_DIR
     )  # Use runner's configured path
 
-    try:
-        async with docker_lock:
-            needs_sync, sync_path = docker_utils.needs_sync(
-                container_name_from_tag, container_tar_dir
-            )
-            if needs_sync:
-                if sync_path:
-                    logger.info(
-                        f"Task {task_id}: Syncing required Docker image from {sync_path}..."
-                    )
-                    sync_success = await asyncio.get_running_loop().run_in_executor(
-                        None,
-                        docker_utils.sync_from_shared,
-                        container_name_from_tag,
-                        sync_path,
-                    )
-                    if not sync_success:
-                        raise RuntimeError(
-                            f"Failed to sync Docker image from {sync_path}"
-                        )
-                    logger.info(f"Task {task_id}: Docker image sync successful.")
-                else:
-                    # This case shouldn't happen if needs_sync is True, but handle defensively
-                    raise RuntimeError(
-                        f"Sync needed but no tarball path found for {container_name_from_tag}"
-                    )
-            else:
+    async with docker_lock:
+        needs_sync, sync_path = docker_utils.needs_sync(
+            container_name_from_tag, container_tar_dir
+        )
+        if needs_sync:
+            if sync_path:
                 logger.info(
-                    f"Task {task_id}: Local Docker image '{task_info.docker_image_name}' is up-to-date."
+                    f"Task {task_id}: Syncing required Docker image from {sync_path}..."
                 )
-
-    except Exception as e:
-        await handle_task_error(
-            logging.ERROR,
-            f"Docker image sync check/load failed for task {task_id}: {e}",
-            task_id,
-        )
-        return  # Stop processing this task
-
-    task_command_list = [task_info.command] + [
-        shlex.quote(arg) for arg in task_info.arguments
-    ]
-    docker_wrapper_cmd = docker_utils.modify_command_for_docker(
-        original_command_list=task_command_list,
-        container_image_name=task_info.docker_image_name,
-        task_id=task_id,
-        privileged=task_info.docker_privileged,
-        mount_dirs=task_info.docker_additional_mounts
-        + [
-            f"{working_dir}:/shared",
-            f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
-        ],
-        working_dir="/shared",
-        cpu_cores=task_info.required_cores,
-        memory_limit=(
-            f"{task_info.required_memory_bytes/1e6:.1f}M"
-            if task_info.required_memory_bytes
-            else None
-        ),
-        gpu_ids=task_info.required_gpus,
-    )
-    inner_cmd_str = " ".join(docker_wrapper_cmd)
-    shell_cmd = f"exec {inner_cmd_str} > {shlex.quote(task_info.stdout_path)} 2> {shlex.quote(task_info.stderr_path)}"
-    run_cmd = ["sudo", "/bin/bash", "-c", shell_cmd]
-    return run_cmd
-
-# Might want to extract the command builder to one or multiple separate files,
-# e.g., cmd_builder.py, or cmd_builders/docker.py and cmd_builders/systemd.py
-
-def build_run_task_cmd_systemd_resource_alloc(
-    task_info: TaskInfo,
-    run_cmd: list[str],
-):
-    """
-    Appends systemd-run specific resource allocation options to the given
-    command. This function modifies `run_cmd` in-place.
-
-    Possible options to be appended:
-    - `CPUQuota`
-    - `MemoryMax`
-    - `MemorySwapMax`
-    """
-    if task_info.required_cores > 0 and total_cores > 0:
-        # Generate CPU list like "0,1,2" if required_cores=3
-        # cpu_list = ",".join(map(str, range(min(task_info.required_cores, total_cores))))
-        # run_cmd.append(f"--property=CPUAffinity={cpu_list}")
-        # Optionally add CPUQuota for stricter enforcement (percentage)
-        cpu_quota = int(task_info.required_cores * 100)
-        run_cmd.append(f"--property=CPUQuota={cpu_quota}%")
-
-    if (
-        task_info.required_memory_bytes is not None
-        and task_info.required_memory_bytes > 0
-    ):
-        run_cmd.append(f"--property=MemoryMax={task_info.required_memory_bytes}")
-    run_cmd.append("--property=MemorySwapMax=0")
-
-def build_run_task_cmd_systemd_env_vars(
-    task_info: TaskInfo,
-    run_cmd: list[str],
-):
-    """
-    Appends systemd-run specific environment variables options to the given
-    command. This function modifies `run_cmd` in-place.
-    """
-    process_env = os.environ.copy()  # Start with runner's environment
-    process_env.update(task_info.env_vars)
-    process_env["HAKURIVER_TASK_ID"] = str(task_info.task_id)  # Use HAKURIVER_ prefix
-    process_env["HAKURIVER_LOCAL_TEMP_DIR"] = RUNNER_CONFIG.LOCAL_TEMP_DIR
-    process_env["HAKURIVER_SHARED_DIR"] = RUNNER_CONFIG.SHARED_DIR
-    if task_info.target_numa_node_id is not None:
-        process_env["HAKURIVER_TARGET_NUMA_NODE"] = str(
-            task_info.target_numa_node_id
-        )
-    for key, value in process_env.items():
-        run_cmd.append(f"--setenv={key}={value}")  # Pass all env vars
-
-def build_run_task_cmd_systemd_inner_cmd(
-    task_info: TaskInfo,
-):
-    """
-    Builds the inner command for systemd-run.
-    """
-    task_id = task_info.task_id
-    # Use shlex.join for the inner command and args if possible, otherwise manual quoting
-    if not task_info.docker_image_name:
-        inner_cmd_parts = [task_info.command] + [
-            shlex.quote(arg) for arg in task_info.arguments
-        ]
-    else:
-        task_command_list = [task_info.command] + [
-            shlex.quote(arg) for arg in task_info.arguments
-        ]
-        docker_wrapper_cmd = docker_utils.modify_command_for_docker(
-            original_command_list=task_command_list,
-            container_image_name=task_info.docker_image_name,
-            task_id=task_id,
-            privileged=task_info.docker_privileged,
-            mount_dirs=task_info.docker_additional_mounts
-            + [
-                f"{RUNNER_CONFIG.SHARED_DIR}/shared_data:/shared",
-                f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
-            ],
-            working_dir="/shared",
-        )
-        inner_cmd_parts = docker_wrapper_cmd
-    inner_cmd_str = " ".join(inner_cmd_parts)
-    return inner_cmd_str
-
-def build_run_task_cmd_systemd_numactl_prefix(
-    task_info: TaskInfo,
-):
-    """
-    Generates a numactl prefix for NUMA node binding based on task
-    configuration.
-
-    Returns an empty string if no NUMA binding can be applied, otherwise
-    returns a numactl command prefix for binding CPU and memory to the
-    specified NUMA node.
-    """
-    task_id = task_info.task_id
-    numactl_prefix = ""
-    if task_info.target_numa_node_id is not None and numa_topology is not None:
-        if (
-            RUNNER_CONFIG.NUMACTL_PATH
-            and numa_topology
-            and task_info.target_numa_node_id in numa_topology
-        ):
-            # Basic binding to both CPU and memory on the target node
-            numa_id = task_info.target_numa_node_id
-            # Use --interleave=all as a fallback if specific binds cause issues,
-            # or fine-tune with --physcpubind= based on numa_topology[numa_id]['cores']
-            numactl_prefix = f"{shlex.quote(RUNNER_CONFIG.NUMACTL_PATH)} --cpunodebind={numa_id} --membind={numa_id} "
-            logger.info(f"Task {task_id}: Applying NUMA binding to node {numa_id}.")
-        elif not RUNNER_CONFIG.NUMACTL_PATH:
-            logger.warning(
-                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but numactl path is not configured. Ignoring NUMA binding."
+                sync_success = await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    docker_utils.sync_from_shared,
+                    container_name_from_tag,
+                    sync_path,
+                )
+                if not sync_success:
+                    raise RuntimeError(
+                        f"Failed to sync Docker image from {sync_path}"
+                    )
+                logger.info(f"Task {task_id}: Docker image sync successful.")
+            else:
+                # This case shouldn't happen if needs_sync is True, but handle defensively
+                raise RuntimeError(
+                    f"Sync needed but no tarball path found for {container_name_from_tag}"
+                )
+        else:
+            logger.info(
+                f"Task {task_id}: Local Docker image '{docker_image_name}' is up-to-date."
             )
-        elif not numa_topology:
-            logger.warning(
-                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} specified, but NUMA topology couldn't be detected on this runner. Ignoring NUMA binding."
-            )
-        else:  # NUMA ID not found in detected topology
-            logger.warning(
-                f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} not found in detected topology {list(numa_topology.keys())}. Ignoring NUMA binding."
-            )
-    return numactl_prefix
-
-def build_run_task_cmd_systemd(
-    task_info: TaskInfo,
-    working_dir: str,
-    unit_name: str,
-):
-    """
-    Builds the command to run the task using systemd.
-    """
-    task_id = task_info.task_id
-    run_cmd = [
-        "sudo",
-        "systemd-run",
-        "--scope",  # Run as a transient scope unit
-        "--collect",  # Garbage collect unit when process exits
-        f"--property=User={RUNNER_CONFIG.RUNNER_USER}",  # Run as the current user (or specify another user)
-        f"--unit={unit_name}",
-        # Basic description
-        f"--description=HakuRiver Task {task_id}: {shlex.quote(task_info.command)}",
-    ]
-
-    # Append resource allocation properties
-    build_run_task_cmd_systemd_resource_alloc(task_info, run_cmd)
-
-    # Append nvironment variables options
-    build_run_task_cmd_systemd_env_vars(task_info, run_cmd)
-
-    # Working Directory (Optional - run in shared or temp?)
-    run_cmd.append(f"--working-directory={working_dir}")  # Example
-
-    # Command and Arguments with Redirection
-    # This is complex due to shell quoting needed inside systemd-run
-    inner_cmd_str = build_run_task_cmd_systemd_inner_cmd(task_info)
-
-    numactl_prefix = build_run_task_cmd_systemd_numactl_prefix(task_info)
-
-    # Ensure stdout/stderr paths are absolute and quoted if they contain spaces
-    quoted_stdout = shlex.quote(task_info.stdout_path)
-    quoted_stderr = shlex.quote(task_info.stderr_path)
-
-    shell_command = (
-        f"exec {numactl_prefix}{inner_cmd_str} > {quoted_stdout} 2> {quoted_stderr}"
-    )
-    run_cmd.extend(["/bin/sh", "-c", shell_command])
-    return run_cmd
 
 def prepare_task_env(task_info: TaskInfo):
     # Ensure output directories exist before starting
@@ -606,13 +390,31 @@ async def run_task_background(task_info: TaskInfo):
     )
     working_dir = os.path.join(RUNNER_CONFIG.SHARED_DIR, "shared_data")
 
+    # Build the command to run the task
+
     if task_info.docker_image_name not in {None, "", "NULL"}:
+        # Docker image specified, use Docker
         use_systemd = False
-        run_cmd = await build_run_task_cmd_docker(task_info, working_dir)
+        try:
+            await sync_docker_image(task_id, task_info.docker_image_name)
+        except Exception as e:
+            await handle_task_error(
+                logging.ERROR,
+                f"Docker image sync check/load failed for task {task_id}: {e}",
+                task_id,
+            )
+            return  # Stop processing this task
+        run_cmd = docker_cmd_builder.build(task_info, working_dir)
     else:
         use_systemd = True
         # No docker image specified, run directly
-        run_cmd = build_run_task_cmd_systemd(task_info, working_dir, unit_name)
+        run_cmd = systemd_cmd_builder.build(
+            task_info,
+            working_dir=working_dir,
+            unit_name=unit_name,
+            total_cores=total_cores,
+            numa_topology=numa_topology,
+        )
 
         logger.info(f"Executing task {task_id} via systemd-run unit {unit_name}")
         logger.debug(
