@@ -447,30 +447,30 @@ The Tasks section allows submitting, listing, and managing tasks.
 <table style="width: 100%; border-collapse: collapse; border: none;">
   <thead>
     <tr>
-      <th style="width: 20%; text-align: center; padding: 10px; border-bottom: 1px solid #ddd;">Task Submission Form</th>
-      <th style="width: 35%; text-align: center; padding: 10px; border-bottom: 1px solid #ddd;">Task Details Dialog</th>
-      <th style="width: 30%; text-align: center; padding: 10px; border-bottom: 1px solid #ddd;">Task logs</th>
+      <th>Task Submission Form</th>
+      <th>Task Details Dialog</th>
+      <th>Task logs</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style="padding: 10px; vertical-align: top; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;">
-        <p align="center">
-          <img src="image/README/1745625554460.png" alt="Task Submission Form" style="max-width: 100%; max-height: 450px; border: 1px solid #ccc; border-radius: 5px;">
+      <td>
+        <p>
+          <img src="image/README/1745625554460.png" alt="Task Submission Form" width="250px">
         </p>
-        <p align="center" style="font-size: 0.9em; color: #555;">Submit new tasks specifying command, arguments, resources, and targets (node/NUMA/GPU).</p>
+        <p>Submit new tasks specifying command, arguments, resources, and targets (node/NUMA/GPU).</p>
       </td>
-      <td style="padding: 10px; vertical-align: top; border-bottom: 1px solid #ddd;">
-        <p align="center">
-          <img src="image/README/1745625574031.png" alt="Task Details Dialog" style="max-width: 100%; max-height: 450px; border: 1px solid #ccc; border-radius: 5px;">
+      <td>
+        <p>
+          <img src="image/README/1745625574031.png" alt="Task Details Dialog" width="850px">
         </p>
-        <p align="center" style="font-size: 0.9em; color: #555;">View comprehensive information about a selected task.</p>
+        <p>View comprehensive information about a selected task.</p>
       </td>
-      <td style="padding: 10px; vertical-align: top; border-bottom: 1px solid #ddd;">
-        <p align="center">
-          <img src="image/README/1745625583209.png" alt="Task Logs Modal" style="max-width: 100%; max-height: 450px; border: 1px solid #ccc; border-radius: 5px;">
+      <td>
+        <p>
+          <img src="image/README/1745625583209.png" alt="Task Logs Modal" width="850px">
         </p>
-        <p align="center" style="font-size: 0.9em; color: #555;">View comprehensive information about a selected task.</p>
+        <p>View comprehensive information about a selected task.</p>
       </td>
     </tr>
   </tbody>
