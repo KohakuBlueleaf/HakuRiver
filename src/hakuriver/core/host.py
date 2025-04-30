@@ -662,7 +662,7 @@ async def submit_task(req: TaskRequest):
 
     required_gpus = req.required_gpus or [[] for _ in targets]
 
-    if len(targets)>1 and req.task_type == "vps":
+    if len(targets) > 1 and req.task_type == "vps":
         raise HTTPException(
             status_code=400,
             detail="VPS tasks cannot be submitted to multiple targets.",

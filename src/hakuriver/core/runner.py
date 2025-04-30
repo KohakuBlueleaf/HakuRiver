@@ -164,9 +164,7 @@ async def make_command_docker(task_id, task_info, working_dir, numactl_prefix):
     container_name_from_tag = task_info.docker_image_name.split("/")[1].split(":")[
         0
     ]  # Extract 'myenv' from 'hakuriver/myenv:base'
-    container_tar_dir = (
-        RUNNER_CONFIG.CONTAINER_TAR_DIR
-    )  # Use runner's configured path
+    container_tar_dir = RUNNER_CONFIG.CONTAINER_TAR_DIR  # Use runner's configured path
 
     try:
         async with docker_lock:
@@ -200,9 +198,7 @@ async def make_command_docker(task_id, task_info, working_dir, numactl_prefix):
                 )
 
     except Exception as e:
-        error_message = (
-            f"Docker image sync check/load failed for task {task_id}: {e}"
-        )
+        error_message = f"Docker image sync check/load failed for task {task_id}: {e}"
         logger.error(error_message)
         await report_status_to_host(
             TaskStatusUpdate(
@@ -244,7 +240,9 @@ async def make_command_docker(task_id, task_info, working_dir, numactl_prefix):
     return ["sudo", "/bin/bash", "-c", shell_cmd]
 
 
-def make_command_systemd(task_id, task_info, working_dir, numactl_prefix, unit_name, total_cores):# No docker image specified, run directly
+def make_command_systemd(
+    task_id, task_info, working_dir, numactl_prefix, unit_name, total_cores
+):  # No docker image specified, run directly
     # --- Construct systemd-run command ---
     run_cmd = [
         "sudo",
@@ -276,9 +274,7 @@ def make_command_systemd(task_id, task_info, working_dir, numactl_prefix, unit_n
     process_env["HAKURIVER_LOCAL_TEMP_DIR"] = RUNNER_CONFIG.LOCAL_TEMP_DIR
     process_env["HAKURIVER_SHARED_DIR"] = RUNNER_CONFIG.SHARED_DIR
     if task_info.target_numa_node_id is not None:
-        process_env["HAKURIVER_TARGET_NUMA_NODE"] = str(
-            task_info.target_numa_node_id
-        )
+        process_env["HAKURIVER_TARGET_NUMA_NODE"] = str(task_info.target_numa_node_id)
     for key, value in process_env.items():
         run_cmd.append(f"--setenv={key}={value}")  # Pass all env vars
 
@@ -328,8 +324,18 @@ def make_command_systemd(task_id, task_info, working_dir, numactl_prefix, unit_n
 
 
 async def run_vps(task_info: TaskInfo):
-    logger.info(f"Running VPS task {task_info.task_id} with container: {task_info.docker_image_name}")
+    logger.info(
+        f"Running VPS task {task_info.task_id} with container: {task_info.docker_image_name}"
+    )
     # [TODO] Implement VPS-specific logic here
+    await report_status_to_host(
+        TaskStatusUpdate(
+            task_id=task_info.task_id,
+            status="TEST_MODE",
+            started_at=datetime.datetime.now(),
+            completed_at=datetime.datetime.now(),
+        )
+    )
 
 
 async def run_task_background(task_info: TaskInfo):
@@ -377,12 +383,16 @@ async def run_task_background(task_info: TaskInfo):
         await run_vps(task_info)
         return  # VPS tasks are handled differently
     elif task_info.docker_image_name not in {None, "", "NULL"}:
-        run_cmd = await make_command_docker(task_id, task_info, working_dir, numactl_prefix)
+        run_cmd = await make_command_docker(
+            task_id, task_info, working_dir, numactl_prefix
+        )
     else:
         use_systemd = True
         # No docker image specified, run directly
         # --- Construct systemd-run command ---
-        run_cmd = await make_command_systemd(task_id, task_info, working_dir, numactl_prefix, unit_name, total_cores)
+        run_cmd = await make_command_systemd(
+            task_id, task_info, working_dir, numactl_prefix, unit_name, total_cores
+        )
 
     exit_code = None
     error_message = None

@@ -8,7 +8,7 @@ from hakuriver.utils.gpu import GPUInfo
 # --- Pydantic Models for runner-host connection ---
 class TaskInfo(BaseModel):
     task_id: int
-    task_type: str = "command" # command or vps
+    task_type: str = "command"  # command or vps
     command: str = ""
     arguments: list[str] = Field(default_factory=list)
     env_vars: dict[str, str] = Field(default_factory=dict)
@@ -49,7 +49,6 @@ class HeartbeatData(BaseModel):
     current_avg_temp: float | None = None
     current_max_temp: float | None = None
     gpu_info: list[GPUInfo] = Field(default_factory=list)
-
 
 
 # --- Pydantic Models for Host ---
