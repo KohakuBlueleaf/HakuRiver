@@ -1,6 +1,7 @@
 import datetime
 import json
 import peewee
+from traitlets import default
 
 db = peewee.SqliteDatabase(None)  # Initialize with None
 
@@ -60,6 +61,7 @@ class Node(BaseModel):
 
 class Task(BaseModel):
     task_id = peewee.BigIntegerField(primary_key=True)
+    task_type = peewee.CharField(default="command")  # command or vps
     batch_id = peewee.BigIntegerField(null=True, index=True)
     command = peewee.TextField()
     arguments = peewee.TextField()  # Store as JSON string

@@ -18,112 +18,20 @@ from hakuriver.utils.gpu import GPUInfo
 from hakuriver.utils import docker as docker_utils
 from hakuriver.db.models import db, Node, Task, initialize_database
 from hakuriver.core.config import HOST_CONFIG
+from hakuriver.core.models import (
+    TaskStatusUpdate,
+    HeartbeatData,
+    TaskInfo as TaskInfoForRunner,
+    RunnerInfo,
+    TaskRequest,
+)
+
 from .docker.host_api import router as docker_host_router
 from .docker.host_terminal import terminal_websocket_endpoint
 
 
-snowflake = Snowflake()
-
-
-# --- Pydantic Models (remain the same) ---
-class RunnerInfo(BaseModel):
-    hostname: str
-    total_cores: int
-    total_ram_bytes: int
-    runner_url: str
-    numa_topology: dict | None = None
-    gpu_info: list[GPUInfo] | None = Field(default_factory=list)
-
-
-class TaskRequest(BaseModel):
-    command: str
-    arguments: list[str] = Field(default_factory=list)
-    env_vars: dict[str, str] = Field(default_factory=dict)
-    required_cores: int = Field(
-        default=1, ge=0, description="Number of CPU cores required"
-    )
-    required_gpus: list[list[int]] | None = Field(
-        default=None,
-        description="List of GPU IDs required for the task for all targets (if any)",
-    )
-    required_memory_bytes: int | None = Field(
-        default=None, ge=0, description="Memory limit in bytes"
-    )
-    targets: list[str] | None = Field(
-        default=None,
-        min_length=0,
-        description='List of targets, e.g., ["host1", "host2:0", "host1:1"]',
-    )
-    container_name: str | None = Field(
-        default=None,
-        description="Optional: Override the default container name for this task batch.",
-    )
-    privileged: bool | None = Field(
-        default=None,
-        description="Optional: Override the default privileged setting for this task batch.",
-    )
-    additional_mounts: list[str] | None = Field(
-        default=None,
-        description="Optional: Override the default additional mounts for this task batch.",
-    )
-
-    @field_validator("targets")
-    @classmethod
-    def validate_targets_format(cls, v):
-        if v is None:
-            return None
-        pattern = r"^[a-zA-Z0-9.-]+(:\d+)?$"  # hostname[:numa_id]
-        for target in v:
-            if not re.match(pattern, target):
-                raise ValueError(
-                    f"Invalid target format: '{target}'. Use 'hostname' or 'hostname:numa_id'."
-                )
-        return v
-
-
-class TaskInfoForRunner(BaseModel):
-    task_id: int
-    command: str
-    arguments: list[str]
-    env_vars: dict[str, str]
-    required_cores: int
-    required_gpus: list[int] | None = None  # List of GPU IDs for this task
-    stdout_path: str
-    stderr_path: str
-    required_memory_bytes: int | None = None
-    target_numa_node_id: int | None = None
-    docker_image_name: str  # Image tag to use (e.g., hakuriver/myenv:base)
-    docker_privileged: bool
-    docker_additional_mounts: list[str]  # ONLY additional mounts specified by host/task
-
-
-class TaskStatusUpdate(BaseModel):
-    task_id: int
-    status: str
-    exit_code: int | None = None
-    message: str | None = None
-    started_at: datetime.datetime | None = None
-    completed_at: datetime.datetime | None = None
-
-
-class HeartbeatKilledTaskInfo(BaseModel):
-    task_id: int
-    reason: str  # e.g., "oom", "killed_by_host"
-
-
-class HeartbeatData(BaseModel):
-    running_tasks: list[int] = Field(default_factory=list)
-    killed_tasks: list[HeartbeatKilledTaskInfo] = Field(default_factory=list)
-    cpu_percent: float | None = None
-    memory_percent: float | None = None
-    memory_used_bytes: int | None = None
-    memory_total_bytes: int | None = None
-    current_avg_temp: float | None = None
-    current_max_temp: float | None = None
-    gpu_info: list[GPUInfo] = Field(default_factory=list)  # List of GPUInfo objects
-
-
 # --- global state ---
+snowflake = Snowflake()
 docker_lock = asyncio.Lock()
 
 
@@ -205,6 +113,58 @@ def find_suitable_node(required_cores: int) -> Node | None:
 
 
 async def send_task_to_runner(runner_url: str, task_info: TaskInfoForRunner):
+    task_id = task_info.task_id
+    logger.info(f"Attempting to send task {task_id} to runner at {runner_url}")
+    try:
+        # Use longer timeout for potentially slow runner start
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{runner_url}/run", json=task_info.model_dump(), timeout=30.0
+            )
+            response.raise_for_status()
+        logger.info(f"Task {task_id} successfully sent to runner {runner_url}")
+        # Let runner report 'running' status
+
+        task: Task = Task.get_or_none(Task.task_id == task_id)
+        if task and task.status == "assigning":
+            # Keep as assigning until runner confirms start
+            pass
+    except httpx.RequestError as e:
+        logger.error(f"Failed to contact runner {runner_url} for task {task_id}: {e}")
+
+        task: Task = Task.get_or_none(Task.task_id == task_id)
+        if task and task.status == "assigning":  # Only fail if it was still assigning
+            task.status = "failed"
+            task.error_message = f"Failed to contact runner: {e}"
+            task.completed_at = datetime.datetime.now()
+            task.save()
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            f"Runner {runner_url} rejected task {task_id}: {e.response.status_code} - {e.response.text}"
+        )
+
+        task: Task = Task.get_or_none(Task.task_id == task_id)
+        if task and task.status == "assigning":
+            task.status = "failed"
+            task.error_message = (
+                f"Runner rejected task: {e.response.status_code} - {e.response.text}"
+            )
+            task.completed_at = datetime.datetime.now()
+            task.save()
+    except Exception as e:
+        logger.exception(
+            f"Unexpected error sending task {task_id} to {runner_url}: {e}"
+        )
+
+        task: Task = Task.get_or_none(Task.task_id == task_id)
+        if task and task.status == "assigning":
+            task.status = "failed"
+            task.error_message = f"Unexpected error during task dispatch: {e}"
+            task.completed_at = datetime.datetime.now()
+            task.save()
+
+
+async def send_vps_task_to_runner(runner_url: str, task_info: TaskInfoForRunner):
     task_id = task_info.task_id
     logger.info(f"Attempting to send task {task_id} to runner at {runner_url}")
     try:
@@ -446,9 +406,11 @@ async def receive_heartbeat(
 async def get_task_stdout(task_id: int):
     """Retrieves the standard output log file content for a given task."""
     logger.debug(f"Request received for stdout of task {task_id}")
-    task = Task.get_or_none(Task.task_id == task_id)
+    task: Task = Task.get_or_none(Task.task_id == task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    if task.task_type == "vps":
+        raise HTTPException(status_code=400, detail="VPS tasks do not have stdout.")
 
     log_path = get_secure_log_path(task, "stdout")
     if not log_path:
@@ -493,9 +455,11 @@ async def get_task_stdout(task_id: int):
 async def get_task_stderr(task_id: int):
     """Retrieves the standard error log file content for a given task."""
     logger.debug(f"Request received for stderr of task {task_id}")
-    task = Task.get_or_none(Task.task_id == task_id)
+    task: Task = Task.get_or_none(Task.task_id == task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task entry not found")
+    if task.task_type == "vps":
+        raise HTTPException(status_code=400, detail="VPS tasks do not have stdout.")
 
     log_path = get_secure_log_path(task, "stderr")
     if not log_path:
@@ -546,6 +510,7 @@ async def get_tasks():
             .join(
                 Node, peewee.JOIN.LEFT_OUTER, on=(Task.assigned_node == Node.hostname)
             )
+            .where(Task.task_type == "command")
             .order_by(Task.submitted_at.desc())
         )
 
@@ -590,9 +555,63 @@ async def get_tasks():
         raise HTTPException(status_code=500, detail="Unexpected error fetching tasks.")
 
 
+@app.get("/vps")
+async def get_vps():
+    """Retrieves a list of tasks, including NUMA target and batch ID."""
+    logger.debug("Received request to fetch tasks list.")
+    try:
+        query: Iterable[Task] = (
+            Task.select(Task, Node.hostname)
+            .join(
+                Node, peewee.JOIN.LEFT_OUTER, on=(Task.assigned_node == Node.hostname)
+            )
+            .where(Task.task_type == "vps")
+            .order_by(Task.submitted_at.desc())
+        )
+
+        tasks_data = []
+        for task in query:
+            node_hostname = task.assigned_node.hostname if task.assigned_node else None
+            tasks_data.append(
+                {
+                    "task_id": str(task.task_id),  # Keep as string for consistency
+                    "required_cores": task.required_cores,
+                    "required_gpus": (
+                        json.loads(task.required_gpus) if task.required_gpus else []
+                    ),
+                    "required_memory_bytes": task.required_memory_bytes,
+                    "status": task.status,
+                    "assigned_node": node_hostname,
+                    "target_numa_node_id": task.target_numa_node_id,  # Add target NUMA ID
+                    "exit_code": task.exit_code,
+                    "error_message": task.error_message,
+                    "submitted_at": task.submitted_at,
+                    "started_at": task.started_at,
+                    "completed_at": task.completed_at,
+                }
+            )
+        return tasks_data
+
+    except peewee.PeeweeException as e:
+        logger.error(f"Database error fetching tasks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Database error fetching tasks.")
+    except Exception as e:
+        logger.error(f"Unexpected error fetching tasks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Unexpected error fetching tasks.")
+
+
 @app.post("/submit", status_code=202)
 async def submit_task(req: TaskRequest):
     """Accepts a task request and dispatches it to one or more target nodes/NUMA nodes."""
+    if req.task_type not in {"command", "vps"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid task type. Only 'command' and 'vps' are supported.",
+        )
+    elif req.task_type == "vps":
+        req.command = ""
+        req.arguments = []  # VPS tasks don't need a command or arguments
+        req.env_vars = {}
     created_task_ids = []
     failed_targets = []
     first_task_id_for_batch = None
@@ -612,6 +631,11 @@ async def submit_task(req: TaskRequest):
         )
 
     if req.container_name == "NULL":
+        if req.task_type == "vps":
+            raise HTTPException(
+                status_code=400,
+                detail="VPS tasks require a Docker container.",
+            )
         task_container_name = None
     else:
         task_container_name = req.container_name or HOST_CONFIG.DEFAULT_CONTAINER_NAME
@@ -637,6 +661,12 @@ async def submit_task(req: TaskRequest):
         targets = [targets]
 
     required_gpus = req.required_gpus or [[] for _ in targets]
+
+    if len(targets)>1 and req.task_type == "vps":
+        raise HTTPException(
+            status_code=400,
+            detail="VPS tasks cannot be submitted to multiple targets.",
+        )
 
     for target_str, target_gpus in zip(targets, required_gpus, strict=True):
         target_numa_id: int | None = None
@@ -770,6 +800,7 @@ async def submit_task(req: TaskRequest):
             with db.atomic():
                 task = Task.create(
                     task_id=task_id,
+                    task_type=req.task_type,
                     batch_id=current_batch_id,
                     arguments="",  # Will be set below
                     env_vars="",  # Will be set below
@@ -812,6 +843,7 @@ async def submit_task(req: TaskRequest):
         # --- Prepare Runner Payload and Dispatch ---
         task_info_for_runner = TaskInfoForRunner(
             task_id=task_id,
+            task_type=req.task_type,
             command=req.command,
             arguments=req.arguments,
             env_vars=req.env_vars,
@@ -826,7 +858,11 @@ async def submit_task(req: TaskRequest):
             docker_additional_mounts=task_additional_mounts,
         )
 
-        asyncio.create_task(send_task_to_runner(node.url, task_info_for_runner))
+        if req.task_type == "vps":
+            # VPS tasks are dispatched differently (e.g., to a different runner or endpoint)
+            asyncio.create_task(send_vps_task_to_runner(node.url, task_info_for_runner))
+        else:
+            asyncio.create_task(send_task_to_runner(node.url, task_info_for_runner))
         created_task_ids.append(str(task_id))  # Add successfully launched task ID
 
     # --- Construct Final Response ---

@@ -1,4 +1,5 @@
 import os
+from tkinter import TRUE
 import httpx
 import asyncio
 import datetime
@@ -17,50 +18,12 @@ from hakuriver.utils.binding import get_executable_and_library_mounts
 from hakuriver.utils.gpu import get_gpu_info, GPUInfo
 from hakuriver.utils import docker as docker_utils
 from hakuriver.core.config import RUNNER_CONFIG, RunnerConfig
-
-
-class TaskInfo(BaseModel):
-    task_id: int
-    command: str
-    arguments: list[str] = Field(default_factory=list)
-    env_vars: dict[str, str] = Field(default_factory=dict)
-    required_cores: int
-    required_gpus: list[int] | None = None  # Number of GPUs required (if any)
-    stdout_path: str
-    stderr_path: str
-    required_memory_bytes: int | None = None
-    target_numa_node_id: int | None = Field(
-        default=None, description="Target NUMA node ID for execution"
-    )
-    docker_image_name: str  # Image tag to use (e.g., hakuriver/myenv:base)
-    docker_privileged: bool
-    docker_additional_mounts: list[str]  # ONLY additional mounts specified by host/task
-
-
-class TaskStatusUpdate(BaseModel):
-    task_id: int
-    status: str
-    exit_code: int | None = None
-    message: str | None = None
-    started_at: datetime.datetime | None = None
-    completed_at: datetime.datetime | None = None
-
-
-class HeartbeatKilledTaskInfo(BaseModel):
-    task_id: int
-    reason: str  # e.g., "oom", "killed_by_host"
-
-
-class HeartbeatData(BaseModel):
-    running_tasks: list[int]
-    killed_tasks: list[HeartbeatKilledTaskInfo] = Field(default_factory=list)
-    cpu_percent: float | None = None
-    memory_percent: float | None = None
-    memory_used_bytes: int | None = None
-    memory_total_bytes: int | None = None
-    current_avg_temp: float | None = None
-    current_max_temp: float | None = None
-    gpu_info: list[GPUInfo] = Field(default_factory=list)
+from hakuriver.core.models import (
+    TaskInfo,
+    TaskStatusUpdate,
+    HeartbeatData,
+    HeartbeatKilledTaskInfo,
+)
 
 
 # --- Global State ---
@@ -194,6 +157,181 @@ async def report_status_to_host(update_data: TaskStatusUpdate):
         )
 
 
+async def make_command_docker(task_id, task_info, working_dir, numactl_prefix):
+    logger.info(
+        f"Task {task_id}: Checking Docker image sync status for '{task_info.docker_image_name}'."
+    )
+    container_name_from_tag = task_info.docker_image_name.split("/")[1].split(":")[
+        0
+    ]  # Extract 'myenv' from 'hakuriver/myenv:base'
+    container_tar_dir = (
+        RUNNER_CONFIG.CONTAINER_TAR_DIR
+    )  # Use runner's configured path
+
+    try:
+        async with docker_lock:
+            needs_sync, sync_path = docker_utils.needs_sync(
+                container_name_from_tag, container_tar_dir
+            )
+            if needs_sync:
+                if sync_path:
+                    logger.info(
+                        f"Task {task_id}: Syncing required Docker image from {sync_path}..."
+                    )
+                    sync_success = await asyncio.get_running_loop().run_in_executor(
+                        None,
+                        docker_utils.sync_from_shared,
+                        container_name_from_tag,
+                        sync_path,
+                    )
+                    if not sync_success:
+                        raise RuntimeError(
+                            f"Failed to sync Docker image from {sync_path}"
+                        )
+                    logger.info(f"Task {task_id}: Docker image sync successful.")
+                else:
+                    # This case shouldn't happen if needs_sync is True, but handle defensively
+                    raise RuntimeError(
+                        f"Sync needed but no tarball path found for {container_name_from_tag}"
+                    )
+            else:
+                logger.info(
+                    f"Task {task_id}: Local Docker image '{task_info.docker_image_name}' is up-to-date."
+                )
+
+    except Exception as e:
+        error_message = (
+            f"Docker image sync check/load failed for task {task_id}: {e}"
+        )
+        logger.error(error_message)
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="failed",
+                message=error_message,
+                completed_at=datetime.datetime.now(),
+            )
+        )
+        return  # Stop processing this task
+
+    task_command_list = (
+        [numactl_prefix]
+        + [task_info.command]
+        + [shlex.quote(arg) for arg in task_info.arguments]
+    )
+    docker_wrapper_cmd = docker_utils.modify_command_for_docker(
+        original_command_list=task_command_list,
+        container_image_name=task_info.docker_image_name,
+        task_id=task_id,
+        privileged=task_info.docker_privileged,
+        mount_dirs=task_info.docker_additional_mounts
+        + [
+            f"{working_dir}:/shared",
+            f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
+        ]
+        + get_executable_and_library_mounts(RunnerConfig.NUMACTL_PATH)[1],
+        working_dir="/shared",
+        cpu_cores=task_info.required_cores,
+        memory_limit=(
+            f"{task_info.required_memory_bytes/1e6:.1f}M"
+            if task_info.required_memory_bytes
+            else None
+        ),
+        gpu_ids=task_info.required_gpus,
+    )
+    inner_cmd_str = " ".join(docker_wrapper_cmd)
+    shell_cmd = f"exec {inner_cmd_str} > {shlex.quote(task_info.stdout_path)} 2> {shlex.quote(task_info.stderr_path)}"
+    return ["sudo", "/bin/bash", "-c", shell_cmd]
+
+
+def make_command_systemd(task_id, task_info, working_dir, numactl_prefix, unit_name, total_cores):# No docker image specified, run directly
+    # --- Construct systemd-run command ---
+    run_cmd = [
+        "sudo",
+        "systemd-run",
+        "--scope",  # Run as a transient scope unit
+        "--collect",  # Garbage collect unit when process exits
+        f"--property=User={RUNNER_CONFIG.RUNNER_USER}",  # Run as the current user (or specify another user)
+        f"--unit={unit_name}",
+        # Basic description
+        f"--description=HakuRiver Task {task_id}: {shlex.quote(task_info.command)}",
+    ]
+
+    # Resource Allocation Properties
+    if task_info.required_cores > 0 and total_cores > 0:
+        cpu_quota = int(task_info.required_cores * 100)
+        run_cmd.append(f"--property=CPUQuota={cpu_quota}%")
+
+    if (
+        task_info.required_memory_bytes is not None
+        and task_info.required_memory_bytes > 0
+    ):
+        run_cmd.append(f"--property=MemoryMax={task_info.required_memory_bytes}")
+    run_cmd.append("--property=MemorySwapMax=0")
+
+    # Environment Variables
+    process_env = os.environ.copy()  # Start with runner's environment
+    process_env.update(task_info.env_vars)
+    process_env["HAKURIVER_TASK_ID"] = str(task_id)  # Use HAKURIVER_ prefix
+    process_env["HAKURIVER_LOCAL_TEMP_DIR"] = RUNNER_CONFIG.LOCAL_TEMP_DIR
+    process_env["HAKURIVER_SHARED_DIR"] = RUNNER_CONFIG.SHARED_DIR
+    if task_info.target_numa_node_id is not None:
+        process_env["HAKURIVER_TARGET_NUMA_NODE"] = str(
+            task_info.target_numa_node_id
+        )
+    for key, value in process_env.items():
+        run_cmd.append(f"--setenv={key}={value}")  # Pass all env vars
+
+    # Working Directory (Optional - run in shared or temp?)
+    run_cmd.append(f"--working-directory={working_dir}")  # Example
+
+    # Command and Arguments with Redirection
+    # This is complex due to shell quoting needed inside systemd-run
+    # Ensure stdout/stderr paths are absolute and quoted if they contain spaces
+    quoted_stdout = shlex.quote(task_info.stdout_path)
+    quoted_stderr = shlex.quote(task_info.stderr_path)
+    # Use shlex.join for the inner command and args if possible, otherwise manual quoting
+    if not task_info.docker_image_name:
+        inner_cmd_parts = [task_info.command] + [
+            shlex.quote(arg) for arg in task_info.arguments
+        ]
+    else:
+        task_command_list = [task_info.command] + [
+            shlex.quote(arg) for arg in task_info.arguments
+        ]
+        docker_wrapper_cmd = docker_utils.modify_command_for_docker(
+            original_command_list=task_command_list,
+            container_image_name=task_info.docker_image_name,
+            task_id=task_id,
+            privileged=task_info.docker_privileged,
+            mount_dirs=task_info.docker_additional_mounts
+            + [
+                f"{RUNNER_CONFIG.SHARED_DIR}/shared_data:/shared",
+                f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
+            ]
+            + get_executable_and_library_mounts(RunnerConfig.NUMACTL_PATH)[1],
+            working_dir="/shared",
+        )
+        inner_cmd_parts = docker_wrapper_cmd
+    inner_cmd_str = " ".join(inner_cmd_parts)
+
+    shell_command = (
+        f"exec {numactl_prefix}{inner_cmd_str} > {quoted_stdout} 2> {quoted_stderr}"
+    )
+    run_cmd.extend(["/bin/sh", "-c", shell_command])
+
+    logger.info(f"Executing task {task_id} via systemd-run unit {unit_name}")
+    logger.debug(
+        f"systemd-run command: {' '.join(run_cmd)}"
+    )  # Log the full command for debugging
+    return run_cmd
+
+
+async def run_vps(task_info: TaskInfo):
+    logger.info(f"Running VPS task {task_info.task_id} with container: {task_info.docker_image_name}")
+    # [TODO] Implement VPS-specific logic here
+
+
 async def run_task_background(task_info: TaskInfo):
     task_id = task_info.task_id
     unit_name = f"hakuriver-task-{task_id}"
@@ -234,178 +372,17 @@ async def run_task_background(task_info: TaskInfo):
                 f"Task {task_id}: Target NUMA node {task_info.target_numa_node_id} not found in detected topology {list(numa_topology.keys())}. Ignoring NUMA binding."
             )
 
-    if task_info.docker_image_name not in {None, "", "NULL"}:
-        use_systemd = False
-        logger.info(
-            f"Task {task_id}: Checking Docker image sync status for '{task_info.docker_image_name}'."
-        )
-        container_name_from_tag = task_info.docker_image_name.split("/")[1].split(":")[
-            0
-        ]  # Extract 'myenv' from 'hakuriver/myenv:base'
-        container_tar_dir = (
-            RUNNER_CONFIG.CONTAINER_TAR_DIR
-        )  # Use runner's configured path
-
-        try:
-            async with docker_lock:
-                needs_sync, sync_path = docker_utils.needs_sync(
-                    container_name_from_tag, container_tar_dir
-                )
-                if needs_sync:
-                    if sync_path:
-                        logger.info(
-                            f"Task {task_id}: Syncing required Docker image from {sync_path}..."
-                        )
-                        sync_success = await asyncio.get_running_loop().run_in_executor(
-                            None,
-                            docker_utils.sync_from_shared,
-                            container_name_from_tag,
-                            sync_path,
-                        )
-                        if not sync_success:
-                            raise RuntimeError(
-                                f"Failed to sync Docker image from {sync_path}"
-                            )
-                        logger.info(f"Task {task_id}: Docker image sync successful.")
-                    else:
-                        # This case shouldn't happen if needs_sync is True, but handle defensively
-                        raise RuntimeError(
-                            f"Sync needed but no tarball path found for {container_name_from_tag}"
-                        )
-                else:
-                    logger.info(
-                        f"Task {task_id}: Local Docker image '{task_info.docker_image_name}' is up-to-date."
-                    )
-
-        except Exception as e:
-            error_message = (
-                f"Docker image sync check/load failed for task {task_id}: {e}"
-            )
-            logger.error(error_message)
-            await report_status_to_host(
-                TaskStatusUpdate(
-                    task_id=task_id,
-                    status="failed",
-                    message=error_message,
-                    completed_at=datetime.datetime.now(),
-                )
-            )
-            return  # Stop processing this task
-
-        task_command_list = (
-            [numactl_prefix]
-            + [task_info.command]
-            + [shlex.quote(arg) for arg in task_info.arguments]
-        )
-        docker_wrapper_cmd = docker_utils.modify_command_for_docker(
-            original_command_list=task_command_list,
-            container_image_name=task_info.docker_image_name,
-            task_id=task_id,
-            privileged=task_info.docker_privileged,
-            mount_dirs=task_info.docker_additional_mounts
-            + [
-                f"{working_dir}:/shared",
-                f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
-            ]
-            + get_executable_and_library_mounts(RunnerConfig.NUMACTL_PATH)[1],
-            working_dir="/shared",
-            cpu_cores=task_info.required_cores,
-            memory_limit=(
-                f"{task_info.required_memory_bytes/1e6:.1f}M"
-                if task_info.required_memory_bytes
-                else None
-            ),
-            gpu_ids=task_info.required_gpus,
-        )
-        inner_cmd_str = " ".join(docker_wrapper_cmd)
-        shell_cmd = f"exec {inner_cmd_str} > {shlex.quote(task_info.stdout_path)} 2> {shlex.quote(task_info.stderr_path)}"
-        run_cmd = ["sudo", "/bin/bash", "-c", shell_cmd]
+    use_systemd = False
+    if task_info.task_type == "vps":
+        await run_vps(task_info)
+        return  # VPS tasks are handled differently
+    elif task_info.docker_image_name not in {None, "", "NULL"}:
+        run_cmd = await make_command_docker(task_id, task_info, working_dir, numactl_prefix)
     else:
         use_systemd = True
         # No docker image specified, run directly
         # --- Construct systemd-run command ---
-        run_cmd = [
-            "sudo",
-            "systemd-run",
-            "--scope",  # Run as a transient scope unit
-            "--collect",  # Garbage collect unit when process exits
-            f"--property=User={RUNNER_CONFIG.RUNNER_USER}",  # Run as the current user (or specify another user)
-            f"--unit={unit_name}",
-            # Basic description
-            f"--description=HakuRiver Task {task_id}: {shlex.quote(task_info.command)}",
-        ]
-
-        # Resource Allocation Properties
-        if task_info.required_cores > 0 and total_cores > 0:
-            # Generate CPU list like "0,1,2" if required_cores=3
-            # cpu_list = ",".join(map(str, range(min(task_info.required_cores, total_cores))))
-            # run_cmd.append(f"--property=CPUAffinity={cpu_list}")
-            # Optionally add CPUQuota for stricter enforcement (percentage)
-            cpu_quota = int(task_info.required_cores * 100)
-            run_cmd.append(f"--property=CPUQuota={cpu_quota}%")
-
-        if (
-            task_info.required_memory_bytes is not None
-            and task_info.required_memory_bytes > 0
-        ):
-            run_cmd.append(f"--property=MemoryMax={task_info.required_memory_bytes}")
-        run_cmd.append("--property=MemorySwapMax=0")
-
-        # Environment Variables
-        process_env = os.environ.copy()  # Start with runner's environment
-        process_env.update(task_info.env_vars)
-        process_env["HAKURIVER_TASK_ID"] = str(task_id)  # Use HAKURIVER_ prefix
-        process_env["HAKURIVER_LOCAL_TEMP_DIR"] = RUNNER_CONFIG.LOCAL_TEMP_DIR
-        process_env["HAKURIVER_SHARED_DIR"] = RUNNER_CONFIG.SHARED_DIR
-        if task_info.target_numa_node_id is not None:
-            process_env["HAKURIVER_TARGET_NUMA_NODE"] = str(
-                task_info.target_numa_node_id
-            )
-        for key, value in process_env.items():
-            run_cmd.append(f"--setenv={key}={value}")  # Pass all env vars
-
-        # Working Directory (Optional - run in shared or temp?)
-        run_cmd.append(f"--working-directory={working_dir}")  # Example
-
-        # Command and Arguments with Redirection
-        # This is complex due to shell quoting needed inside systemd-run
-        # Ensure stdout/stderr paths are absolute and quoted if they contain spaces
-        quoted_stdout = shlex.quote(task_info.stdout_path)
-        quoted_stderr = shlex.quote(task_info.stderr_path)
-        # Use shlex.join for the inner command and args if possible, otherwise manual quoting
-        if not task_info.docker_image_name:
-            inner_cmd_parts = [task_info.command] + [
-                shlex.quote(arg) for arg in task_info.arguments
-            ]
-        else:
-            task_command_list = [task_info.command] + [
-                shlex.quote(arg) for arg in task_info.arguments
-            ]
-            docker_wrapper_cmd = docker_utils.modify_command_for_docker(
-                original_command_list=task_command_list,
-                container_image_name=task_info.docker_image_name,
-                task_id=task_id,
-                privileged=task_info.docker_privileged,
-                mount_dirs=task_info.docker_additional_mounts
-                + [
-                    f"{RUNNER_CONFIG.SHARED_DIR}/shared_data:/shared",
-                    f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
-                ]
-                + get_executable_and_library_mounts(RunnerConfig.NUMACTL_PATH)[1],
-                working_dir="/shared",
-            )
-            inner_cmd_parts = docker_wrapper_cmd
-        inner_cmd_str = " ".join(inner_cmd_parts)
-
-        shell_command = (
-            f"exec {numactl_prefix}{inner_cmd_str} > {quoted_stdout} 2> {quoted_stderr}"
-        )
-        run_cmd.extend(["/bin/sh", "-c", shell_command])
-
-        logger.info(f"Executing task {task_id} via systemd-run unit {unit_name}")
-        logger.debug(
-            f"systemd-run command: {' '.join(run_cmd)}"
-        )  # Log the full command for debugging
+        run_cmd = await make_command_systemd(task_id, task_info, working_dir, numactl_prefix, unit_name, total_cores)
 
     exit_code = None
     error_message = None
