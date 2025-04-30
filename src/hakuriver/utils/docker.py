@@ -557,6 +557,89 @@ def modify_command_for_docker(
     return docker_cmd
 
 
+def vps_command_for_docker(
+    container_image_name: str,  # This should be hakuriver/<container_name>:base
+    task_id: int,
+    # These are handled by the runner now based on its config
+    ssh_port: int = 0,  # Port for SSH access (0 for random port)
+    privileged: bool = False,
+    mount_dirs: list[str] | None = None,
+    working_dir: str = "/shared",  # Default working directory inside the container
+    cpu_cores: int = 0,  # Default CPU cores to allocate (optional)
+    memory_limit: str = "",  # Default memory limit (optional)
+    gpu_ids: list[int] = [],
+) -> list[str]:
+    """
+    Make a command to create persistant VPS container for SSH access.
+    Mounts for shared/temp dirs should be added by the caller (runner) based on its config.
+
+    Args:
+        container_image_name: The name/tag of the Docker image to use (e.g., 'hakuriver/myenv:base').
+        task_id: The HakuRiver task ID (used for temporary container name).
+        privileged: If True, run the container with --privileged flag.
+        mount_dirs: Optional list of *additional* host directories to mount
+                    into the container. Each entry should be 'host_path:container_path'.
+                    (e.g., ["/data:/app/data"])
+
+    Returns:
+        A list representing the full command to execute via subprocess,
+        starting with 'docker', 'run', etc.
+    """
+    docker_cmd = ["docker", "run"]  ## No --rm for persistent VPS
+
+    # Add name for easier identification (optional but helpful)
+    docker_cmd.extend(["--name", f"hakuriver-vps-{task_id}"])
+    docker_cmd.extend(["--network", "host"])  # Use host network for simplicity
+
+    docker_cmd.extend(["-p", f"{ssh_port}:22"])  # Map SSH port to host
+    docker_cmd.extend(["-e", "SSH_PORT=22"])  # Set SSH_PORT environment variable
+
+    # Add privileged flag if requested
+    if privileged:
+        docker_cmd.append("--privileged")
+        logger.warning(
+            f"Task {task_id}: Running Docker container with --privileged flag!"
+        )
+    else:
+        docker_cmd.extend(["--cap-add", "SYS_NICE"])
+
+    # Add *additional* mount directories specified by the host/task request
+    if mount_dirs:
+        for mount in mount_dirs:
+            parts = mount.split(":")
+            if len(parts) < 2:
+                logger.warning(
+                    f"Invalid mount format: '{mount}'. Expected 'host_path:container_path'. Skipping."
+                )
+                continue
+            host_path, container_path, *options = parts
+            option_str = ("," + ",".join(options)) if options else ""
+            docker_cmd.extend(
+                [
+                    "--mount",
+                    f"type=bind,source={host_path},target={container_path}{option_str}",
+                ]
+            )
+    if working_dir:
+        docker_cmd.extend(["--workdir", working_dir])
+    if cpu_cores > 0:
+        docker_cmd.extend(["--cpus", str(cpu_cores)])
+    if memory_limit:
+        docker_cmd.extend(["--memory", memory_limit])
+    if gpu_ids:
+        docker_cmd.extend(
+            ["--gpus", shlex.quote(f'"device={",".join(map(str, gpu_ids))}"')]
+        )
+
+    # Add the container image name
+    docker_cmd.append(container_image_name)
+    docker_cmd.extend(["/usr/sbin/sshd", "-D"])  # start sshd service
+
+    logger.debug(f"Base docker command for VPS {task_id}: {docker_cmd}")
+
+    return docker_cmd
+
+
 # Example Usage (for standalone testing - requires Docker daemon)
 if __name__ == "__main__":
     # Ensure test directories exist
