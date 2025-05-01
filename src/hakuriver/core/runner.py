@@ -32,6 +32,9 @@ running_processes = (
     {}
 )  # task_id -> {'unit': str, 'process': asyncio.Process | None, 'memory_limit': int | None, 'pid': int | None}
 paused_processes = {}
+running_vps = {}
+paused_vps = {}
+
 docker_lock = asyncio.Lock()  # Lock for Docker image sync operations
 runner_ip = RUNNER_CONFIG.RUNNER_ADDRESS
 runner_url = f"http://{runner_ip}:{RUNNER_CONFIG.RUNNER_PORT}"
@@ -373,6 +376,10 @@ async def run_vps(task_info: TaskInfo):
 
     if exit_code == 0:
         ssh_port = docker_utils.find_ssh_port(f"hakuriver-vps-{task_id}")
+
+    running_vps[task_id] = {
+        "ssh_port": ssh_port,
+    }
 
     if ssh_port:
         # We use /usr/sbin/sshd -D, so it will exit directly after starting the daemon
@@ -746,9 +753,10 @@ async def pause_task(body: dict = Body(...)):
 
     logger.info(f"Received pause request for task {task_id}")
     task_data = running_processes.get(task_id, None)
+    vps_data = running_vps.get(task_id, None)
     unit_name = task_data["unit"]
 
-    if not task_data:
+    if not task_data and not vps_data:
         logger.warning(
             f"Pause request for task {task_id}, but it's not actively tracked."
         )
@@ -785,10 +793,16 @@ async def pause_task(body: dict = Body(...)):
             paused_processes[task_id] = running_processes.pop(task_id)
             paused_processes[task_id]["task_pid"] = pid  # Store the paused PID
         else:
-            container_name = f"hakuriver-task-{task_id}"
+            if vps_data is None:
+                container_name = f"hakuriver-task-{task_id}"
+            else:
+                container_name = f"hakuriver-vps-{task_id}"
             pause_cmd = ["docker", "pause", container_name]
             docker_utils._run_command(pause_cmd, check=True, timeout=1)
-            paused_processes[task_id] = running_processes.pop(task_id)
+            if vps_data is None:
+                paused_processes[task_id] = running_processes.pop(task_id)
+            else:
+                paused_vps[task_id] = running_vps.pop(task_id)
 
         logger.info(f"Task {task_id} paused successfully.")
         await report_status_to_host(
@@ -816,8 +830,9 @@ async def resume_task(body: dict = Body(...)):
 
     logger.info(f"Received resume request for task {task_id}")
     task_data = paused_processes.get(task_id, None)
+    vps_data = paused_vps.get(task_id, None)
 
-    if not task_data:
+    if not task_data and not vps_data:
         logger.warning(
             f"Resume request for task {task_id}, but it's not actively tracked."
         )
@@ -834,9 +849,16 @@ async def resume_task(body: dict = Body(...)):
             if result.returncode != 0:
                 raise RuntimeError(f"Failed to resume task {task_id} using kill.")
         else:
-            container_name = f"hakuriver-task-{task_id}"
+            if vps_data is None:
+                container_name = f"hakuriver-task-{task_id}"
+            else:
+                container_name = f"hakuriver-vps-{task_id}"
             resume_cmd = ["docker", "unpause", container_name]
             docker_utils._run_command(resume_cmd, check=True, timeout=1)
+            if vps_data is None:
+                running_processes[task_id] = paused_processes.pop(task_id)
+            else:
+                running_vps[task_id] = paused_vps.pop(task_id)
 
         logger.info(f"Task {task_id} resumed successfully.")
         running_processes[task_id] = paused_processes.pop(task_id)
@@ -855,6 +877,74 @@ async def resume_task(body: dict = Body(...)):
     return {"message": f"Resume request processed for task {task_id}"}
 
 
+def kill_systemd(task_data, unit_name, task_id):
+    if "task_pid" in task_data:
+        pid = task_data["task_pid"]
+    else:
+        logger.info(f"Finding process for task {unit_name} to pause.")
+        find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
+        process = subprocess.run(find_cmd, capture_output=True, text=True)
+        result = re.search(
+            rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout
+        )
+        if not result:
+            logger.error(
+                f"Failed to find process for task {task_id}."
+                f"\nOutput: {process.stdout}"
+            )
+            raise RuntimeError(
+                f"Failed to find process for task {task_id}.\nOutput: {process.stdout}"
+            )
+        pid = result.group(1)
+        logger.info(f"Found process {pid} for task {task_id}.")
+    logger.info(
+        f"Attempting to stop/kill systemd unit {unit_name} for task {task_id}"
+    )
+    # Use kill directly to ensure we stop the unit
+    kill_cmd_task = ["sudo", "kill", "-s", "SIGKILL", str(pid)]
+    kill_result_task = subprocess.run(
+        kill_cmd_task, capture_output=True, text=True, check=False
+    )
+    kill_cmd = ["sudo", "kill", "-s", "SIGKILL", str(process.pid)]
+    kill_result = subprocess.run(
+        kill_cmd, capture_output=True, text=True, check=False
+    )
+
+    if kill_result.returncode == 0 and kill_result_task.returncode == 0:
+        logger.info(f"Successfully sent kill signal to unit {unit_name}.")
+    else:
+        # Maybe it already stopped? Or permission error?
+        logger.warning(
+            f"kill {unit_name} failed (rc={kill_result.returncode}): {kill_result.stderr.strip()}. Unit might be stopped already."
+        )
+        # Check if it's inactive
+        status_cmd = ["sudo", "systemctl", "is-active", unit_name]
+        status_result = subprocess.run(
+            status_cmd, capture_output=True, text=True, check=False
+        )
+        if status_result.stdout.strip() != "active":
+            logger.info(
+                f"Unit {unit_name} is not active, assuming kill effective or already stopped."
+            )
+        else:
+            logger.error(
+                f"Failed to kill unit {unit_name} and it still seems active."
+            )
+            kill_message += " | Failed to confirm kill via systemctl."
+
+
+def kill_docker(task_id, vps=False):
+    if vps:
+        container_name = f"hakuriver-vps-{task_id}"
+    else:
+        container_name = f"hakuriver-task-{task_id}"
+    kill_cmd = ["docker", "kill", container_name]
+    docker_utils._run_command(kill_cmd, check=True, timeout=1)
+    logger.info(
+        f"Successfully sent kill signal to Docker container for task {task_id}."
+    )
+
+
 @app.post("/kill")
 async def kill_task_endpoint(body: dict = Body(...)):
     task_id = body.get("task_id")
@@ -865,8 +955,9 @@ async def kill_task_endpoint(body: dict = Body(...)):
 
     logger.info(f"Received kill request for task {task_id}")
     task_data = running_processes.get(task_id)
+    vps_data = running_vps.get(task_id)
 
-    if not task_data:
+    if not task_data and not vps_data:
         logger.warning(
             f"Kill request for task {task_id}, but it's not actively tracked."
         )
@@ -884,74 +975,18 @@ async def kill_task_endpoint(body: dict = Body(...)):
             status_code=404, detail=f"Task {task_id} not found or not tracked."
         )
 
-    process = task_data["process"]
-    unit_name = task_data["unit"]
-
     try:
-        if task_data["use_systemd"]:
-            if "task_pid" in task_data:
-                pid = task_data["task_pid"]
-            else:
-                logger.info(f"Finding process for task {unit_name} to pause.")
-                find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
-                process = subprocess.run(find_cmd, capture_output=True, text=True)
-                result = re.search(
-                    rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout
-                )
-                if not result:
-                    logger.error(
-                        f"Failed to find process for task {task_id}."
-                        f"\nOutput: {process.stdout}"
-                    )
-                    raise RuntimeError(
-                        f"Failed to find process for task {task_id}.\nOutput: {process.stdout}"
-                    )
-                pid = result.group(1)
-                logger.info(f"Found process {pid} for task {task_id}.")
-            logger.info(
-                f"Attempting to stop/kill systemd unit {unit_name} for task {task_id}"
-            )
-            # Use kill directly to ensure we stop the unit
-            kill_cmd_task = ["sudo", "kill", "-s", "SIGKILL", str(pid)]
-            kill_result_task = subprocess.run(
-                kill_cmd_task, capture_output=True, text=True, check=False
-            )
-            kill_cmd = ["sudo", "kill", "-s", "SIGKILL", str(process.pid)]
-            kill_result = subprocess.run(
-                kill_cmd, capture_output=True, text=True, check=False
-            )
-
-            if kill_result.returncode == 0 and kill_result_task.returncode == 0:
-                logger.info(f"Successfully sent kill signal to unit {unit_name}.")
-            else:
-                # Maybe it already stopped? Or permission error?
-                logger.warning(
-                    f"kill {unit_name} failed (rc={kill_result.returncode}): {kill_result.stderr.strip()}. Unit might be stopped already."
-                )
-                # Check if it's inactive
-                status_cmd = ["sudo", "systemctl", "is-active", unit_name]
-                status_result = subprocess.run(
-                    status_cmd, capture_output=True, text=True, check=False
-                )
-                if status_result.stdout.strip() != "active":
-                    logger.info(
-                        f"Unit {unit_name} is not active, assuming kill effective or already stopped."
-                    )
-                else:
-                    logger.error(
-                        f"Failed to kill unit {unit_name} and it still seems active."
-                    )
-                    kill_message += " | Failed to confirm kill via systemctl."
+        if task_data and task_data["use_systemd"]:
+            unit_name = task_data["unit"]
+            kill_systemd(task_data, unit_name, task_id)
         else:
-            kill_cmd = ["docker", "kill", f"hakuriver-task-{task_id}"]
-            docker_utils._run_command(kill_cmd, check=True, timeout=1)
-            logger.info(
-                f"Successfully sent kill signal to Docker container for task {task_id}."
-            )
+            kill_docker(task_id, vps=vps_data is not None)
 
         # Remove from tracking immediately
         if task_id in running_processes:
             del running_processes[task_id]
+        if task_id in running_vps:
+            del running_vps[task_id]
 
         # Add to report list
         killed_info = HeartbeatKilledTaskInfo(task_id=task_id, reason="killed_by_host")
