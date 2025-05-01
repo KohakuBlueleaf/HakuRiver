@@ -884,9 +884,7 @@ def kill_systemd(task_data, unit_name, task_id):
         logger.info(f"Finding process for task {unit_name} to pause.")
         find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
         process = subprocess.run(find_cmd, capture_output=True, text=True)
-        result = re.search(
-            rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout
-        )
+        result = re.search(rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout)
         if not result:
             logger.error(
                 f"Failed to find process for task {task_id}."
@@ -897,18 +895,14 @@ def kill_systemd(task_data, unit_name, task_id):
             )
         pid = result.group(1)
         logger.info(f"Found process {pid} for task {task_id}.")
-    logger.info(
-        f"Attempting to stop/kill systemd unit {unit_name} for task {task_id}"
-    )
+    logger.info(f"Attempting to stop/kill systemd unit {unit_name} for task {task_id}")
     # Use kill directly to ensure we stop the unit
     kill_cmd_task = ["sudo", "kill", "-s", "SIGKILL", str(pid)]
     kill_result_task = subprocess.run(
         kill_cmd_task, capture_output=True, text=True, check=False
     )
     kill_cmd = ["sudo", "kill", "-s", "SIGKILL", str(process.pid)]
-    kill_result = subprocess.run(
-        kill_cmd, capture_output=True, text=True, check=False
-    )
+    kill_result = subprocess.run(kill_cmd, capture_output=True, text=True, check=False)
 
     if kill_result.returncode == 0 and kill_result_task.returncode == 0:
         logger.info(f"Successfully sent kill signal to unit {unit_name}.")
@@ -927,9 +921,7 @@ def kill_systemd(task_data, unit_name, task_id):
                 f"Unit {unit_name} is not active, assuming kill effective or already stopped."
             )
         else:
-            logger.error(
-                f"Failed to kill unit {unit_name} and it still seems active."
-            )
+            logger.error(f"Failed to kill unit {unit_name} and it still seems active.")
             kill_message += " | Failed to confirm kill via systemctl."
 
 

@@ -156,10 +156,9 @@ def submit_payload(url, payload):
     return None
 
 
-
 def get_active_vps_status():
     """Fetches the status of active VPS tasks."""
-    url = f"{CLIENT_CONFIG.host_url}/vps/status" # Call the new endpoint
+    url = f"{CLIENT_CONFIG.host_url}/vps/status"  # Call the new endpoint
     logger.info(f"Fetching active VPS status from {url}")
 
     try:
@@ -167,7 +166,7 @@ def get_active_vps_status():
             response = client.get(url)
             response.raise_for_status()
             logger.info("--- Active VPS Status ---")
-            print_response(response) # Use the helper to print JSON
+            print_response(response)  # Use the helper to print JSON
 
     except httpx.HTTPStatusError as e:
         print_response(e.response)
@@ -175,7 +174,10 @@ def get_active_vps_status():
     except httpx.RequestError as e:
         logger.error(f"Network error occurred while connecting to {url}: {e}")
     except Exception as e:
-        logger.exception(f"An unexpected error occurred fetching active VPS status: {e}")
+        logger.exception(
+            f"An unexpected error occurred fetching active VPS status: {e}"
+        )
+
 
 # Also, add a new function for the 'command' endpoint
 def send_task_command(task_id: str, action: str):

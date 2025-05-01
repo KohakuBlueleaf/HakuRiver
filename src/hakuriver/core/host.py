@@ -1010,9 +1010,7 @@ async def get_active_vps_status():
             .join(
                 Node, peewee.JOIN.LEFT_OUTER, on=(Task.assigned_node == Node.hostname)
             )
-            .where(
-                (Task.task_type == "vps") & (Task.status.in_(active_statuses))
-            )
+            .where((Task.task_type == "vps") & (Task.status.in_(active_statuses)))
             .order_by(Task.submitted_at.desc())
         )
 
@@ -1030,19 +1028,27 @@ async def get_active_vps_status():
                         json.loads(task.required_gpus) if task.required_gpus else []
                     ),
                     "required_memory_bytes": task.required_memory_bytes,
-                    "submitted_at": task.submitted_at.isoformat() if task.submitted_at else None,
-                    "started_at": task.started_at.isoformat() if task.started_at else None,
-                    "ssh_port": task.ssh_port, # Include the SSH port
+                    "submitted_at": (
+                        task.submitted_at.isoformat() if task.submitted_at else None
+                    ),
+                    "started_at": (
+                        task.started_at.isoformat() if task.started_at else None
+                    ),
+                    "ssh_port": task.ssh_port,  # Include the SSH port
                 }
             )
         return tasks_data
 
     except peewee.PeeweeException as e:
         logger.error(f"Database error fetching active VPS tasks: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Database error fetching active VPS tasks.")
+        raise HTTPException(
+            status_code=500, detail="Database error fetching active VPS tasks."
+        )
     except Exception as e:
         logger.error(f"Unexpected error fetching active VPS tasks: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Unexpected error fetching active VPS tasks.")
+        raise HTTPException(
+            status_code=500, detail="Unexpected error fetching active VPS tasks."
+        )
 
 
 # Kill endpoint and helper (logic same, use logger)
