@@ -598,7 +598,7 @@ def vps_command_for_docker(
         A list representing the full command to execute via subprocess,
         starting with 'docker', 'run', etc.
     """
-    docker_cmd = ["docker", "run", "--rm"]
+    docker_cmd = ["docker", "run", "--restart", "unless-stopped"]
 
     # Add detached mode if requested
     if detached:

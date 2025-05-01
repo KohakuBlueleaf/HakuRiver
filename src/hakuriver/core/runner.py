@@ -936,10 +936,14 @@ def kill_systemd(task_data, unit_name, task_id):
 def kill_docker(task_id, vps=False):
     if vps:
         container_name = f"hakuriver-vps-{task_id}"
+        kill_cmd = ["docker", "stop", container_name]
+        docker_utils._run_command(kill_cmd, check=True, timeout=1)
+        kill_cmd = ["docker", "rm", container_name]
+        docker_utils._run_command(kill_cmd, check=True, timeout=1)
     else:
         container_name = f"hakuriver-task-{task_id}"
-    kill_cmd = ["docker", "kill", container_name]
-    docker_utils._run_command(kill_cmd, check=True, timeout=1)
+        kill_cmd = ["docker", "kill", container_name]
+        docker_utils._run_command(kill_cmd, check=True, timeout=1)
     logger.info(
         f"Successfully sent kill signal to Docker container for task {task_id}."
     )
