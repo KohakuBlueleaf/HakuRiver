@@ -88,7 +88,7 @@ def main():
     )
 
     # Status Command (List active VPS tasks)
-    parser_status = subparsers.add_parser("status", help="List active VPS tasks.")
+    subparsers.add_parser("status", help="List active VPS tasks.")
 
     # Kill Command (Specific to VPS task IDs)
     parser_kill = subparsers.add_parser("kill", help="Kill a VPS task by ID.")

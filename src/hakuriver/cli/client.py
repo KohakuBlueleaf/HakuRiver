@@ -70,7 +70,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Nodes Command
-    parser_nodes = subparsers.add_parser("nodes", help="List node status.")
+    subparsers.add_parser("nodes", help="List node status.")
 
     # Health Command
     parser_health = subparsers.add_parser("health", help="Get node health status.")
