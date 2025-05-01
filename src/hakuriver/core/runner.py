@@ -342,7 +342,7 @@ async def run_vps(task_info: TaskInfo):
     if not await docker_setup(
         task_id, task_info, container_name_from_tag, container_tar_dir
     ):
-        return
+        return {"error": "Docker setup failed"}
 
     vps_startup_cmd = docker_utils.vps_command_for_docker(
         container_image_name=task_info.docker_image_name,
@@ -382,9 +382,9 @@ async def run_vps(task_info: TaskInfo):
                 status="running",
                 exit_code=exit_code,
                 started_at=datetime.datetime.now(),
-                message=f"VPS task {task_id} started successfully. SSH port: {ssh_port}",
             )
         )
+        return {"ssh_port": ssh_port}
     else:
         # sshd startup failed, most possible reason: sshd not found
         error_message = f"VPS task {task_id} failed to start: {exit_code}: {stderr.decode(errors='replace').strip()}"
@@ -440,10 +440,7 @@ async def run_task_background(task_info: TaskInfo):
             )
 
     use_systemd = False
-    if task_info.task_type == "vps":
-        await run_vps(task_info)
-        return  # VPS tasks are handled differently
-    elif task_info.docker_image_name not in {None, "", "NULL"}:
+    if task_info.docker_image_name not in {None, "", "NULL"}:
         run_cmd = await make_command_docker(
             task_id, task_info, working_dir, numactl_prefix
         )
@@ -728,7 +725,8 @@ async def accept_task(task_info: TaskInfo, background_tasks: BackgroundTasks):
             status_code=500,
             detail=f"Configuration error: LOCAL_TEMP_DIR '{RUNNER_CONFIG.LOCAL_TEMP_DIR}' missing on node.",
         )
-
+    if task_info.task_type == "vps":
+        return await run_vps(task_info)
     logger.info(
         f"Accepted task {task_id}: {task_info.command} "
         f"Cores: {task_info.required_cores}, "

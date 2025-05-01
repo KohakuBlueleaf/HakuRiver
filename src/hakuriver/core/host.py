@@ -174,13 +174,14 @@ async def send_vps_task_to_runner(runner_url: str, task_info: TaskInfoForRunner)
                 f"{runner_url}/run", json=task_info.model_dump(), timeout=30.0
             )
             response.raise_for_status()
-        logger.info(f"Task {task_id} successfully sent to runner {runner_url}")
+        logger.info(f"VPS {task_id} successfully created on runner {runner_url}")
         # Let runner report 'running' status
 
         task: Task = Task.get_or_none(Task.task_id == task_id)
-        if task and task.status == "assigning":
-            # Keep as assigning until runner confirms start
-            pass
+        ssh_port = response.json().get("ssh_port", None)
+        task.ssh_port = ssh_port
+        task.save()
+        return response.json()
     except httpx.RequestError as e:
         logger.error(f"Failed to contact runner {runner_url} for task {task_id}: {e}")
 
@@ -859,9 +860,10 @@ async def submit_task(req: TaskRequest):
             docker_additional_mounts=task_additional_mounts,
         )
 
+        result = None
         if req.task_type == "vps":
-            # VPS tasks are dispatched differently (e.g., to a different runner or endpoint)
-            asyncio.create_task(send_vps_task_to_runner(node.url, task_info_for_runner))
+            # VPS tasks are dispatched differently
+            result = await send_vps_task_to_runner(node.url, task_info_for_runner)
         else:
             asyncio.create_task(send_task_to_runner(node.url, task_info_for_runner))
         created_task_ids.append(str(task_id))  # Add successfully launched task ID
@@ -891,7 +893,13 @@ async def submit_task(req: TaskRequest):
             f"Task batch submitted successfully. {len(created_task_ids)} tasks created."
         )
         logger.info(f"Task batch submission successful. Task IDs: {created_task_ids}")
-        return {"message": message, "task_ids": created_task_ids}
+        resp = {"message": message, "task_ids": created_task_ids, "assigned_node": {
+            "hostname": node.hostname,
+            "url": node.url,
+        }}
+        if result:
+            resp["runner_response"] = result
+        return resp
 
 
 @app.post("/update")
@@ -916,13 +924,7 @@ async def update_task_status(update: TaskStatusUpdate):
 
     task.status = update.status
     task.exit_code = update.exit_code
-    if update.status != "running":
-        task.error_message = update.message
-    elif task.task_type == "vps":
-        # status is running and type is vps, use update.message to find ssh port
-        ssh_port = update.message.split(":")[-1].strip()
-        task.ssh_port = int(ssh_port)
-        logger.debug(f"Task {update.task_id} ssh port updated to {task.ssh_port}")
+    task.error_message = update.message
 
     if update.started_at and not task.started_at:
         task.started_at = update.started_at
