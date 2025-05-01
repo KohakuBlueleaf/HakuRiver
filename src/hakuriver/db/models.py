@@ -1,7 +1,6 @@
 import datetime
 import json
 import peewee
-from traitlets import default
 
 db = peewee.SqliteDatabase(None)  # Initialize with None
 
@@ -88,6 +87,7 @@ class Task(BaseModel):
     batch_id = peewee.BigIntegerField(
         null=True, index=True
     )  # ID linking tasks submitted together
+    ssh_port = peewee.IntegerField(null=True)  # SSH port for VPS tasks
 
     def get_arguments(self):
         try:
