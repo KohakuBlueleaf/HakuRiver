@@ -5,6 +5,7 @@ import sys
 import toml
 import uvicorn
 import hakuriver.core.runner as runner_core
+from hakuriver.utils.logger import logger
 
 
 def update_config(config_instance, custom_config_data):
@@ -116,4 +117,5 @@ def main():
 
 
 if __name__ == "__main__":
+    logger.setLevel("DEBUG")
     main()
