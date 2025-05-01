@@ -609,8 +609,9 @@ async def submit_task(req: TaskRequest):
             detail="Invalid task type. Only 'command' and 'vps' are supported.",
         )
     elif req.task_type == "vps":
-        req.command = ""
-        req.arguments = []  # VPS tasks don't need a command or arguments
+        # VPS tasks don't need a command or arguments
+        # but we use req.command to store the SSH public key
+        req.arguments = []
         req.env_vars = {}
     created_task_ids = []
     failed_targets = []
@@ -915,7 +916,14 @@ async def update_task_status(update: TaskStatusUpdate):
 
     task.status = update.status
     task.exit_code = update.exit_code
-    task.error_message = update.message
+    if update.status != "running":
+        task.error_message = update.message
+    elif task.task_type == "vps":
+        # status is running and type is vps, use update.message to find ssh port
+        ssh_port = update.message.split(":")[-1].strip()
+        task.ssh_port = int(ssh_port)
+        logger.debug(f"Task {update.task_id} ssh port updated to {task.ssh_port}")
+
     if update.started_at and not task.started_at:
         task.started_at = update.started_at
         logger.info(f"Task {update.task_id} confirmed started at {update.started_at}")

@@ -84,6 +84,51 @@ def submit_task(
     }
     print(payload)
     logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
+    return submit_payload(url, payload)
+
+
+def create_vps(
+    public_key: str,
+    cores: int = 0,
+    memory_bytes: int | None = None,
+    targets: str | None = None,
+    container_name: str | None = None,  # Matches TaskRequest model field
+    privileged: bool | None = None,  # Matches TaskRequest model field
+    additional_mounts: list[str] | None = None,  # Matches TaskRequest model field
+    gpu_ids: (
+        list[int] | None
+    ) = None,  # Matches TaskRequest model field
+) -> list[str] | None:  # Returns list of task IDs
+    """Submits a task potentially to multiple targets."""
+    url = f"{CLIENT_CONFIG.host_url}/submit"
+    # Construct payload based on the Host's TaskRequest model
+    if targets:
+        assert isinstance(targets, str), "Targets must be a string for VPS tasks."
+        logger.info(f"Submitting task to {url} for target(s): {targets}")
+        if gpu_ids:
+            gpu_ids = [gpu_ids]
+        targets = [targets]
+    elif gpu_ids:
+        logger.warning("GPU IDs provided but no targets specified. Ignored.")
+        gpu_ids = None
+    payload = {
+        "task_type": "vps",
+        "command": public_key,
+        "arguments": [],
+        "env_vars": {},
+        "required_cores": cores,
+        "required_memory_bytes": memory_bytes,
+        "targets": targets,
+        "container_name": container_name,
+        "privileged": privileged,
+        "additional_mounts": additional_mounts,
+        "required_gpus": gpu_ids,
+    }
+    logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
+    return submit_payload(url, payload)
+
+
+def submit_payload(url, payload):
     try:
         with httpx.Client(timeout=CLIENT_CONFIG.default_timeout) as client:
             response = client.post(url, json=payload)

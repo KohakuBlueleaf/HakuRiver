@@ -157,15 +157,7 @@ async def report_status_to_host(update_data: TaskStatusUpdate):
         )
 
 
-async def make_command_docker(task_id, task_info, working_dir, numactl_prefix):
-    logger.info(
-        f"Task {task_id}: Checking Docker image sync status for '{task_info.docker_image_name}'."
-    )
-    container_name_from_tag = task_info.docker_image_name.split("/")[1].split(":")[
-        0
-    ]  # Extract 'myenv' from 'hakuriver/myenv:base'
-    container_tar_dir = RUNNER_CONFIG.CONTAINER_TAR_DIR  # Use runner's configured path
-
+async def docker_setup(task_id, task_info, container_name_from_tag, container_tar_dir):
     try:
         async with docker_lock:
             needs_sync, sync_path = docker_utils.needs_sync(
@@ -208,7 +200,23 @@ async def make_command_docker(task_id, task_info, working_dir, numactl_prefix):
                 completed_at=datetime.datetime.now(),
             )
         )
-        return  # Stop processing this task
+        return False
+    return True
+
+
+async def make_command_docker(task_id, task_info, working_dir, numactl_prefix):
+    logger.info(
+        f"Task {task_id}: Checking Docker image sync status for '{task_info.docker_image_name}'."
+    )
+    container_name_from_tag = task_info.docker_image_name.split("/")[1].split(":")[
+        0
+    ]  # Extract 'myenv' from 'hakuriver/myenv:base'
+    container_tar_dir = RUNNER_CONFIG.CONTAINER_TAR_DIR  # Use runner's configured path
+
+    if not await docker_setup(
+        task_id, task_info, container_name_from_tag, container_tar_dir
+    ):
+        return []
 
     task_command_list = (
         [numactl_prefix]
@@ -327,15 +335,66 @@ async def run_vps(task_info: TaskInfo):
     logger.info(
         f"Running VPS task {task_info.task_id} with container: {task_info.docker_image_name}"
     )
-    # [TODO] Implement VPS-specific logic here
-    await report_status_to_host(
-        TaskStatusUpdate(
-            task_id=task_info.task_id,
-            status="TEST_MODE",
-            started_at=datetime.datetime.now(),
-            completed_at=datetime.datetime.now(),
-        )
+    task_id = task_info.task_id
+    container_name_from_tag = task_info.docker_image_name.split("/")[1].split(":")[0]
+    container_tar_dir = RUNNER_CONFIG.CONTAINER_TAR_DIR  # Use runner's configured path
+
+    if not await docker_setup(
+        task_id, task_info, container_name_from_tag, container_tar_dir
+    ):
+        return
+
+    vps_startup_cmd = docker_utils.vps_command_for_docker(
+        container_image_name=task_info.docker_image_name,
+        task_id=task_id,
+        public_key=task_info.command,
+        mount_dirs=task_info.docker_additional_mounts
+        + [
+            f"{RUNNER_CONFIG.SHARED_DIR}/shared_data:/shared",
+            f"{RUNNER_CONFIG.LOCAL_TEMP_DIR}:/local_temp",
+        ],
+        working_dir="/shared",
+        cpu_cores=task_info.required_cores,
+        memory_limit=task_info.required_memory_bytes,
+        gpu_ids=task_info.required_gpus,
+        privileged=task_info.docker_privileged,
     )
+
+    process = await asyncio.create_subprocess_exec(
+        *vps_startup_cmd,
+        stdout=asyncio.subprocess.PIPE,  # Capture systemd-run's output/errors
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    exit_code = process.returncode
+    logger.debug(f"VPS task {task_id} exit code: {exit_code}: {stdout.decode(errors='replace').strip()} | {stderr.decode(errors='replace').strip()}")
+
+    if exit_code == 0:
+        ssh_port = docker_utils.find_ssh_port(f"hakuriver-vps-{task_id}")
+
+    if ssh_port:
+        # We use /usr/sbin/sshd -D, so it will exit directly after starting the daemon
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="running",
+                exit_code=exit_code,
+                started_at=datetime.datetime.now(),
+                message=f"VPS task {task_id} started successfully. SSH port: {ssh_port}",
+            )
+        )
+    else:
+        # sshd startup failed, most possible reason: sshd not found
+        error_message = f"VPS task {task_id} failed to start: {exit_code}: {stderr.decode(errors='replace').strip()}"
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="failed",
+                error_message=error_message,
+                exit_code=exit_code,
+                completed_at=datetime.datetime.now(),
+            )
+        )
 
 
 async def run_task_background(task_info: TaskInfo):

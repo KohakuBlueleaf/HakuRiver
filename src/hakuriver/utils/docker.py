@@ -568,31 +568,49 @@ def vps_command_for_docker(
     cpu_cores: int = 0,  # Default CPU cores to allocate (optional)
     memory_limit: str = "",  # Default memory limit (optional)
     gpu_ids: list[int] = [],
+    public_key: str = "",  # Public key for SSH access (optional)
+    detached: bool = True,  # Run in detached mode
+    distro: str = "",  # Linux distribution ("alpine", "debian", "ubuntu", "centos", "redhat")
 ) -> list[str]:
     """
-    Make a command to create persistant VPS container for SSH access.
+    Make a command to create persistent VPS container for SSH access.
     Mounts for shared/temp dirs should be added by the caller (runner) based on its config.
 
     Args:
         container_image_name: The name/tag of the Docker image to use (e.g., 'hakuriver/myenv:base').
         task_id: The HakuRiver task ID (used for temporary container name).
+        ssh_port: Port for SSH access (0 for random port, Docker will assign one)
         privileged: If True, run the container with --privileged flag.
         mount_dirs: Optional list of *additional* host directories to mount
                     into the container. Each entry should be 'host_path:container_path'.
                     (e.g., ["/data:/app/data"])
+        working_dir: Default working directory inside the container
+        cpu_cores: Number of CPU cores to allocate
+        memory_limit: Memory limit (e.g., "2g" for 2 gigabytes)
+        gpu_ids: List of GPU IDs to make available to the container
+        public_key: Public key for SSH access (required for SSH functionality)
+        restart_policy: Docker restart policy (default: unless-stopped)
+        detached: Run in detached mode (-d flag)
+        distro: Linux distribution to use for setup ("alpine", "debian", "ubuntu",
+                "centos", "redhat"). If empty, will auto-detect from image name.
 
     Returns:
         A list representing the full command to execute via subprocess,
         starting with 'docker', 'run', etc.
     """
-    docker_cmd = ["docker", "run"]  ## No --rm for persistent VPS
+    docker_cmd = ["docker", "run", "--rm"]
+
+    # Add detached mode if requested
+    if detached:
+        docker_cmd.append("-d")
 
     # Add name for easier identification (optional but helpful)
     docker_cmd.extend(["--name", f"hakuriver-vps-{task_id}"])
-    docker_cmd.extend(["--network", "host"])  # Use host network for simplicity
 
+    # Note: --network host and -p are conflicting. 
+    # If using host network, individual port mappings aren't needed
+    # But for SSH access, we need a specific port mapping, so we won't use host networking
     docker_cmd.extend(["-p", f"{ssh_port}:22"])  # Map SSH port to host
-    docker_cmd.extend(["-e", "SSH_PORT=22"])  # Set SSH_PORT environment variable
 
     # Add privileged flag if requested
     if privileged:
@@ -631,115 +649,97 @@ def vps_command_for_docker(
             ["--gpus", shlex.quote(f'"device={",".join(map(str, gpu_ids))}"')]
         )
 
+    # Determine which Linux distribution to use for setup
+    detected_distro = ""
+    if not distro:
+        # Auto-detect if not provided
+        if "alpine" in container_image_name.lower():
+            detected_distro = "alpine"
+        elif any(
+            d in container_image_name.lower()
+            for d in ["centos", "redhat", "fedora", "rhel"]
+        ):
+            detected_distro = "centos"
+        else:
+            # Default to Ubuntu/Debian
+            detected_distro = "debian"
+    else:
+        detected_distro = distro.lower()
+
+    # Set up SSH based on the determined distribution
+    if detected_distro == "alpine":
+        # Alpine setup for SSH with fixes for host key generation
+        setup_cmd = (
+            "apk update && "
+            "apk add --no-cache openssh && "
+            "mkdir -p /etc/ssh && "
+        )
+    elif detected_distro in ["centos", "redhat", "fedora", "rhel"]:
+        # CentOS/RHEL setup for SSH
+        setup_cmd = (
+            "yum update -y && "
+            "yum install -y openssh-server && "
+        )
+    else:
+        # Default to Ubuntu/Debian
+        setup_cmd = (
+            "apt-get update && "
+            "apt-get install -y openssh-server && "
+            "mkdir -p /run/sshd && "  # Required directory for some Ubuntu/Debian versions
+            "mkdir -p /etc/ssh && "
+        )
+    setup_cmd += (
+        "ssh-keygen -A && "  # Generate host keys if they don't exist
+        "echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config && "
+        "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "
+        "mkdir -p /root/.ssh && "
+        f"echo '{public_key}' > /root/.ssh/authorized_keys && "
+        "chmod 700 /root/.ssh && "
+        "chmod 600 /root/.ssh/authorized_keys && "
+        "/usr/sbin/sshd -D -e"  # Use -e flag for easier debugging
+    )
+
     # Add the container image name
     docker_cmd.append(container_image_name)
-    docker_cmd.extend(["/usr/sbin/sshd", "-D"])  # start sshd service
+    docker_cmd.extend(["/bin/sh", "-c", setup_cmd])
 
-    logger.debug(f"Base docker command for VPS {task_id}: {docker_cmd}")
+    logger.debug(f"Docker command for VPS {task_id}: {docker_cmd}")
 
     return docker_cmd
 
 
+def find_ssh_port(container_name: str) -> int | None:
+    try:
+        result = _run_command(
+            ["docker", "port", container_name, "22"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        """
+        it may have multiple line:
+        > docker port hakuriver-vps-7323718749301768192 22
+        0.0.0.0:32792
+        [::]:32792
+        """
+        # Extract the first port mapping (IPv4)
+        port_mapping = result.stdout.splitlines()[0].strip()
+        return int(port_mapping.split(":")[1])
+    except subprocess.CalledProcessError:
+        logger.error(f"Failed to find SSH port for container '{container_name}'")
+        return None
+    except FileNotFoundError:
+        return None
+
+
 # Example Usage (for standalone testing - requires Docker daemon)
 if __name__ == "__main__":
-    # Ensure test directories exist
-    test_base_shared_dir = os.path.abspath("test_shared_dir_base")  # Base shared dir
-    test_container_tar_dir = os.path.join(
-        test_base_shared_dir, "hakuriver-containers"
-    )  # Specific tar dir
-    test_local_temp_dir = os.path.abspath("test_local_temp_dir")
-    os.makedirs(test_base_shared_dir, exist_ok=True)
-    os.makedirs(test_container_tar_dir, exist_ok=True)
-    os.makedirs(test_local_temp_dir, exist_ok=True)
-
-    test_hakuriver_container_name = "mytestenv"
-    test_image_name = "ubuntu:latest"
-    test_source_container_name = f"hakuriver_user_cont_{test_hakuriver_container_name}"  # Name for persistent container
-
-    # Clean up previous test artifacts
-    print("\n--- Cleaning up previous test artifacts ---")
-    try:
-        _run_command(["docker", "stop", test_source_container_name], check=False)
-        _run_command(
-            ["docker", "rm", "--force", test_source_container_name], check=False
-        )
-        _run_command(
-            [
-                "docker",
-                "rmi",
-                "--force",
-                f"hakuriver/{test_hakuriver_container_name}:base",
-            ],
-            check=False,
-        )
-    except Exception as e:
-        print(f"Initial cleanup notice: {e}")
-
-    print(
-        f"\n--- Testing create_container (persistent container: {test_source_container_name}) ---"
+    logger.setLevel("DEBUG")
+    logger.info("Starting Docker command example...")
+    vps_docker_cmd = vps_command_for_docker(
+        "hakuriver/py313:base",
+        "test",
+        distro="alpine",
+        public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJaT9GDwMEOCDa+2PThDgipYrWlbg0umOptqAkp28Pb9 apoll@RiceShower",
     )
-    create_success = create_container(test_image_name, test_source_container_name)
-    if create_success:
-        print(
-            f"Persistent container '{test_source_container_name}' created successfully."
-        )
-    else:
-        print(f"Failed to create persistent container '{test_source_container_name}'.")
-        # Don't exit, maybe it already existed or user will create manually
-
-    print(
-        f"\n--- Testing create_container_tar (from persistent container {test_source_container_name}) ---"
-    )
-    # Simulate modification (optional, requires running container)
-    try:
-        print("(Skipping modification simulation for simplicity)")
-    except Exception as e:
-        print(f"Error during modification simulation: {e}")
-
-    tar_path_from_persistent = create_container_tar(
-        test_source_container_name,
-        test_hakuriver_container_name,
-        test_container_tar_dir,
-    )
-    if tar_path_from_persistent:
-        print(f"Tarball created from persistent container: {tar_path_from_persistent}")
-        print("Listing shared tars:")
-        print(
-            list_shared_container_tars(
-                test_container_tar_dir, test_hakuriver_container_name
-            )
-        )
-    else:
-        print(
-            f"Failed to create tarball from persistent container '{test_source_container_name}'. Does it exist?"
-        )
-
-    print("\n--- Testing needs_sync / sync_from_shared ---")
-    needs, sync_path = needs_sync(test_hakuriver_container_name, test_container_tar_dir)
-    print(f"Needs sync: {needs}, Path: {sync_path}")
-    if needs:
-        success = sync_from_shared(test_hakuriver_container_name, sync_path)
-        print(f"Sync successful: {success}")
-        needs_after, _ = needs_sync(
-            test_hakuriver_container_name, test_container_tar_dir
-        )
-        print(f"Needs sync after sync: {needs_after}")  # Should be False
-
-    print("\n--- Testing modify_command_for_docker ---")
-    original_cmd = ["echo", "Hello from inside Docker task!"]
-    container_img = f"hakuriver/{test_hakuriver_container_name}:base"
-    task_id_example = 1122334455
-    # Runner would add its own shared/temp mounts before calling this
-    docker_wrapped_cmd = modify_command_for_docker(
-        original_command_list=original_cmd,
-        container_image_name=container_img,
-        task_id=task_id_example,
-        # shared_dir, local_temp_dir are NOT passed here
-        privileged=False,
-        mount_dirs=[
-            "/opt/host_data:/container_data"
-        ],  # Example additional mount from host
-    )
-    print("Original command:", original_cmd)
-    print("Docker wrapped command base:", docker_wrapped_cmd)
-    print("Full command string (base):", shlex.join(docker_wrapped_cmd))
+    _run_command(["sudo"] + vps_docker_cmd)
