@@ -998,6 +998,53 @@ async def get_task_status(task_id: int):
     return response
 
 
+@app.get("/vps/status")
+async def get_active_vps_status():
+    """Retrieves a list of active VPS tasks."""
+    logger.debug("Received request to fetch active VPS tasks list.")
+    try:
+        # Filter by task_type and active statuses
+        active_statuses = ["pending", "assigning", "running", "paused"]
+        query = (
+            Task.select(Task, Node.hostname)
+            .join(
+                Node, peewee.JOIN.LEFT_OUTER, on=(Task.assigned_node == Node.hostname)
+            )
+            .where(
+                (Task.task_type == "vps") & (Task.status.in_(active_statuses))
+            )
+            .order_by(Task.submitted_at.desc())
+        )
+
+        tasks_data = []
+        for task in query:
+            node_hostname = task.assigned_node.hostname if task.assigned_node else None
+            tasks_data.append(
+                {
+                    "task_id": str(task.task_id),
+                    "status": task.status,
+                    "assigned_node": node_hostname,
+                    "target_numa_node_id": task.target_numa_node_id,
+                    "required_cores": task.required_cores,
+                    "required_gpus": (
+                        json.loads(task.required_gpus) if task.required_gpus else []
+                    ),
+                    "required_memory_bytes": task.required_memory_bytes,
+                    "submitted_at": task.submitted_at.isoformat() if task.submitted_at else None,
+                    "started_at": task.started_at.isoformat() if task.started_at else None,
+                    "ssh_port": task.ssh_port, # Include the SSH port
+                }
+            )
+        return tasks_data
+
+    except peewee.PeeweeException as e:
+        logger.error(f"Database error fetching active VPS tasks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Database error fetching active VPS tasks.")
+    except Exception as e:
+        logger.error(f"Unexpected error fetching active VPS tasks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Unexpected error fetching active VPS tasks.")
+
+
 # Kill endpoint and helper (logic same, use logger)
 async def send_kill_to_runner(runner_url: str, task_id: int, unit_name: str | None):
     if not unit_name:

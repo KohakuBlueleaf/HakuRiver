@@ -156,6 +156,47 @@ def submit_payload(url, payload):
     return None
 
 
+
+def get_active_vps_status():
+    """Fetches the status of active VPS tasks."""
+    url = f"{CLIENT_CONFIG.host_url}/vps/status" # Call the new endpoint
+    logger.info(f"Fetching active VPS status from {url}")
+
+    try:
+        with httpx.Client(timeout=CLIENT_CONFIG.status_timeout) as client:
+            response = client.get(url)
+            response.raise_for_status()
+            logger.info("--- Active VPS Status ---")
+            print_response(response) # Use the helper to print JSON
+
+    except httpx.HTTPStatusError as e:
+        print_response(e.response)
+        logger.error(f"HTTP error occurred while fetching active VPS status.")
+    except httpx.RequestError as e:
+        logger.error(f"Network error occurred while connecting to {url}: {e}")
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred fetching active VPS status: {e}")
+
+# Also, add a new function for the 'command' endpoint
+def send_task_command(task_id: str, action: str):
+    """Sends a control command (e.g., pause, resume) to a task."""
+    url = f"{CLIENT_CONFIG.host_url}/command/{task_id}/{action}"
+    logger.info(f"Sending command '{action}' to task {task_id} at {url}")
+    try:
+        with httpx.Client(timeout=CLIENT_CONFIG.default_timeout) as client:
+            response = client.post(url)
+            response.raise_for_status()
+            logger.info(f"--- Command '{action}' Response ---")
+            print_response(response)
+    except httpx.HTTPStatusError as e:
+        print_response(e.response)
+        logger.error(f"HTTP error occurred while sending command.")
+    except httpx.RequestError as e:
+        logger.error(f"Network error occurred while connecting to {url}: {e}")
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred sending command: {e}")
+
+
 def check_status(task_id: str) -> str | None:
     """Checks the status of a specific task."""
     url = f"{CLIENT_CONFIG.host_url}/status/{task_id}"
