@@ -367,7 +367,9 @@ async def run_vps(task_info: TaskInfo):
     )
     stdout, stderr = await process.communicate()
     exit_code = process.returncode
-    logger.debug(f"VPS task {task_id} exit code: {exit_code}: {stdout.decode(errors='replace').strip()} | {stderr.decode(errors='replace').strip()}")
+    logger.debug(
+        f"VPS task {task_id} exit code: {exit_code}: {stdout.decode(errors='replace').strip()} | {stderr.decode(errors='replace').strip()}"
+    )
 
     if exit_code == 0:
         ssh_port = docker_utils.find_ssh_port(f"hakuriver-vps-{task_id}")

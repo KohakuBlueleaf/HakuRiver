@@ -607,7 +607,7 @@ def vps_command_for_docker(
     # Add name for easier identification (optional but helpful)
     docker_cmd.extend(["--name", f"hakuriver-vps-{task_id}"])
 
-    # Note: --network host and -p are conflicting. 
+    # Note: --network host and -p are conflicting.
     # If using host network, individual port mappings aren't needed
     # But for SSH access, we need a specific port mapping, so we won't use host networking
     docker_cmd.extend(["-p", f"{ssh_port}:22"])  # Map SSH port to host
@@ -670,16 +670,11 @@ def vps_command_for_docker(
     if detected_distro == "alpine":
         # Alpine setup for SSH with fixes for host key generation
         setup_cmd = (
-            "apk update && "
-            "apk add --no-cache openssh && "
-            "mkdir -p /etc/ssh && "
+            "apk update && " "apk add --no-cache openssh && " "mkdir -p /etc/ssh && "
         )
     elif detected_distro in ["centos", "redhat", "fedora", "rhel"]:
         # CentOS/RHEL setup for SSH
-        setup_cmd = (
-            "yum update -y && "
-            "yum install -y openssh-server && "
-        )
+        setup_cmd = "yum update -y && " "yum install -y openssh-server && "
     else:
         # Default to Ubuntu/Debian
         setup_cmd = (
