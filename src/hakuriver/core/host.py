@@ -893,10 +893,14 @@ async def submit_task(req: TaskRequest):
             f"Task batch submitted successfully. {len(created_task_ids)} tasks created."
         )
         logger.info(f"Task batch submission successful. Task IDs: {created_task_ids}")
-        resp = {"message": message, "task_ids": created_task_ids, "assigned_node": {
-            "hostname": node.hostname,
-            "url": node.url,
-        }}
+        resp = {
+            "message": message,
+            "task_ids": created_task_ids,
+            "assigned_node": {
+                "hostname": node.hostname,
+                "url": node.url,
+            },
+        }
         if result:
             resp["runner_response"] = result
         return resp
