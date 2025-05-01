@@ -35,8 +35,10 @@ Repository = "https://github.com/KohakuBlueleaf/HakuRiver"
 
 [project.scripts]
 "hakuriver.host" = "hakuriver.cli.host:main"
-"hakuriver.client" = "hakuriver.cli.client:main"
 "hakuriver.runner" = "hakuriver.cli.runner:main"
+"hakuriver.client" = "hakuriver.cli.client:main"
+"hakuriver.task" = "hakuriver.cli.task:main"
+"hakuriver.vps" = "hakuriver.cli.vps:main"
 "hakuriver.init" = "hakuriver.cli.init:main"
 "hakuriver.docker" = "hakuriver.cli.docker:main"
 "hakuriver.docker-shell" = "hakuriver.cli.docker_shell:main"
