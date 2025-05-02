@@ -12,6 +12,8 @@ try:
         # Network
         HOST_BIND_IP = settings["network"]["host_bind_ip"]
         HOST_PORT = settings["network"]["host_port"]
+        HOST_SSH_PROXY_PORT = settings["network"]["host_ssh_proxy_port"]
+        REACABLE_ADDRESS = settings["network"]["host_reachable_address"]
         # Paths
         SHARED_DIR = settings["paths"]["shared_dir"]
         # Database
