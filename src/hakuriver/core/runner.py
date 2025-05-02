@@ -342,6 +342,13 @@ async def run_vps(task_info: TaskInfo):
     container_name_from_tag = task_info.docker_image_name.split("/")[1].split(":")[0]
     container_tar_dir = RUNNER_CONFIG.CONTAINER_TAR_DIR  # Use runner's configured path
 
+    await report_status_to_host(
+        TaskStatusUpdate(
+            task_id=task_id,
+            status="pending",
+        )
+    )
+
     if not await docker_setup(
         task_id, task_info, container_name_from_tag, container_tar_dir
     ):
@@ -929,9 +936,9 @@ def kill_docker(task_id, vps=False):
     if vps:
         container_name = f"hakuriver-vps-{task_id}"
         kill_cmd = ["docker", "stop", container_name]
-        docker_utils._run_command(kill_cmd, check=True, timeout=1)
+        docker_utils._run_command(kill_cmd, check=True, timeout=60)
         kill_cmd = ["docker", "rm", container_name]
-        docker_utils._run_command(kill_cmd, check=True, timeout=1)
+        docker_utils._run_command(kill_cmd, check=True, timeout=60)
     else:
         container_name = f"hakuriver-task-{task_id}"
         kill_cmd = ["docker", "kill", container_name]

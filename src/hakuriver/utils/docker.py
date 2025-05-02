@@ -543,7 +543,7 @@ def modify_command_for_docker(
         docker_cmd.extend(["--memory", memory_limit])
     if gpu_ids:
         docker_cmd.extend(
-            ["--gpus", shlex.quote(f'"device={",".join(map(str, gpu_ids))}"')]
+            ["--gpus", shlex.quote(f"device={",".join(map(str, gpu_ids))}")]
         )
 
     # Add the container image name
@@ -646,7 +646,7 @@ def vps_command_for_docker(
         docker_cmd.extend(["--memory", memory_limit])
     if gpu_ids:
         docker_cmd.extend(
-            ["--gpus", shlex.quote(f'"device={",".join(map(str, gpu_ids))}"')]
+            ["--gpus", shlex.quote(f"device={",".join(map(str, gpu_ids))}")]
         )
 
     # Determine which Linux distribution to use for setup
