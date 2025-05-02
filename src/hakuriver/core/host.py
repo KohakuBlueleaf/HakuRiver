@@ -2,15 +2,13 @@ import asyncio
 import datetime
 import os
 import json
-import re
 from collections import defaultdict
-from typing import Iterable, List
+from typing import Iterable
 
 import peewee
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Path, WebSocket
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field, field_validator
 
 from hakuriver.utils.snowflake import Snowflake
 from hakuriver.utils.logger import logger
@@ -28,6 +26,8 @@ from hakuriver.core.models import (
 
 from .docker.host_api import router as docker_host_router
 from .docker.host_terminal import terminal_websocket_endpoint
+
+from .ssh_proxy.host import start_server
 
 
 # --- global state ---
@@ -1523,6 +1523,9 @@ async def startup_event():
     # Start background task AFTER app starts running
     asyncio.create_task(check_dead_runners())
     asyncio.create_task(collate_health_data())
+    asyncio.create_task(
+        start_server(HOST_CONFIG.HOST_BIND_IP, HOST_CONFIG.HOST_SSH_PROXY_PORT)
+    )
 
 
 app.add_event_handler("startup", startup_event)
