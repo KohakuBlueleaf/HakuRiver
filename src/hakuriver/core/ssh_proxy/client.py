@@ -151,9 +151,7 @@ class ClientProxy:
             # Print the SSH command for the user
             logger.info(f"Tunnel established. Connect via SSH:")
             # Use the fixed 127.0.0.1 address as the local server binds there
-            print(
-                f"    ssh {self.user}@127.0.0.1 -p {self.local_port}"
-            )
+            print(f"    ssh {self.user}@127.0.0.1 -p {self.local_port}")
 
             # Keep the server running
             async with self._local_server:
