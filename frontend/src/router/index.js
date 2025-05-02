@@ -1,6 +1,6 @@
 // src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router';
-import HomeView from '../views/HomeView.vue'; // Example view
+import HomeView from '../views/HomeView.vue';
 
 const routes = [
   {
@@ -11,29 +11,32 @@ const routes = [
   {
     path: '/nodes',
     name: 'nodes',
-    // Lazy-loaded component
     component: () => import('../views/NodesView.vue'),
   },
   {
-    path: '/gpus', // New path for GPU view
+    path: '/gpus',
     name: 'gpus',
-    component: () => import('../views/GPUView.vue'), // Lazy-loaded GPU view
+    component: () => import('../views/GPUView.vue'),
   },
   {
     path: '/tasks',
     name: 'tasks',
-    // Lazy-loaded component
     component: () => import('../views/TasksView.vue'),
   },
   {
     path: '/docker',
     name: 'docker',
-    component: () => import('../views/DockerView.vue'), // Assuming DockerView.vue will be the main view
+    component: () => import('../views/DockerView.vue'),
+  },
+  {
+    path: '/vps', // NEW path for VPS view
+    name: 'vps',
+    component: () => import('../views/VPSView.vue'), // Lazy-loaded VPS view
   },
 ];
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL), // Use history mode
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes,
 });
 

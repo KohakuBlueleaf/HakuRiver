@@ -49,6 +49,10 @@
               <el-icon><Tickets /></el-icon>
               <template #title>Tasks</template>
             </el-menu-item>
+            <el-menu-item index="/vps">
+              <el-icon><Tickets /></el-icon>
+              <template #title>VPS</template>
+            </el-menu-item>
             <el-menu-item index="/docker">
               <el-icon><Cellphone /></el-icon>
               <template #title>Docker</template>
@@ -113,12 +117,14 @@ const sidebarWidth = computed(() => {
 // Get current page title based on route
 const currentPageTitle = computed(() => {
   const path = route.path;
-  if (path === '/') return 'Dashboard';
-  if (path === '/nodes') return 'Nodes';
-  if (path === '/tasks') return 'Tasks';
-  if (path === '/docker') return 'Docker'; // New page title
+  if (path === '/') return 'Cluster Overview';
+  if (path === '/nodes') return 'Compute Nodes';
+  if (path === '/gpus') return 'GPU Overview';
+  if (path === '/tasks') return 'Command Tasks';
+  if (path === '/vps') return 'VPS Tasks'; // NEW page title
+  if (path === '/docker') return 'Docker Management';
   // Add more cases as needed
-  return 'HakuRiver';
+  return 'HakuRiver Dashboard';
 });
 
 // Check screen size and update state

@@ -37,6 +37,8 @@ export default {
       container_name: taskData.container_name,
       privileged: taskData.privileged,
       additional_mounts: taskData.additional_mounts,
+      // Added task_type for submission endpoint
+      task_type: taskData.task_type, // Add task_type here
     };
     // Clean up payload - remove null/undefined values
     Object.keys(payload).forEach((key) => payload[key] == null && delete payload[key]);
@@ -48,12 +50,15 @@ export default {
     return apiClient.post(`/command/${task_id}/${command}`);
   },
   getTaskStatus(taskId) {
+    // This endpoint works for any task type
     return apiClient.get(`/status/${taskId}`);
   },
   killTask(taskId) {
+    // This endpoint works for any task type
     return apiClient.post(`/kill/${taskId}`);
   },
   getTasks() {
+    // This endpoint specifically gets 'command' tasks
     return apiClient.get('/tasks');
   },
   getTaskStdout(taskId) {
@@ -89,5 +94,11 @@ export default {
   },
   getTarballs() {
     return apiClient.get('/docker/list');
+  },
+
+  // --- NEW VPS API Call ---
+  getVpsStatus() {
+    // This endpoint specifically gets 'vps' tasks that are active
+    return apiClient.get('/vps/status');
   },
 };
