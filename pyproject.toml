@@ -13,6 +13,7 @@ authors = [
     {name = "Shih-Ying Yeh(KohakuBlueLeaf)", email = "apolloyeh0123@gmail.com"},
 ]
 dependencies = [
+    "hakustore",
     "peewee",
     "fastapi",
     "httpx",

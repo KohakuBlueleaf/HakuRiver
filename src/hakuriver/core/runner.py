@@ -10,7 +10,7 @@ import json
 import re
 
 from fastapi import FastAPI, HTTPException, Body, BackgroundTasks
-from pydantic import BaseModel, Field
+from hakustore import PersistentDict, logger
 
 # Load configuration FIRST
 from hakuriver.utils.logger import logger
@@ -26,14 +26,21 @@ from hakuriver.core.models import (
 )
 
 
+def make_persistent_dict(name):
+    return PersistentDict(
+        os.path.join(RUNNER_CONFIG.LOCAL_TEMP_DIR, f"runner-status.db"),
+        name,
+    )
+
+
 # --- Global State ---
 killed_tasks_pending_report: list[HeartbeatKilledTaskInfo] = []
 running_processes = (
-    {}
+    make_persistent_dict("running_processes")
 )  # task_id -> {'unit': str, 'process': asyncio.Process | None, 'memory_limit': int | None, 'pid': int | None}
-paused_processes = {}
-running_vps = {}
-paused_vps = {}
+paused_processes = make_persistent_dict("paused_processes")
+running_vps = make_persistent_dict("running_vps")  # task_id -> {'ssh_port': int}
+paused_vps = make_persistent_dict("paused_vps")  # task_id -> {'ssh_port': int}
 
 docker_lock = asyncio.Lock()  # Lock for Docker image sync operations
 runner_ip = RUNNER_CONFIG.RUNNER_ADDRESS
@@ -1008,6 +1015,98 @@ async def kill_task_endpoint(body: dict = Body(...)):
     }
 
 
+async def start_up_check():
+    # check all the running VPS/tasks and see if they are still running
+    for task_id, task_data in list(running_processes.items()):
+        unit_name = task_data["unit"]
+        if task_data["use_systemd"]:
+            # assume it dead, since it is subprocess of runner
+            await report_status_to_host(
+                TaskStatusUpdate(
+                    task_id=task_id,
+                    status="stopped",
+                    exit_code=-1,
+                    message="Runner restarted, assumed task stopped.",
+                    completed_at=datetime.datetime.now(),
+                )
+            )
+            running_processes.pop(task_id)  # Remove from tracking
+        else:
+            container_name = f"hakuriver-task-{task_id}"
+            try:
+                result = docker_utils._run_command(
+                    ["docker", "inspect", container_name], check=True, timeout=1
+                )
+                if result.returncode != 0:
+                    logger.warning(
+                        f"Container {container_name} not found, assuming it stopped."
+                    )
+                    # Report to host as stopped
+                    await report_status_to_host(
+                        TaskStatusUpdate(
+                            task_id=task_id,
+                            status="stopped",
+                            exit_code=-1,
+                            message="Container not found, assuming stopped.",
+                            completed_at=datetime.datetime.now(),
+                        )
+                    )
+                    running_processes.pop(task_id)  # Remove from tracking
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Error checking container {container_name}: {e}")
+                await report_status_to_host(
+                    TaskStatusUpdate(
+                        task_id=task_id,
+                        status="stopped",
+                        exit_code=-1,
+                        message="Container not found, assuming stopped.",
+                        completed_at=datetime.datetime.now(),
+                    )
+                )
+
+    for vps_id, vps_data in list(running_vps.items()):
+        container_name = f"hakuriver-vps-{vps_id}"
+        try:
+            result = docker_utils._run_command(
+                ["docker", "inspect", container_name], check=True, timeout=1
+            )
+            if result.returncode != 0:
+                logger.warning(
+                    f"Container {container_name} not found, assuming it stopped."
+                )
+                # Report to host as stopped
+                await report_status_to_host(
+                    TaskStatusUpdate(
+                        task_id=vps_id,
+                        status="stopped",
+                        exit_code=-1,
+                        message="Container not found, assuming stopped.",
+                        completed_at=datetime.datetime.now(),
+                    )
+                )
+                running_vps.pop(vps_id)  # Remove from tracking
+            else:
+                ssh_port = docker_utils.find_ssh_port(f"hakuriver-vps-{task_id}")
+                if ssh_port:
+                    vps_data["ssh_port"] = ssh_port
+                    running_vps[vps_id] = vps_data
+                else:
+                    logger.warning(
+                        f"Failed to update SSH port for container {container_name}."
+                    )
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error checking container {container_name}: {e}")
+            await report_status_to_host(
+                TaskStatusUpdate(
+                    task_id=vps_id,
+                    status="stopped",
+                    exit_code=-1,
+                    message="Container not found, assuming stopped.",
+                    completed_at=datetime.datetime.now(),
+                )
+            )
+
+
 async def startup_event():
     global numa_topology
     logger.info(
@@ -1058,7 +1157,7 @@ async def startup_event():
         )
     else:
         logger.info("Starting background tasks (Heartbeat).")
-        # Removed check_running_tasks call - rely on systemd-run --scope --collect
+        asyncio.create_task(start_up_check())  # Check running tasks
         asyncio.create_task(send_heartbeat())
 
 
