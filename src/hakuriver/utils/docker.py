@@ -472,6 +472,29 @@ def sync_from_shared(container_name: str, tarball_path: str) -> bool:
         return False
 
 
+
+package_manager_lists = [
+    "apk",
+    "apt-get",
+    "apt",
+    "yum",
+    "dnf",
+    "zypper",
+    "pacman",
+    "emerge",
+    "xbps-install",
+    "pkg_add",
+    "pkg",
+]
+def find_package_manager(container_image_name: str) -> str | None:
+    for manager in package_manager_lists:
+        if _run_command(
+            ["docker", "run", container_image_name, "which", manager]
+        ).returncode == 0:
+            return manager
+    return None
+
+
 def modify_command_for_docker(
     original_command_list: list[str],
     container_image_name: str,  # This should be hakuriver/<container_name>:base
@@ -650,40 +673,27 @@ def vps_command_for_docker(
         )
 
     # Determine which Linux distribution to use for setup
-    detected_distro = ""
-    if not distro:
-        # Auto-detect if not provided
-        if "alpine" in container_image_name.lower():
-            detected_distro = "alpine"
-        elif any(
-            d in container_image_name.lower()
-            for d in ["centos", "redhat", "fedora", "rhel"]
-        ):
-            detected_distro = "centos"
-        else:
-            # Default to Ubuntu/Debian
-            detected_distro = "debian"
-    else:
-        detected_distro = distro.lower()
+    detected_package_manager = find_package_manager(container_image_name)
 
     # Set up SSH based on the determined distribution
-    if detected_distro == "alpine":
-        # Alpine setup for SSH with fixes for host key generation
-        setup_cmd = (
-            "apk update && " "apk add --no-cache openssh && " "mkdir -p /etc/ssh && "
-        )
-    elif detected_distro in ["centos", "redhat", "fedora", "rhel"]:
-        # CentOS/RHEL setup for SSH
-        setup_cmd = "yum update -y && " "yum install -y openssh-server && "
-    else:
-        # Default to Ubuntu/Debian
-        setup_cmd = (
-            "apt-get update && "
-            "apt-get install -y openssh-server && "
-            "mkdir -p /run/sshd && "  # Required directory for some Ubuntu/Debian versions
-            "mkdir -p /etc/ssh && "
-        )
+    match detected_package_manager:
+        case "apk":
+            setup_cmd = "apk update && apk add --no-cache openssh"
+        case ("apt" | "apt-get"):
+            setup_cmd = "apt-get update && apt-get install -y openssh-server"
+        case "dnf":
+            setup_cmd = "dnf update && dnf install -y openssh-server"
+        case "yum":
+            setup_cmd = "yum update && yum install -y openssh-server"
+        case "zypper":
+            setup_cmd = "zypper refresh && zypper install -y openssh"
+        case _:
+            logger.error(
+                f"Unsupported package manager '{detected_package_manager}' for image '{container_image_name}'."
+            )
+            raise ValueError(f"Unsupported package manager: {detected_package_manager}")
     setup_cmd += (
+        " && "
         "ssh-keygen -A && "  # Generate host keys if they don't exist
         "echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config && "
         "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "

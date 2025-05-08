@@ -1066,6 +1066,7 @@ async def start_up_check():
 
     for vps_id, vps_data in list(running_vps.items()):
         container_name = f"hakuriver-vps-{vps_id}"
+        running_vps.pop(vps_id)  # Remove from tracking
         try:
             result = docker_utils._run_command(
                 ["docker", "inspect", container_name], check=True, timeout=1
@@ -1084,15 +1085,29 @@ async def start_up_check():
                         completed_at=datetime.datetime.now(),
                     )
                 )
-                running_vps.pop(vps_id)  # Remove from tracking
             else:
-                ssh_port = docker_utils.find_ssh_port(f"hakuriver-vps-{task_id}")
+                ssh_port = docker_utils.find_ssh_port(f"hakuriver-vps-{vps_id}")
                 if ssh_port:
                     vps_data["ssh_port"] = ssh_port
                     running_vps[vps_id] = vps_data
                 else:
-                    logger.warning(
+                    logger.error(
                         f"Failed to update SSH port for container {container_name}."
+                    )
+                    docker_utils._run_command(
+                        ["docker", "stop", container_name], check=True, timeout=1
+                    )
+                    docker_utils._run_command(
+                        ["docker", "rm", container_name], check=True, timeout=1
+                    )
+                    await report_status_to_host(
+                        TaskStatusUpdate(
+                            task_id=vps_id,
+                            status="stopped",
+                            exit_code=-1,
+                            message="Container lost SSH port, assuming stopped.",
+                            completed_at=datetime.datetime.now(),
+                        )
                     )
         except subprocess.CalledProcessError as e:
             logger.error(f"Error checking container {container_name}: {e}")
