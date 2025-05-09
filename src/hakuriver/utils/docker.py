@@ -66,6 +66,7 @@ def create_container(image_name: str, container_name: str) -> bool:
     Returns:
         True if creation was successful, False otherwise.
     """
+    image_name = image_name.lower()
     logger.info(
         f"Attempting to create persistent container '{container_name}' from image '{image_name}'..."
     )
@@ -237,7 +238,7 @@ def create_container_tar(
     Returns:
         The absolute path to the created tarball, or None if failed.
     """
-    hakuriver_image_tag = f"hakuriver/{hakuriver_container_name}:base"
+    hakuriver_image_tag = f"hakuriver/{hakuriver_container_name}:base".lower()
     timestamp = int(time.time())
     tarball_filename = f"{hakuriver_container_name}-{timestamp}.tar"
     tarball_path = os.path.join(container_tar_dir, tarball_filename)
@@ -324,7 +325,7 @@ def list_shared_container_tars(
         A list of (timestamp, absolute_filepath) tuples, sorted by timestamp (newest first).
     """
     tar_files = []
-    pattern = re.compile(rf"^{re.escape(container_name)}-(\d+)\.tar$")
+    pattern = re.compile(rf"^{re.escape(container_name.lower())}-(\d+)\.tar$")
 
     try:
         if not os.path.isdir(container_tar_dir):
@@ -359,7 +360,7 @@ def get_local_image_timestamp(container_name: str) -> int | None:
     Returns:
         The creation timestamp as an integer (Unix time), or None if the image is not found.
     """
-    hakuriver_image_tag = f"hakuriver/{container_name}:base"
+    hakuriver_image_tag = f"hakuriver/{container_name}:base".lower()
     try:
         # Use docker image inspect to get the creation timestamp
         result = _run_command(
@@ -491,6 +492,7 @@ package_manager_lists = [
     "pkg",
 ]
 def find_package_manager(container_image_name: str) -> str | None:
+    container_image_name = container_image_name.lower()
     for manager in package_manager_lists:
         logger.debug(
             f"Checking for package manager '{manager}' in container image '{container_image_name}'..."
@@ -533,6 +535,7 @@ def modify_command_for_docker(
         A list representing the full command to execute via subprocess,
         starting with 'docker', 'run', etc.
     """
+    container_image_name = container_image_name.lower()
     docker_cmd = ["docker", "run", "--rm"]
 
     # Add name for easier identification (optional but helpful)
@@ -573,7 +576,7 @@ def modify_command_for_docker(
         docker_cmd.extend(["--memory", memory_limit])
     if gpu_ids:
         id_string = ",".join(map(str, gpu_ids))
-        docker_cmd.extend(["--gpus", f'"device={id_string}"'])
+        docker_cmd.extend([f'--gpus="{id_string}"'])
 
     # Add the container image name
     docker_cmd.append(container_image_name)
@@ -627,6 +630,7 @@ def vps_command_for_docker(
         A list representing the full command to execute via subprocess,
         starting with 'docker', 'run', etc.
     """
+    container_image_name = container_image_name.lower()
     docker_cmd = ["docker", "run", "--restart", "unless-stopped"]
 
     # Add detached mode if requested
