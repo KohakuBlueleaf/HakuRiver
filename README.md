@@ -1,9 +1,10 @@
 # HakuRiver - Shared Container Cluster & VPS Tasks
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![en](https://img.shields.io/badge/lang-en-red.svg)](./README.md)
 [![中文](https://img.shields.io/badge/lang-%E4%B8%AD%E6%96%87-green.svg)](./README.zh.md)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/KohakuBlueleaf/HakuRiver)
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ![HakuRiver logo svg](image/logo.svg)
 
