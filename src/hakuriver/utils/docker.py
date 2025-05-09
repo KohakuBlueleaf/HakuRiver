@@ -16,6 +16,10 @@ def _run_command(cmd, capture_output=True, text=True, check=False, **kwargs):
         result = subprocess.run(
             cmd, capture_output=capture_output, text=text, check=check, **kwargs
         )
+        if "sudo" != cmd[0] and result.returncode != 0:
+            return _run_command(
+                ["sudo"] + cmd, capture_output, text, check, **kwargs
+            )
         # Avoid logging potentially huge output from docker save/load by default
         if result.stdout and cmd[0:2] not in (["docker", "save"], ["docker", "load"]):
             logger.debug(f"Command stdout:\n{result.stdout}")
@@ -488,6 +492,9 @@ package_manager_lists = [
 ]
 def find_package_manager(container_image_name: str) -> str | None:
     for manager in package_manager_lists:
+        logger.debug(
+            f"Checking for package manager '{manager}' in container image '{container_image_name}'..."
+        )
         if _run_command(
             ["docker", "run", container_image_name, "which", manager]
         ).returncode == 0:
@@ -565,9 +572,8 @@ def modify_command_for_docker(
     if memory_limit:
         docker_cmd.extend(["--memory", memory_limit])
     if gpu_ids:
-        docker_cmd.extend(
-            ["--gpus", shlex.quote(f"device={",".join(map(str, gpu_ids))}")]
-        )
+        id_string = ",".join(map(str, gpu_ids))
+        docker_cmd.extend(["--gpus", f'"device={id_string}"'])
 
     # Add the container image name
     docker_cmd.append(container_image_name)
@@ -668,9 +674,8 @@ def vps_command_for_docker(
     if memory_limit:
         docker_cmd.extend(["--memory", memory_limit])
     if gpu_ids:
-        docker_cmd.extend(
-            ["--gpus", shlex.quote(f"device={",".join(map(str, gpu_ids))}")]
-        )
+        id_string = ",".join(map(str, gpu_ids))
+        docker_cmd.extend(["--gpus", f'"device={id_string}"'])
 
     # Determine which Linux distribution to use for setup
     detected_package_manager = find_package_manager(container_image_name)
@@ -679,7 +684,9 @@ def vps_command_for_docker(
     match detected_package_manager:
         case "apk":
             setup_cmd = "apk update && apk add --no-cache openssh"
-        case ("apt" | "apt-get"):
+        case "apt":
+            setup_cmd = "apt update && apt install -y openssh-server"
+        case "apt-get":
             setup_cmd = "apt-get update && apt-get install -y openssh-server"
         case "dnf":
             setup_cmd = "dnf update && dnf install -y openssh-server"
@@ -687,6 +694,16 @@ def vps_command_for_docker(
             setup_cmd = "yum update && yum install -y openssh-server"
         case "zypper":
             setup_cmd = "zypper refresh && zypper install -y openssh"
+        case "pacman":
+            setup_cmd = "pacman -Syu --noconfirm openssh"
+        case "emerge":
+            setup_cmd = "emerge --sync openssh"
+        case "xbps-install":
+            setup_cmd = "xbps-install -Syu openssh"
+        case "pkg_add":
+            setup_cmd = "pkg_add openssh"
+        case "pkg":
+            setup_cmd = "pkg update && pkg install -y openssh"
         case _:
             logger.error(
                 f"Unsupported package manager '{detected_package_manager}' for image '{container_image_name}'."
@@ -697,6 +714,8 @@ def vps_command_for_docker(
         "ssh-keygen -A && "  # Generate host keys if they don't exist
         "echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config && "
         "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "
+        "mkdir -p /run/sshd && "
+        "chmod 0755 /run/sshd && "
         "mkdir -p /root/.ssh && "
         f"echo '{public_key}' > /root/.ssh/authorized_keys && "
         "chmod 700 /root/.ssh && "
