@@ -500,7 +500,6 @@ async def run_task_background(task_info: TaskInfo):
         # Store info immediately, even before systemd-run finishes
         running_processes[task_id] = {
             "unit": unit_name,
-            "process": systemd_process,  # Store the systemd-run process object initially
             "pid": systemd_process.pid,  # PID will be filled by the check loop
             "use_systemd": use_systemd,
         }
