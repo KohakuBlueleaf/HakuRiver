@@ -75,9 +75,19 @@ class ClientProxy:
                     bind_reader_writer(host_reader, writer)
                 )
 
-                await asyncio.gather(
-                    task_local_to_host, task_host_to_local, return_exceptions=True
-                )
+                try:
+                    await asyncio.gather(
+                        task_local_to_host, task_host_to_local
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"{log_prefix} Error during bidirectional forwarding: {e}"
+                    )
+                    try:
+                        await writer.drain()
+                    except Exception:
+                        pass
+                    return
                 logger.info(f"{log_prefix} Bidirectional forwarding ended.")
 
             elif response.startswith(b"ERROR"):

@@ -55,7 +55,7 @@ let websocket = null;
 const isLoading = ref(false);
 const error = ref(null);
 
-const hostUrl = import.meta.env.DEV ? '' : '/api'; // Use proxy in dev, direct /api in prod
+const hostUrl = import.meta.env.DEV ? '' : '/ws'; // Use proxy in dev, direct /api in prod
 
 const handleOpen = () => {
   isLoading.value = true;
@@ -159,7 +159,8 @@ const disposeTerminal = () => {
 };
 
 const connectWebSocket = () => {
-  const wsUrl = `ws://${window.location.host}${hostUrl}/api/docker/host/containers/${props.containerName}/terminal`; // Construct WebSocket URL
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl = `${protocol}://${window.location.host}${hostUrl}/docker/host/containers/${props.containerName}/terminal`; // Construct WebSocket URL
 
   websocket = new WebSocket(wsUrl);
 
