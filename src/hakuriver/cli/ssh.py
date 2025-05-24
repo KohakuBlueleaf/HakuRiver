@@ -13,7 +13,7 @@ from hakuriver.core.ssh_proxy.client import ClientProxy
 from hakuriver.utils.logger import logger
 
 # Import ClientConfig and config update helper for default values
-from hakuriver.core.config import CLIENT_CONFIG, HOST_CONFIG
+from hakuriver.core.config import CLIENT_CONFIG
 from .client import update_client_config_from_toml
 
 
@@ -157,17 +157,17 @@ def main():
         "--host",
         metavar="HOST_ADDRESS",
         # Default can be read from CLIENT_CONFIG, but required=True is simpler initially
-        required=not hasattr(HOST_CONFIG, "REACABLE_ADDRESS"),
-        default=getattr(HOST_CONFIG, "REACABLE_ADDRESS"),
+        required=not hasattr(CLIENT_CONFIG, "host_address"),
+        default=getattr(CLIENT_CONFIG, "host_address"),
         help="The address of the HakuRiver Host.",
     )
     parser.add_argument(
         "--proxy-port",
         type=int,
         metavar="PORT",
-        # Default can be read from HOST_CONFIG.vps_proxy_port, but required=True is simpler initially
-        required=not hasattr(HOST_CONFIG, "HOST_SSH_PROXY_PORT"),
-        default=getattr(HOST_CONFIG, "HOST_SSH_PROXY_PORT", 0),
+        # Default can be read from CLIENT_CONFIG.vps_proxy_port, but required=True is simpler initially
+        required=not hasattr(CLIENT_CONFIG, "host_ssh_proxy_port"),
+        default=getattr(CLIENT_CONFIG, "host_ssh_proxy_port", 0),
         help="The port the Host SSH proxy is listening on.",
     )
     parser.add_argument(
