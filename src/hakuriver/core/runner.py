@@ -390,6 +390,11 @@ async def run_vps(task_info: TaskInfo):
 
     if exit_code == 0:
         ssh_port = docker_utils.find_ssh_port(f"hakuriver-vps-{task_id}")
+    else:
+        logger.error(
+            f"VPS task {task_id} failed to start: {exit_code}: {stderr.decode(errors='replace').strip()}"
+        )
+        ssh_port = None
 
     running_vps[task_id] = {
         "ssh_port": ssh_port,

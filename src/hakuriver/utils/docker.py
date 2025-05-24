@@ -498,7 +498,7 @@ def find_package_manager(container_image_name: str) -> str | None:
             f"Checking for package manager '{manager}' in container image '{container_image_name}'..."
         )
         if _run_command(
-            ["docker", "run", container_image_name, "which", manager]
+            ["docker", "run", "--rm", container_image_name, "which", manager]
         ).returncode == 0:
             return manager
     return None
@@ -576,7 +576,7 @@ def modify_command_for_docker(
         docker_cmd.extend(["--memory", memory_limit])
     if gpu_ids:
         id_string = ",".join(map(str, gpu_ids))
-        docker_cmd.extend([f'--gpus="{id_string}"'])
+        docker_cmd.extend(["--gpus", f'\'"device={id_string}"\''])
 
     # Add the container image name
     docker_cmd.append(container_image_name)
