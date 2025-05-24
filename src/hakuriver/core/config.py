@@ -92,7 +92,7 @@ try:
             try:
                 self.host_address: str = settings["network"]["host_reachable_address"]
                 self.host_port: int = settings["network"]["host_port"]
-                self.host_proxy_port: int = settings["network"]["host_ssh_proxy_port"]
+                self.host_ssh_proxy_port: int = settings["network"]["host_ssh_proxy_port"]
                 # Default timeouts (can be overridden in requests if needed)
                 self.default_timeout: float = 30.0
                 self.status_timeout: float = 10.0
