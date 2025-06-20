@@ -119,7 +119,7 @@ async def send_task_to_runner(runner_url: str, task_info: TaskInfoForRunner):
         # Use longer timeout for potentially slow runner start
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{runner_url}/run", json=task_info.model_dump(), timeout=30.0
+                f"{runner_url}/run", json=task_info.model_dump(), timeout=600.0
             )
             response.raise_for_status()
         logger.info(f"Task {task_id} successfully sent to runner {runner_url}")
@@ -171,7 +171,7 @@ async def send_vps_task_to_runner(runner_url: str, task_info: TaskInfoForRunner)
         # Use longer timeout for potentially slow runner start
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{runner_url}/run", json=task_info.model_dump(), timeout=30.0
+                f"{runner_url}/run", json=task_info.model_dump(), timeout=600.0
             )
             response.raise_for_status()
         logger.info(f"VPS {task_id} successfully created on runner {runner_url}")
