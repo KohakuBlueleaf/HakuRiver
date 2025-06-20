@@ -268,7 +268,7 @@ def runner():
             logger.error(
                 f"Error during direct execution of '{args.app}':"
             )  # Use logger.exception to include traceback
-            sys.exit(1)
+            raise e
         finally:
             # Restore original sys.argv regardless of success/failure
             sys.argv = original_argv
