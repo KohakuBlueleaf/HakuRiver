@@ -39,9 +39,7 @@ def load_config(config_path: str = None):
     """Loads the TOML configuration file."""
     config_path = config_path or find_config_path()
     if not config_path:
-        logger.error(
-            f"Error: Configuration file '{CONFIG_FILENAME}' not found.", file=sys.stderr
-        )
+        logger.error(f"Error: Configuration file '{CONFIG_FILENAME}' not found.")
         sys.exit(1)
 
     try:
@@ -50,12 +48,12 @@ def load_config(config_path: str = None):
         logger.info(f"Configuration loaded from: {config_path}")
         return config_data
     except toml.TomlDecodeError as e:
-        logger.error(f"Error decoding TOML file '{config_path}': {e}", )
+        logger.error(
+            f"Error decoding TOML file '{config_path}': {e}",
+        )
         sys.exit(1)
     except IOError as e:
-        logger.error(
-            f"Error reading configuration file '{config_path}': {e}", file=sys.stderr
-        )
+        logger.error(f"Error reading configuration file '{config_path}': {e}")
         sys.exit(1)
 
 
