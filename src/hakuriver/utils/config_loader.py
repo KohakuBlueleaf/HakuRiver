@@ -50,7 +50,7 @@ def load_config(config_path: str = None):
         logger.info(f"Configuration loaded from: {config_path}")
         return config_data
     except toml.TomlDecodeError as e:
-        logger.error(f"Error decoding TOML file '{config_path}': {e}", file=sys.stderr)
+        logger.error(f"Error decoding TOML file '{config_path}': {e}", )
         sys.exit(1)
     except IOError as e:
         logger.error(

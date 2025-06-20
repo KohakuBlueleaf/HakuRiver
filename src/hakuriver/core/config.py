@@ -104,11 +104,11 @@ try:
                     f"Error: Missing configuration key in config.toml: {e}",
                     file=sys.stderr,
                 )
-                logger.error("Exiting.", file=sys.stderr)
+                logger.error("Exiting.", )
                 sys.exit(1)
             except Exception as e:
-                logger.error(f"Error processing configuration: {e}", file=sys.stderr)
-                logger.error("Exiting.", file=sys.stderr)
+                logger.error(f"Error processing configuration: {e}", )
+                logger.error("Exiting.", )
                 sys.exit(1)
 
         @property
