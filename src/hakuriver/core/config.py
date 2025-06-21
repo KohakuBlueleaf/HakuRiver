@@ -102,7 +102,6 @@ try:
             except KeyError as e:
                 logger.error(
                     f"Error: Missing configuration key in config.toml: {e}",
-                    file=sys.stderr,
                 )
                 logger.error("Exiting.", )
                 sys.exit(1)
@@ -125,7 +124,7 @@ try:
                 setattr(self, key, value)
             else:
                 logger.warning(
-                    f"Warning: Config key '{key}' not found.", file=sys.stderr
+                    f"Warning: Config key '{key}' not found.",
                 )
 
 except Exception as e:
