@@ -1,4 +1,6 @@
 *.db
+.DS_store
+CLAUDE.md
 test/
 .vscode
 
