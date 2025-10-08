@@ -167,6 +167,7 @@ class ClientProxy:
 
         except asyncio.CancelledError:
             logger.info("Client proxy server task cancelled.")
+            raise
         except OSError as e:
             if (
                 e.errno == 98 or e.errno == 48

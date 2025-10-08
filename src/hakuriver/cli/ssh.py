@@ -36,8 +36,12 @@ async def run_ssh_and_proxy(
         try:
             custom_config_data = None
             if os.path.exists(config_path):
-                with open(config_path, "r") as f:
-                    custom_config_data = toml.load(f)
+
+                def _load_config():
+                    with open(config_path, "r") as f:
+                        return toml.load(f)
+
+                custom_config_data = await asyncio.to_thread(_load_config)
                 update_client_config_from_toml(CLIENT_CONFIG, custom_config_data)
                 logger.info(f"Client SSH CLI loaded custom config from {config_path}")
             else:

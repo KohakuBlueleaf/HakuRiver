@@ -31,6 +31,7 @@ from .ssh_proxy.host import start_server
 
 
 # --- global state ---
+background_tasks = set()  # Store background tasks to prevent garbage collection
 snowflake = Snowflake()
 docker_lock = asyncio.Lock()
 
@@ -428,8 +429,11 @@ async def get_task_stdout(task_id: int):
                 detail="Standard output file not found (might not be generated yet).",
             )
 
-        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
+        def _read_file():
+            with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                return f.read()
+
+        content = await asyncio.to_thread(_read_file)
         logger.debug(f"Successfully read stdout for task {task_id}")
         return PlainTextResponse(content=content)
 
@@ -477,8 +481,11 @@ async def get_task_stderr(task_id: int):
                 detail="Standard error file not found (might not be generated yet).",
             )
 
-        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
+        def _read_file():
+            with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                return f.read()
+
+        content = await asyncio.to_thread(_read_file)
         logger.debug(f"Successfully read stderr for task {task_id}")
         return PlainTextResponse(content=content)
 
@@ -865,7 +872,11 @@ async def submit_task(req: TaskRequest):
             # VPS tasks are dispatched differently
             result = await send_vps_task_to_runner(node.url, task_info_for_runner)
         else:
-            asyncio.create_task(send_task_to_runner(node.url, task_info_for_runner))
+            task = asyncio.create_task(
+                send_task_to_runner(node.url, task_info_for_runner)
+            )
+            background_tasks.add(task)
+            task.add_done_callback(background_tasks.discard)
         created_task_ids.append(str(task_id))  # Add successfully launched task ID
 
     # --- Construct Final Response ---
@@ -1226,7 +1237,11 @@ async def request_kill_task(task_id: int):
             "Requesting kill confirmation from runner "
             f"{task.assigned_node.hostname} for task {task_id}"
         )
-        asyncio.create_task(send_kill_to_runner(runner_url, task_id, unit_name))
+        kill_task = asyncio.create_task(
+            send_kill_to_runner(runner_url, task_id, unit_name)
+        )
+        background_tasks.add(kill_task)
+        kill_task.add_done_callback(background_tasks.discard)
     else:
         logger.info(
             "No kill signal sent to runner for task "
@@ -1521,11 +1536,17 @@ async def startup_event():
         )
 
     # Start background task AFTER app starts running
-    asyncio.create_task(check_dead_runners())
-    asyncio.create_task(collate_health_data())
-    asyncio.create_task(
+    task1 = asyncio.create_task(check_dead_runners())
+    task2 = asyncio.create_task(collate_health_data())
+    task3 = asyncio.create_task(
         start_server(HOST_CONFIG.HOST_BIND_IP, HOST_CONFIG.HOST_SSH_PROXY_PORT)
     )
+    background_tasks.add(task1)
+    background_tasks.add(task2)
+    background_tasks.add(task3)
+    task1.add_done_callback(background_tasks.discard)
+    task2.add_done_callback(background_tasks.discard)
+    task3.add_done_callback(background_tasks.discard)
 
 
 app.add_event_handler("startup", startup_event)

@@ -92,8 +92,12 @@ async def main_shell():
             logger.error(f"Custom config file not found: {config_path}")
             sys.exit(1)
         try:
-            with open(config_path, "r") as f:
-                custom_config_data = toml.load(f)
+
+            def _load_config():
+                with open(config_path, "r") as f:
+                    return toml.load(f)
+
+            custom_config_data = await asyncio.to_thread(_load_config)
             logger.info(f"Loaded custom configuration from: {config_path}")
         except (toml.TomlDecodeError, IOError) as e:
             logger.error(f"Error loading or reading config file '{config_path}': {e}")

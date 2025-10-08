@@ -282,6 +282,7 @@ async def start_server(host: str, port: int):
 
     except asyncio.CancelledError:
         logger.info("Host SSH Proxy server task cancelled.")
+        raise
     except Exception as e:
         logger.critical(
             f"FATAL: Host SSH Proxy server failed to start on {host}:{port}: {e}",

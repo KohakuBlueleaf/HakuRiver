@@ -34,6 +34,7 @@ def make_persistent_dict(name):
 
 
 # --- Global State ---
+background_tasks = set()  # Store background tasks to prevent garbage collection
 killed_tasks_pending_report: list[HeartbeatKilledTaskInfo] = []
 running_processes = make_persistent_dict(
     "running_processes"
@@ -1176,8 +1177,12 @@ async def startup_event():
         )
     else:
         logger.info("Starting background tasks (Heartbeat).")
-        asyncio.create_task(start_up_check())  # Check running tasks
-        asyncio.create_task(send_heartbeat())
+        task1 = asyncio.create_task(start_up_check())  # Check running tasks
+        task2 = asyncio.create_task(send_heartbeat())
+        background_tasks.add(task1)
+        background_tasks.add(task2)
+        task1.add_done_callback(background_tasks.discard)
+        task2.add_done_callback(background_tasks.discard)
 
 
 app.add_event_handler("startup", startup_event)

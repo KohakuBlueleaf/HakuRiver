@@ -61,7 +61,9 @@ class Node(BaseModel):
 class Task(BaseModel):
     task_id = peewee.BigIntegerField(primary_key=True)
     task_type = peewee.CharField(default="command")  # command or vps
-    batch_id = peewee.BigIntegerField(null=True, index=True)
+    batch_id = peewee.BigIntegerField(
+        null=True, index=True
+    )  # ID linking tasks submitted together
     command = peewee.TextField()
     arguments = peewee.TextField()  # Store as JSON string
     env_vars = peewee.TextField()  # Store as JSON string
@@ -84,10 +86,11 @@ class Task(BaseModel):
     target_numa_node_id = peewee.IntegerField(
         null=True
     )  # Target NUMA node on the assigned_node
-    batch_id = peewee.BigIntegerField(
-        null=True, index=True
-    )  # ID linking tasks submitted together
     ssh_port = peewee.IntegerField(null=True)  # SSH port for VPS tasks
+    container_name = peewee.CharField(null=True)  # Container environment name
+    docker_image_name = peewee.CharField(null=True)  # Docker image tag
+    docker_privileged = peewee.BooleanField(default=False)  # Privileged flag
+    docker_mount_dirs = peewee.TextField(null=True)  # Additional mounts as JSON
 
     def get_arguments(self):
         try:
