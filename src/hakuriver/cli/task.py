@@ -230,7 +230,6 @@ def main():
             )
 
             task_ids = client_core.submit_task(
-                task_type="command",  # Explicitly set type
                 command=command_to_run,
                 args=command_arguments,
                 env=env_vars,

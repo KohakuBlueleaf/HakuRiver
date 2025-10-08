@@ -790,24 +790,41 @@ async def pause_task(body: dict = Body(...)):
             else:
                 logger.info(f"Finding process for task {unit_name} to pause.")
                 find_cmd = ["sudo", "systemctl", "status", f"{unit_name}.scope"]
-                process = subprocess.run(find_cmd, capture_output=True, text=True)
+                process = await asyncio.create_subprocess_exec(
+                    *find_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                try:
+                    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    process.kill()
+                    await process.wait()
+                    raise RuntimeError(f"Timeout finding process for task {task_id} (systemctl status)")
+                stdout_text = stdout.decode()
                 result = re.search(
-                    rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", process.stdout
+                    rf"{unit_name}\.scope\n\s+[^\d]+(\d+)", stdout_text
                 )
                 if not result:
                     logger.error(
                         f"Failed to find process for task {task_id}."
-                        f"\nOutput: {process.stdout}"
+                        f"\nOutput: {stdout_text}"
                     )
                     raise RuntimeError(
-                        f"Failed to find process for task {task_id}.\nOutput: {process.stdout}"
+                        f"Failed to find process for task {task_id}.\nOutput: {stdout_text}"
                     )
                 pid = result.group(1)
                 logger.info(f"Found process {pid} for task {task_id}.")
             logger.info(f"Attempting to pause task {task_id} using kill.")
             stop_cmd = ["sudo", "kill", "-s", "SIGSTOP", str(pid)]
-            result = subprocess.run(stop_cmd, check=False, timeout=1)
-            if result.returncode != 0:
+            process = await asyncio.create_subprocess_exec(*stop_cmd)
+            try:
+                await asyncio.wait_for(process.wait(), timeout=1.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                raise RuntimeError(f"Timeout pausing task {task_id} (kill -s SIGSTOP)")
+            if process.returncode and process.returncode != 0:
                 raise RuntimeError(f"Failed to pause task {task_id} using kill.")
             paused_processes[task_id] = running_processes.pop(task_id)
             paused_processes[task_id]["task_pid"] = pid  # Store the paused PID
@@ -864,8 +881,14 @@ async def resume_task(body: dict = Body(...)):
             logger.info(f"Attempting to resume task {task_id} using kill.")
             task_pid = task_data["task_pid"]
             resume_cmd = ["sudo", "kill", "-s", "SIGCONT", str(task_pid)]
-            result = subprocess.run(resume_cmd, check=False, timeout=1)
-            if result.returncode != 0:
+            process = await asyncio.create_subprocess_exec(*resume_cmd)
+            try:
+                await asyncio.wait_for(process.wait(), timeout=1.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                raise RuntimeError(f"Timeout resuming task {task_id} (kill -s SIGCONT)")
+            if process.returncode and process.returncode != 0:
                 raise RuntimeError(f"Failed to resume task {task_id} using kill.")
         else:
             if vps_data is None:
@@ -1203,11 +1226,17 @@ async def shutdown_event():
             try:
                 # Use stop for potentially cleaner shutdown than kill
                 stop_cmd = ["sudo", "systemctl", "stop", unit_name]
-                subprocess.run(
-                    stop_cmd, check=False, timeout=1
-                )  # Short timeout, best effort
+                process = await asyncio.create_subprocess_exec(*stop_cmd)
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=10.0)
+                except asyncio.TimeoutError:
+                    process.kill()
+                    await process.wait()
+                    logger.error(f"Timeout stopping unit {unit_name} on shutdown (systemctl stop)")
+                    raise
             except Exception as e:
                 logger.error(f"Error stopping unit {unit_name} on shutdown: {e}")
+                raise
     await asyncio.sleep(0.5)  # Brief pause
 
 
