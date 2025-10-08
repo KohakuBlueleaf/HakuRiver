@@ -92,7 +92,9 @@ try:
             try:
                 self.host_address: str = settings["network"]["host_reachable_address"]
                 self.host_port: int = settings["network"]["host_port"]
-                self.host_ssh_proxy_port: int = settings["network"]["host_ssh_proxy_port"]
+                self.host_ssh_proxy_port: int = settings["network"][
+                    "host_ssh_proxy_port"
+                ]
                 # Default timeouts (can be overridden in requests if needed)
                 self.default_timeout: float = 30.0
                 self.status_timeout: float = 10.0
@@ -103,11 +105,17 @@ try:
                 logger.error(
                     f"Error: Missing configuration key in config.toml: {e}",
                 )
-                logger.error("Exiting.", )
+                logger.error(
+                    "Exiting.",
+                )
                 sys.exit(1)
             except Exception as e:
-                logger.error(f"Error processing configuration: {e}", )
-                logger.error("Exiting.", )
+                logger.error(
+                    f"Error processing configuration: {e}",
+                )
+                logger.error(
+                    "Exiting.",
+                )
                 sys.exit(1)
 
         @property

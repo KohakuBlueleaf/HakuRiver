@@ -28,7 +28,7 @@ export default defineConfig({
     proxy: {
       // Proxy API requests starting with /api to your HakuRiver host
       '/api': {
-        target: 'http://127.0.0.1:8000', // Your HakuRiver Host address
+        target: 'http://192.168.88.53:8000', // Your HakuRiver Host address
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''), // Remove /api prefix before forwarding
         ws: true, // Enable WebSocket proxying

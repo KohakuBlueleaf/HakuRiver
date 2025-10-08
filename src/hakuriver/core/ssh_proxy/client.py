@@ -76,9 +76,7 @@ class ClientProxy:
                 )
 
                 try:
-                    await asyncio.gather(
-                        task_local_to_host, task_host_to_local
-                    )
+                    await asyncio.gather(task_local_to_host, task_host_to_local)
                 except Exception as e:
                     logger.error(
                         f"{log_prefix} Error during bidirectional forwarding: {e}"

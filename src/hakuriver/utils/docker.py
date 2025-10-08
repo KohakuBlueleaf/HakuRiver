@@ -17,9 +17,7 @@ def _run_command(cmd, capture_output=True, text=True, check=False, **kwargs):
             cmd, capture_output=capture_output, text=text, check=check, **kwargs
         )
         if "sudo" != cmd[0] and result.returncode != 0:
-            return _run_command(
-                ["sudo"] + cmd, capture_output, text, check, **kwargs
-            )
+            return _run_command(["sudo"] + cmd, capture_output, text, check, **kwargs)
         # Avoid logging potentially huge output from docker save/load by default
         if result.stdout and cmd[0:2] not in (["docker", "save"], ["docker", "load"]):
             logger.debug(f"Command stdout:\n{result.stdout}")
@@ -477,7 +475,6 @@ def sync_from_shared(container_name: str, tarball_path: str) -> bool:
         return False
 
 
-
 package_manager_lists = [
     "apk",
     "apt-get",
@@ -491,15 +488,20 @@ package_manager_lists = [
     "pkg_add",
     "pkg",
 ]
+
+
 def find_package_manager(container_image_name: str) -> str | None:
     container_image_name = container_image_name.lower()
     for manager in package_manager_lists:
         logger.debug(
             f"Checking for package manager '{manager}' in container image '{container_image_name}'..."
         )
-        if _run_command(
-            ["docker", "run", "--rm", container_image_name, "which", manager]
-        ).returncode == 0:
+        if (
+            _run_command(
+                ["docker", "run", "--rm", container_image_name, "which", manager]
+            ).returncode
+            == 0
+        ):
             return manager
     return None
 
@@ -576,7 +578,7 @@ def modify_command_for_docker(
         docker_cmd.extend(["--memory", memory_limit])
     if gpu_ids:
         id_string = ",".join(map(str, gpu_ids))
-        docker_cmd.extend(["--gpus", f'\'"device={id_string}"\''])
+        docker_cmd.extend(["--gpus", f"'\"device={id_string}\"'"])
 
     # Add the container image name
     docker_cmd.append(container_image_name)

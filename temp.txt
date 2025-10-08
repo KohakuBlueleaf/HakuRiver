@@ -1,3 +1,4 @@
+--- START OF FILE docs/README.md ---
 # HakuRiver Documentation
 
 Welcome to the HakuRiver documentation!
@@ -65,11 +66,13 @@ docs/
 
 ## Section Overviews
 
-*   **[1. Getting Started](1.%20getting-started/1.%20overview.md)**: If you are new to HakuRiver, start here. Learn what HakuRiver is, how to install it, get a cluster running quickly, understand its core concepts, and see how it compares to other tools.
-*   **[2. Admin Guides](2.%20admin-guides/)**: These guides are for administrators responsible for setting up and maintaining the HakuRiver cluster infrastructure. They cover detailed Host and Runner setup, shared storage configuration, systemd integration, and security considerations.
-*   **[3. User Guides](3.%20user-guides/)**: This section is for users who will submit and manage tasks on the cluster. It explains the Docker container workflow for environment management, how to submit and manage Command tasks and VPS tasks using the CLI, how to request GPU resources, and how to use the optional Web Dashboard for monitoring and submission.
-*   **[4. Reference](4.%20reference/)**: This section provides detailed technical information about HakuRiver, including a full reference for the configuration file options, the command-line interface tools (`hakuriver.client`, `hakuriver.task`, `hakuriver.vps`, `hakuriver.ssh`, `hakuriver.docker`), the Host and Runner API endpoints, and the system architecture.
-*   **[5. Troubleshooting](5.%20troubleshooting/)**: This section helps you diagnose and resolve common problems that may arise during the setup, operation, or task execution phases of HakuRiver. It covers issues with component startup, task failures, network problems, and permissions.
-*   **[6. Integration Guides](6.%20integration-guides/)**: These guides provide information on integrating HakuRiver with external systems, such as pulling monitoring data into external dashboards, using external workflow managers to orchestrate HakuRiver tasks, and setting up notifications.
+*   **[1. Getting Started](1. getting-started/README.md)**: If you are new to HakuRiver, start here. Learn what HakuRiver is, how to install it, get a cluster running quickly, understand its core concepts, and see how it compares to other tools.
+*   **[2. Admin Guides](2. admin-guides/README.md)**: These guides are for administrators responsible for setting up and maintaining the HakuRiver cluster infrastructure. They cover detailed Host and Runner setup, shared storage configuration, systemd integration, and security considerations.
+*   **[3. User Guides](3. user-guides/README.md)**: This section is for users who will submit and manage tasks on the cluster. It explains the Docker container workflow for environment management, how to submit and manage Command tasks and VPS tasks using the CLI, how to request GPU resources, and how to use the optional Web Dashboard for monitoring and submission.
+*   **[4. Reference](4. reference/README.md)**: This section provides detailed technical information about HakuRiver, including a full reference for the configuration file options, the command-line interface tools (`hakuriver.client`, `hakuriver.task`, `hakuriver.vps`, `hakuriver.ssh`, `hakuriver.docker`), the Host and Runner API endpoints, and the system architecture.
+*   **[5. Troubleshooting](5. troubleshooting/README.md)**: This section helps you diagnose and resolve common problems that may arise during the setup, operation, or task execution phases of HakuRiver. It covers issues with component startup, task failures, network problems, and permissions.
+*   **[6. Integration Guides](6. integration-guides/README.md)**: These guides provide information on integrating HakuRiver with external systems, such as pulling monitoring data into external dashboards, using external workflow managers to orchestrate HakuRiver tasks, and setting up notifications.
 
-We recommend starting with the [Getting Started](1.%20getting-started/1.%20overview.md) section and then exploring the other sections based on your role and needs.
+We recommend starting with the [Getting Started](1. getting-started/README.md) section and then exploring the other sections based on your role and needs.
+
+--- END OF FILE docs/README.md ---

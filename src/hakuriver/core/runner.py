@@ -35,8 +35,8 @@ def make_persistent_dict(name):
 
 # --- Global State ---
 killed_tasks_pending_report: list[HeartbeatKilledTaskInfo] = []
-running_processes = (
-    make_persistent_dict("running_processes")
+running_processes = make_persistent_dict(
+    "running_processes"
 )  # task_id -> {'unit': str, 'process': asyncio.Process | None, 'memory_limit': int | None, 'pid': int | None}
 paused_processes = make_persistent_dict("paused_processes")
 running_vps = make_persistent_dict("running_vps")  # task_id -> {'ssh_port': int}
