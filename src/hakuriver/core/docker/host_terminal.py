@@ -258,9 +258,9 @@ async def terminal_websocket_endpoint(
         for task in pending:
             task.cancel()
             try:
-                await task  # Wait for cancellation (optional, handles potential exceptions)
-            except asyncio.CancelledError:
-                pass  # Expected
+                await task
+            except Exception as e:
+                logger.info(f"task canceled with following error: {e}")
 
         logger.info(f"I/O tasks finished for container '{container_name}'.")
 
@@ -310,3 +310,4 @@ async def terminal_websocket_endpoint(
             await websocket.close(code=1000)  # Normal closure
         except Exception as e:
             pass  # Ignore if already closed
+
