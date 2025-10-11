@@ -128,8 +128,9 @@ async def run_ssh_and_proxy(
             logger.info("Local proxy server task finished.")
         except asyncio.TimeoutError:
             logger.warning("Timeout waiting for local proxy server task to finish.")
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as e:
             logger.debug("Proxy server task was already cancelled.")
+            raise e
         except Exception as e:
             logger.error(f"Error waiting for proxy server task: {e}")
 
@@ -219,3 +220,4 @@ def main():
 if __name__ == "__main__":
     # Logger setup happens on import of hakuriver.utils.logger
     main()
+
