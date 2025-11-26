@@ -17,7 +17,7 @@ from fastapi.responses import PlainTextResponse
 
 from hakuriver.db.node import Node
 from hakuriver.db.task import Task
-from hakuriver.docker.naming import task_container_name
+from hakuriver.docker.naming import task_container_name, vps_container_name
 from hakuriver.host.config import config
 from hakuriver.host.services.node_manager import (
     find_suitable_node,
@@ -450,12 +450,7 @@ async def get_task_status(task_id: int):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid Task ID format.")
 
-    task: Task | None = (
-        Task.select(Task, Node.hostname.alias("node_hostname"))
-        .left_outer_join(Node, on=(Task.assigned_node == Node.hostname))
-        .where(Task.task_id == task_uuid)
-        .first()
-    )
+    task: Task | None = Task.get_or_none(Task.task_id == task_uuid)
 
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
@@ -471,9 +466,7 @@ async def get_task_status(task_id: int):
         "required_gpus": json.loads(task.required_gpus) if task.required_gpus else [],
         "required_memory_bytes": task.required_memory_bytes,
         "status": task.status,
-        "assigned_node": (
-            task.node_hostname if hasattr(task, "node_hostname") else None
-        ),
+        "assigned_node": task.assigned_node,
         "target_numa_node_id": task.target_numa_node_id,
         "stdout_path": task.stdout_path,
         "stderr_path": task.stderr_path,
@@ -595,7 +588,11 @@ async def request_kill_task(task_id: int):
         )
 
     original_status = task.status
-    container_name = task_container_name(task.task_id)
+    # Use correct container name based on task type
+    if task.task_type == "vps":
+        container_name = vps_container_name(task.task_id)
+    else:
+        container_name = task_container_name(task.task_id)
 
     # Mark as killed
     mark_task_killed(task)
@@ -632,7 +629,11 @@ async def send_command_to_task(task_id: int, command: str):
     if not node:
         raise HTTPException(status_code=400, detail="Assigned node not found.")
 
-    container_name = task_container_name(task.task_id)
+    # Use correct container name based on task type
+    if task.task_type == "vps":
+        container_name = vps_container_name(task.task_id)
+    else:
+        container_name = task_container_name(task.task_id)
 
     match (command, task.status):
         case ("pause", "running"):

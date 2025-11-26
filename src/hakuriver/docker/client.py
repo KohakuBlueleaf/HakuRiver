@@ -45,10 +45,14 @@ class DockerManager:
     - Container synchronization from shared storage
     """
 
-    def __init__(self):
-        """Initialize Docker client."""
+    def __init__(self, timeout: int | None = None):
+        """Initialize Docker client.
+
+        Args:
+            timeout: Request timeout in seconds. None means no timeout (default).
+        """
         try:
-            self.client = docker.from_env()
+            self.client = docker.from_env(timeout=timeout)
             self.client.ping()
         except Exception as e:
             raise DockerConnectionError(f"Failed to connect to Docker: {e}") from e

@@ -71,7 +71,7 @@ def get_local_image_timestamp(container_name: str) -> int | None:
     tag = image_tag(container_name)
 
     try:
-        client = docker.from_env()
+        client = docker.from_env(timeout=None)
         image = client.images.get(tag)
         created_str = image.attrs.get("Created")
 
@@ -159,18 +159,38 @@ def sync_from_shared(
         return False
 
     try:
-        # Create client with custom timeout for large image loads
-        client = docker.from_env(timeout=timeout)
+        # Create client with no timeout for large image loads (timeout param is legacy, ignored)
+        client = docker.from_env(timeout=None)
 
         with open(tarball_path, "rb") as f:
             images = client.images.load(f)
 
-        if images:
-            logger.info(f"Successfully loaded image from {tarball_path}.")
-            return True
-        else:
+        if not images:
             logger.error(f"No images loaded from {tarball_path}.")
             return False
+
+        loaded_image = images[0]
+        expected_tag = image_tag(container_name)
+
+        logger.info(f"Loaded image: {loaded_image.id}, tags: {loaded_image.tags}")
+
+        # Check if image has the expected tag
+        if expected_tag not in (loaded_image.tags or []):
+            # Image loaded without proper tag (legacy tarball with RepoTags: null)
+            # Tag it manually
+            logger.warning(
+                f"Loaded image missing expected tag '{expected_tag}'. "
+                f"Tagging manually..."
+            )
+            try:
+                loaded_image.tag(expected_tag)
+                logger.info(f"Successfully tagged image as '{expected_tag}'")
+            except Exception as e:
+                logger.error(f"Failed to tag image: {e}")
+                return False
+
+        logger.info(f"Successfully synced image '{expected_tag}' from {tarball_path}.")
+        return True
 
     except Exception as e:
         logger.error(f"Failed to load image from {tarball_path}: {e}")
@@ -204,7 +224,7 @@ def create_container_tar(
     )
 
     try:
-        client = docker.from_env()
+        client = docker.from_env(timeout=None)
 
         # Get the source container
         try:
@@ -222,8 +242,12 @@ def create_container_tar(
 
         # Commit the container to a new image
         logger.info(f"Committing container to image {tag}")
-        image = container.commit(repository=tag.split(":")[0], tag="base")
+        container.commit(repository=tag.split(":")[0], tag="base")
         logger.info(f"Committed to image: {tag}")
+
+        # Get the image by tag (commit returns image without proper tag reference for save)
+        image = client.images.get(tag)
+        logger.info(f"Got image for saving: {image.tags}")
 
         # Ensure directory exists
         os.makedirs(container_tar_dir, exist_ok=True)

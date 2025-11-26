@@ -126,19 +126,22 @@ async def send_vps_to_runner(
             response = await client.post(
                 f"{runner_url}/vps/create",
                 json=payload,
-                timeout=60.0,  # VPS creation may take longer
+                timeout=None,  # No timeout - VPS creation can take a long time
             )
             response.raise_for_status()
             return response.json()
 
     except httpx.RequestError as e:
         logger.error(f"Failed to send VPS {task.task_id} to {runner_url}: {e}")
-        return None
+        # Return empty dict to indicate communication failure (not rejection)
+        # The task should remain in "assigning" state - runner will report actual status
+        return {}
     except httpx.HTTPStatusError as e:
         logger.error(
             f"Runner {runner_url} rejected VPS {task.task_id}: "
             f"{e.response.status_code} - {e.response.text}"
         )
+        # Return None only for explicit rejection from runner
         return None
 
 
@@ -268,14 +271,35 @@ async def submit_vps(submission: VPSSubmission):
     )
 
     if result is None:
+        # Runner explicitly rejected the VPS creation
         task.status = "failed"
-        task.error_message = "Failed to create VPS on runner."
+        task.error_message = "Runner rejected VPS creation."
         task.completed_at = datetime.datetime.now()
         task.save()
         raise HTTPException(
             status_code=502,
-            detail="Failed to create VPS on runner.",
+            detail="Runner rejected VPS creation.",
         )
+
+    if result == {}:
+        # Communication failure - don't mark as failed
+        # Task remains in "assigning" state, runner will report actual status
+        logger.warning(
+            f"VPS {task.task_id} communication failed, but task remains in 'assigning' state. "
+            "Runner will report actual status."
+        )
+        # Return success response - client should poll for actual status
+        return {
+            "message": "VPS creation request sent (awaiting runner confirmation).",
+            "task_id": str(task_id),
+            "ssh_key_mode": ssh_key_mode,
+            "ssh_port": ssh_port,
+            "assigned_node": {
+                "hostname": node.hostname,
+                "url": node.url,
+            },
+            "status": "assigning",
+        }
 
     response = {
         "message": "VPS created successfully.",

@@ -608,6 +608,7 @@ async def execute_task(
 
 def kill_task(
     task_id: int,
+    container_name: str,
     task_store: TaskStateStore,
 ) -> bool:
     """
@@ -615,12 +616,12 @@ def kill_task(
 
     Args:
         task_id: Task ID to kill.
+        container_name: Docker container name (e.g., hakuriver-task-123 or hakuriver-vps-123).
         task_store: Task state store.
 
     Returns:
         True if kill was successful, False otherwise.
     """
-    container_name = task_container_name(task_id)
     logger.debug(f"kill_task called: task_id={task_id}, container={container_name}")
 
     try:
@@ -648,6 +649,7 @@ def kill_task(
 
 def pause_task(
     task_id: int,
+    container_name: str,
     task_store: TaskStateStore,
 ) -> bool:
     """
@@ -655,12 +657,12 @@ def pause_task(
 
     Args:
         task_id: Task ID to pause.
+        container_name: Docker container name.
         task_store: Task state store.
 
     Returns:
         True if pause was successful, False otherwise.
     """
-    container_name = task_container_name(task_id)
     logger.debug(f"pause_task called: task_id={task_id}, container={container_name}")
 
     try:
@@ -680,6 +682,7 @@ def pause_task(
 
 def resume_task(
     task_id: int,
+    container_name: str,
     task_store: TaskStateStore,
 ) -> bool:
     """
@@ -687,12 +690,12 @@ def resume_task(
 
     Args:
         task_id: Task ID to resume.
+        container_name: Docker container name.
         task_store: Task state store.
 
     Returns:
         True if resume was successful, False otherwise.
     """
-    container_name = task_container_name(task_id)
     logger.debug(f"resume_task called: task_id={task_id}, container={container_name}")
 
     try:

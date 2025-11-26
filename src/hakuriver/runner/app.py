@@ -131,11 +131,15 @@ async def startup_event():
         f"({config.RUNNER_BIND_IP}:{config.RUNNER_PORT})"
     )
 
-    # Check Docker access
+    # Check Docker access (in executor to avoid blocking)
     logger.info("Checking Docker access...")
     try:
-        docker_manager = DockerManager()
-        docker_manager.client.ping()
+
+        def _check_docker():
+            dm = DockerManager()
+            dm.client.ping()
+
+        await asyncio.to_thread(_check_docker)
         logger.info("Docker daemon accessible.")
     except Exception as e:
         logger.warning(f"Docker check failed: {e}. Docker tasks may fail.")

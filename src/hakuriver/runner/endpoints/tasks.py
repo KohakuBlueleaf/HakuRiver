@@ -90,7 +90,8 @@ async def execute_task_endpoint(
 async def kill_task_endpoint(request: TaskControlRequest):
     """Kill a running task."""
     task_id = request.task_id
-    logger.info(f"Received kill request for task {task_id}")
+    container_name = request.container_name
+    logger.info(f"Received kill request for task {task_id}, container={container_name}")
 
     if not task_store or not task_store.get_task(task_id):
         logger.warning(f"Kill request for unknown task {task_id}")
@@ -99,7 +100,7 @@ async def kill_task_endpoint(request: TaskControlRequest):
             detail=f"Task {task_id} not found.",
         )
 
-    success = kill_task(task_id, task_store)
+    success = kill_task(task_id, container_name, task_store)
     if not success:
         raise HTTPException(
             status_code=500,
@@ -113,7 +114,10 @@ async def kill_task_endpoint(request: TaskControlRequest):
 async def pause_task_endpoint(request: TaskControlRequest):
     """Pause a running task."""
     task_id = request.task_id
-    logger.info(f"Received pause request for task {task_id}")
+    container_name = request.container_name
+    logger.info(
+        f"Received pause request for task {task_id}, container={container_name}"
+    )
 
     if not task_store or not task_store.get_task(task_id):
         logger.warning(f"Pause request for unknown task {task_id}")
@@ -122,7 +126,7 @@ async def pause_task_endpoint(request: TaskControlRequest):
             detail=f"Task {task_id} not found.",
         )
 
-    success = pause_task(task_id, task_store)
+    success = pause_task(task_id, container_name, task_store)
     if not success:
         raise HTTPException(
             status_code=500,
@@ -136,7 +140,10 @@ async def pause_task_endpoint(request: TaskControlRequest):
 async def resume_task_endpoint(request: TaskControlRequest):
     """Resume a paused task."""
     task_id = request.task_id
-    logger.info(f"Received resume request for task {task_id}")
+    container_name = request.container_name
+    logger.info(
+        f"Received resume request for task {task_id}, container={container_name}"
+    )
 
     if not task_store or not task_store.get_task(task_id):
         logger.warning(f"Resume request for unknown task {task_id}")
@@ -145,7 +152,7 @@ async def resume_task_endpoint(request: TaskControlRequest):
             detail=f"Task {task_id} not found.",
         )
 
-    success = resume_task(task_id, task_store)
+    success = resume_task(task_id, container_name, task_store)
     if not success:
         raise HTTPException(
             status_code=500,

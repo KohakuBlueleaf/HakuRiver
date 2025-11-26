@@ -3,15 +3,17 @@ Startup check background task.
 
 Verifies running containers on startup and reports status.
 Handles VPS port recovery after runner restart.
+
+All Docker operations are wrapped in asyncio.to_thread to prevent blocking.
 """
 
+import asyncio
 import datetime
 import logging
 import subprocess
 
 from hakuriver.docker.client import DockerManager
 from hakuriver.docker.naming import (
-    LABEL_MANAGED,
     TASK_PREFIX,
     VPS_PREFIX,
     is_hakuriver_container,
@@ -44,6 +46,23 @@ def _find_ssh_port(container_name: str) -> int | None:
         return None
 
 
+def _get_running_containers() -> tuple[list, set[str]]:
+    """Get running containers (blocking, run in executor)."""
+    docker_manager = DockerManager()
+    all_running = docker_manager.list_containers(all=False)
+    running_container_names = {
+        c.name for c in all_running if is_hakuriver_container(c.name)
+    }
+    return all_running, running_container_names
+
+
+def _stop_and_remove_container(container_name: str, timeout: int = 10):
+    """Stop and remove container (blocking, run in executor)."""
+    docker_manager = DockerManager()
+    docker_manager.stop_container(container_name, timeout=timeout)
+    docker_manager.remove_container(container_name)
+
+
 async def startup_check(task_store: TaskStateStore):
     """
     Check all running containers on startup and reconcile state.
@@ -55,15 +74,10 @@ async def startup_check(task_store: TaskStateStore):
     4. For VPS containers still running, recovers SSH port binding
     5. Updates store for containers that are still running
     """
-    docker_manager = DockerManager()
-
-    # Get all running HakuRiver containers
-    running_containers = docker_manager.list_containers(
-        all=False,  # Only running
-        filters={"label": LABEL_MANAGED},
+    # Get all running containers in executor
+    all_running, running_container_names = await asyncio.to_thread(
+        _get_running_containers
     )
-
-    running_container_names = {c.name for c in running_containers}
 
     # Check tracked tasks
     tracked_tasks = list(task_store.items())  # Copy to avoid mutation during iteration
@@ -144,7 +158,7 @@ async def startup_check(task_store: TaskStateStore):
 
     # Check for orphan HakuRiver containers (running but not tracked)
     # For VPS containers, try to recover them; for task containers, clean them up
-    for container in running_containers:
+    for container in all_running:
         # Check name matches HakuRiver pattern
         if not is_hakuriver_container(container.name):
             continue
@@ -194,8 +208,9 @@ async def startup_check(task_store: TaskStateStore):
                         "Cleaning up."
                     )
                     try:
-                        docker_manager.stop_container(container.name, timeout=10)
-                        docker_manager.remove_container(container.name)
+                        await asyncio.to_thread(
+                            _stop_and_remove_container, container.name, 10
+                        )
                         logger.info(
                             f"Successfully cleaned up broken VPS {container.name}"
                         )
@@ -210,8 +225,9 @@ async def startup_check(task_store: TaskStateStore):
                     "Stopping and removing."
                 )
                 try:
-                    docker_manager.stop_container(container.name, timeout=10)
-                    docker_manager.remove_container(container.name)
+                    await asyncio.to_thread(
+                        _stop_and_remove_container, container.name, 10
+                    )
                     logger.info(
                         f"Successfully cleaned up orphan container {container.name}"
                     )
