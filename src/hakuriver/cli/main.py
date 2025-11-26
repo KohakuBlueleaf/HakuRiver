@@ -19,7 +19,7 @@ from typing import Annotated
 import typer
 
 from hakuriver.cli import config as cli_config
-from hakuriver.cli.commands import config_cmd, docker, node, ssh, task, terminal, vps
+from hakuriver.cli.commands import config_cmd, connect, docker, node, ssh, task, terminal, vps
 from hakuriver.cli.output import console
 
 app = typer.Typer(
@@ -35,7 +35,8 @@ app.add_typer(vps.app, name="vps", help="VPS management")
 app.add_typer(node.app, name="node", help="Node management")
 app.add_typer(docker.app, name="docker", help="Docker/container management")
 app.add_typer(ssh.app, name="ssh", help="SSH commands")
-app.add_typer(terminal.app, name="terminal", help="Terminal access")
+app.add_typer(terminal.app, name="terminal", help="Terminal access (TUI)")
+app.add_typer(connect.app, name="connect", help="Connect to container terminal")
 app.add_typer(config_cmd.app, name="config", help="Configuration")
 
 

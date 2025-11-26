@@ -468,3 +468,103 @@ async def stop_vps(task_id: int):
             stop_task.add_done_callback(background_tasks.discard)
 
     return {"message": f"VPS {task_id} stop requested. VPS marked as stopped."}
+
+
+@router.post("/vps/restart/{task_id}", status_code=202)
+async def restart_vps(task_id: int):
+    """Restart a VPS instance.
+
+    Useful when nvidia docker breaks (nvml error) or container becomes unresponsive.
+    This will stop the current container and create a new one with the same configuration.
+    """
+    try:
+        task_uuid = int(task_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Task ID format.")
+
+    task: Task | None = Task.get_or_none(
+        (Task.task_id == task_uuid) & (Task.task_type == "vps")
+    )
+
+    if not task:
+        raise HTTPException(status_code=404, detail="VPS not found.")
+
+    # Check if VPS can be restarted
+    restartable_states = ["running", "paused", "failed"]
+    if task.status not in restartable_states:
+        raise HTTPException(
+            status_code=409,
+            detail=f"VPS cannot be restarted (state: {task.status}). Must be running, paused, or failed.",
+        )
+
+    if not task.assigned_node:
+        raise HTTPException(
+            status_code=400,
+            detail="VPS has no assigned node.",
+        )
+
+    node = Node.get_or_none(Node.hostname == task.assigned_node)
+    if not node or node.status != "online":
+        raise HTTPException(
+            status_code=503,
+            detail=f"Assigned node '{task.assigned_node}' is not online.",
+        )
+
+    container_name = vps_container_name(task.task_id)
+    original_status = task.status
+
+    logger.info(f"Restarting VPS {task_id} on node {node.hostname}")
+
+    # Step 1: Stop the current container
+    if original_status in ["running", "paused"]:
+        logger.info(f"Stopping VPS container {container_name} on {node.hostname}")
+        await send_kill_to_runner(node.url, task_id, container_name)
+        # Wait briefly for container to stop
+        await asyncio.sleep(2)
+
+    # Step 2: Update task status to "assigning" for restart
+    task.status = "assigning"
+    task.error_message = None
+    task.started_at = None
+    task.completed_at = None
+    task.save()
+
+    # Step 3: Re-send VPS creation request to runner
+    # We need to get the container name from the original task
+    # The container_name field stores the base image name (e.g., "hakuriver-base")
+    base_container_name = task.container_name or config.DEFAULT_CONTAINER_NAME
+
+    result = await send_vps_to_runner(
+        runner_url=node.url,
+        task=task,
+        container_name=base_container_name,
+        ssh_key_mode="none",  # Restart uses existing container, SSH should already be set up
+        ssh_public_key=None,
+    )
+
+    if result is None:
+        task.status = "failed"
+        task.error_message = "Runner rejected VPS restart."
+        task.completed_at = datetime.datetime.now()
+        task.save()
+        raise HTTPException(
+            status_code=502,
+            detail="Runner rejected VPS restart.",
+        )
+
+    if result == {}:
+        # Communication failure - task remains in "assigning" state
+        logger.warning(
+            f"VPS {task_id} restart communication failed, task remains in 'assigning' state."
+        )
+        return {
+            "message": "VPS restart request sent (awaiting runner confirmation).",
+            "task_id": str(task_id),
+            "status": "assigning",
+        }
+
+    return {
+        "message": f"VPS {task_id} restart successful.",
+        "task_id": str(task_id),
+        "runner_response": result,
+    }

@@ -79,10 +79,10 @@ async def _run_ssh_with_proxy(
 
     finally:
         proxy.close()
+        # Cancel the proxy server task since serve_forever doesn't exit on close
+        proxy_server_task.cancel()
         try:
-            await asyncio.wait_for(proxy_server_task, timeout=5.0)
-        except asyncio.TimeoutError:
-            pass
+            await proxy_server_task
         except asyncio.CancelledError:
             pass
         except Exception:

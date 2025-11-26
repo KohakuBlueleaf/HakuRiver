@@ -402,6 +402,26 @@ def stop_vps(task_id: str) -> dict:
     return {}
 
 
+def restart_vps(task_id: str) -> dict:
+    """Restart a VPS instance.
+
+    Useful when nvidia docker breaks (nvml error) or container becomes unresponsive.
+    """
+    url = f"{_get_host_url()}/vps/restart/{task_id}"
+
+    try:
+        # No timeout - restart can take a while
+        response = httpx.post(url, timeout=None)
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as e:
+        _handle_http_error(e, f"restart VPS {task_id}")
+    except httpx.RequestError as e:
+        logger.error(f"Request error: {e}")
+        raise APIError(f"Network error: {e}")
+    return {}
+
+
 # =============================================================================
 # Docker Operations
 # =============================================================================

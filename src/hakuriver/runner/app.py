@@ -11,13 +11,13 @@ import socket
 
 import httpx
 import psutil
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, Path
 
 from hakuriver.docker.client import DockerManager
 from hakuriver.runner.config import config
 from hakuriver.runner.background.heartbeat import send_heartbeat
 from hakuriver.runner.background.startup_check import startup_check
-from hakuriver.runner.endpoints import docker, tasks, vps
+from hakuriver.runner.endpoints import docker, tasks, terminal, vps
 from hakuriver.runner.numa.detector import detect_numa_topology
 from hakuriver.runner.services.resource_monitor import get_gpu_stats, get_total_cores
 from hakuriver.storage.vault import TaskStateStore
@@ -43,6 +43,13 @@ app = FastAPI(
 app.include_router(tasks.router, tags=["Tasks"])
 app.include_router(vps.router, tags=["VPS"])
 app.include_router(docker.router, tags=["Docker"])
+
+
+# WebSocket endpoint for task/VPS terminal access
+@app.websocket("/task/{task_id}/terminal")
+async def websocket_task_terminal(websocket: WebSocket, task_id: int = Path(...)):
+    """WebSocket endpoint for interactive terminal access to task/VPS containers."""
+    await terminal.task_terminal_websocket_endpoint(websocket, task_id=task_id)
 
 
 def get_hostname() -> str:
@@ -162,6 +169,7 @@ async def startup_event():
     # Set dependencies on endpoint modules
     tasks.set_dependencies(task_store, numa_topology)
     vps.set_dependencies(task_store)
+    terminal.set_dependencies(task_store)
 
     # Detect NUMA topology
     logger.info("Detecting NUMA topology...")

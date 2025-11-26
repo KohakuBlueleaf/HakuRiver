@@ -17,6 +17,7 @@ from hakuriver.host.background.health import collate_health_data, health_datas
 from hakuriver.host.background.runner_monitor import check_dead_runners
 from hakuriver.host.endpoints import docker, health, nodes, tasks, vps
 from hakuriver.host.endpoints.docker_terminal import terminal_websocket_endpoint
+from hakuriver.host.endpoints.task_terminal import task_terminal_proxy_endpoint
 from hakuriver.ssh_proxy.server import start_server
 from hakuriver.utils.logger import configure_logging, format_traceback
 
@@ -40,13 +41,22 @@ app.include_router(docker.router, prefix="/docker", tags=["Docker"])
 app.include_router(health.router, tags=["Health"])
 
 
-# WebSocket endpoint for Docker container terminal
+# WebSocket endpoint for Docker container terminal (host-side env containers)
 @app.websocket("/docker/host/containers/{container_name}/terminal")
 async def websocket_terminal_endpoint(
     websocket: WebSocket, container_name: str = Path(...)
 ):
-    """WebSocket endpoint for interactive terminal access to containers."""
+    """WebSocket endpoint for interactive terminal access to host containers."""
     await terminal_websocket_endpoint(websocket, container_name=container_name)
+
+
+# WebSocket endpoint for task/VPS terminal (proxied to runner)
+@app.websocket("/task/{task_id}/terminal")
+async def websocket_task_terminal_proxy(
+    websocket: WebSocket, task_id: int = Path(...)
+):
+    """WebSocket proxy for task/VPS terminal access on remote runners."""
+    await task_terminal_proxy_endpoint(websocket, task_id=task_id)
 
 
 async def startup_event():

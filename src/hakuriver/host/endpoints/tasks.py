@@ -483,25 +483,20 @@ async def get_task_status(task_id: int):
 @router.get("/tasks")
 async def list_tasks(
     status: str | None = None,
-    task_type: str | None = None,  # No default filter - show all task types
     limit: int = 100,
     offset: int = 0,
 ):
-    """List tasks with optional filtering.
+    """List command tasks (excludes VPS - use /vps endpoint for VPS).
 
     Returns all fields that frontend expects (matching old code behavior).
     """
     logger.debug(
-        f"list_tasks called: status={status}, task_type={task_type}, limit={limit}, offset={offset}"
+        f"list_tasks called: status={status}, limit={limit}, offset={offset}"
     )
 
-    query = Task.select().order_by(Task.submitted_at.desc())
-    logger.debug(f"Initial query created")
-
-    # Filter by task type if specified
-    if task_type:
-        query = query.where(Task.task_type == task_type)
-        logger.debug(f"Added task_type filter: {task_type}")
+    # Always exclude VPS tasks - they have their own /vps endpoint
+    query = Task.select().where(Task.task_type == "command").order_by(Task.submitted_at.desc())
+    logger.debug(f"Initial query created (VPS excluded)")
 
     if status:
         query = query.where(Task.status == status)

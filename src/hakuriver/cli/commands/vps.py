@@ -239,6 +239,26 @@ def stop_vps(
         raise typer.Exit(1)
 
 
+@app.command("restart")
+def restart_vps(
+    task_id: Annotated[str, typer.Argument(help="VPS Task ID to restart")],
+):
+    """Restart a VPS instance.
+
+    Useful when nvidia docker breaks (nvml error) or container becomes unresponsive.
+    This will stop the current container and create a new one with the same configuration.
+    """
+    try:
+        console.print(f"[dim]Restarting VPS {task_id}...[/dim]")
+        result = client.restart_vps(task_id)
+        message = result.get("message", "VPS restart requested.")
+        print_success(message)
+
+    except client.APIError as e:
+        print_error(str(e))
+        raise typer.Exit(1)
+
+
 @app.command("pause")
 def pause_vps(
     task_id: Annotated[str, typer.Argument(help="VPS Task ID to pause")],
