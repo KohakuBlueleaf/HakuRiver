@@ -2,59 +2,67 @@
 CLI entry point for the HakuRiver Runner agent.
 
 Usage:
-    hakuriver.runner --config ~/.hakuriver/runner_config.py
+    hakuriver.runner [--config PATH]
 """
 
-import argparse
 import logging
 import sys
+from typing import Annotated
 
+import typer
+
+app = typer.Typer(help="HakuRiver Runner agent")
 logger = logging.getLogger(__name__)
 
 
-def main():
-    """CLI entry point for running the Runner agent."""
-    parser = argparse.ArgumentParser(description="Run the HakuRiver Runner agent.")
-    parser.add_argument(
-        "-c",
-        "--config",
-        metavar="PATH",
-        help="Path to a Python configuration file (KohakuEngine format).",
-        default=None,
-    )
-    args = parser.parse_args()
-
+@app.command()
+def run(
+    config: Annotated[
+        str | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="Path to a Python configuration file (KohakuEngine format).",
+        ),
+    ] = None,
+):
+    """Run the HakuRiver Runner agent."""
     # Load and apply config
-    if args.config:
-        print(f"Loading configuration from: {args.config}")
+    if config:
+        print(f"Loading configuration from: {config}")
         try:
             from kohakuengine import Config as KohakuConfig
 
-            kohaku_config = KohakuConfig.from_file(args.config)
+            kohaku_config = KohakuConfig.from_file(config)
 
             # Apply globals to our config instance
-            from hakuriver.runner.config import config
+            from hakuriver.runner.config import config as runner_config
 
             for key, value in kohaku_config.globals_dict.items():
-                if hasattr(config, key):
-                    setattr(config, key, value)
+                if hasattr(runner_config, key):
+                    setattr(runner_config, key, value)
 
         except ImportError:
             print("WARNING: KohakuEngine not found, config file ignored.")
         except Exception as e:
             logger.error(f"Failed to load config: {e}")
-            sys.exit(1)
+            raise typer.Exit(1)
 
     # Run the server
     try:
         print("Starting HakuRiver Runner agent...")
-        from hakuriver.runner.app import run
+        from hakuriver.runner.app import run as run_server
 
-        run()
+        run_server()
 
     except Exception as e:
         logger.critical(f"FATAL: Runner agent failed to start: {e}", exc_info=True)
-        sys.exit(1)
+        raise typer.Exit(1)
+
+
+def main():
+    """Entry point for hakuriver.runner."""
+    app()
 
 
 if __name__ == "__main__":
