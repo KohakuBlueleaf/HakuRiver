@@ -52,9 +52,7 @@ async def websocket_terminal_endpoint(
 
 # WebSocket endpoint for task/VPS terminal (proxied to runner)
 @app.websocket("/task/{task_id}/terminal")
-async def websocket_task_terminal_proxy(
-    websocket: WebSocket, task_id: int = Path(...)
-):
+async def websocket_task_terminal_proxy(websocket: WebSocket, task_id: int = Path(...)):
     """WebSocket proxy for task/VPS terminal access on remote runners."""
     await task_terminal_proxy_endpoint(websocket, task_id=task_id)
 

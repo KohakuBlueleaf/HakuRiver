@@ -81,7 +81,9 @@ async def task_terminal_websocket_endpoint(
         # 1. Validate task is tracked on this runner
         container_name = _resolve_container_name(task_id)
         if not container_name:
-            logger.warning(f"Task {task_id} not found on this runner for terminal connection.")
+            logger.warning(
+                f"Task {task_id} not found on this runner for terminal connection."
+            )
             await websocket.send_json(
                 WebSocketOutputMessage(
                     type="error", data=f"Task {task_id} not found on this runner."
@@ -119,9 +121,13 @@ async def task_terminal_websocket_endpoint(
                 )
                 await websocket.close(code=1008)
                 return
-            logger.debug(f"Found running container '{container_name}' (ID: {container.id})")
+            logger.debug(
+                f"Found running container '{container_name}' (ID: {container.id})"
+            )
         except DockerNotFound:
-            logger.warning(f"Container '{container_name}' not found for terminal connection.")
+            logger.warning(
+                f"Container '{container_name}' not found for terminal connection."
+            )
             await websocket.send_json(
                 WebSocketOutputMessage(
                     type="error", data=f"Container not found."
@@ -162,7 +168,9 @@ async def task_terminal_websocket_endpoint(
             return
 
         # 5. Create exec instance (interactive shell)
-        logger.info(f"Creating exec instance in container '{container_name}' with shell '{shell_cmd}'")
+        logger.info(
+            f"Creating exec instance in container '{container_name}' with shell '{shell_cmd}'"
+        )
         exec_instance = client.api.exec_create(
             container.id,
             cmd=shell_cmd,
@@ -220,7 +228,9 @@ async def task_terminal_websocket_endpoint(
                 try:
                     output = await asyncio.to_thread(raw_socket.recv, 4096)
                     if not output:
-                        logger.info(f"Container socket closed (output) for task {task_id}.")
+                        logger.info(
+                            f"Container socket closed (output) for task {task_id}."
+                        )
                         break
                     await websocket.send_json(
                         WebSocketOutputMessage(
@@ -230,10 +240,14 @@ async def task_terminal_websocket_endpoint(
                 except TimeoutError:
                     continue
                 except BrokenPipeError as e:
-                    logger.info(f"Container socket error (output) for task {task_id}: {e}.")
+                    logger.info(
+                        f"Container socket error (output) for task {task_id}: {e}."
+                    )
                     break
                 except Exception as e:
-                    logger.error(f"Error reading from container for task {task_id}: {e}")
+                    logger.error(
+                        f"Error reading from container for task {task_id}: {e}"
+                    )
                     try:
                         await websocket.send_json(
                             WebSocketOutputMessage(
@@ -257,9 +271,13 @@ async def task_terminal_websocket_endpoint(
                         await asyncio.to_thread(
                             raw_socket.sendall, input_msg.data.encode("utf-8")
                         )
-                    elif input_msg.type == "resize" and input_msg.rows and input_msg.cols:
+                    elif (
+                        input_msg.type == "resize" and input_msg.rows and input_msg.cols
+                    ):
                         try:
-                            logger.debug(f"Resizing terminal to {input_msg.rows}x{input_msg.cols}")
+                            logger.debug(
+                                f"Resizing terminal to {input_msg.rows}x{input_msg.cols}"
+                            )
                             await asyncio.to_thread(
                                 client.api.exec_resize,
                                 exec_id,
@@ -269,15 +287,21 @@ async def task_terminal_websocket_endpoint(
                         except DockerAPIError as resize_err:
                             logger.warning(f"Failed to resize terminal: {resize_err}")
                         except Exception as resize_exc:
-                            logger.error(f"Unexpected error resizing terminal: {resize_exc}")
+                            logger.error(
+                                f"Unexpected error resizing terminal: {resize_exc}"
+                            )
 
                 except WebSocketDisconnect:
                     logger.info(f"WebSocket disconnected (input) for task {task_id}.")
                     break
                 except json.JSONDecodeError:
-                    logger.warning(f"Received invalid JSON from WebSocket for task {task_id}.")
+                    logger.warning(
+                        f"Received invalid JSON from WebSocket for task {task_id}."
+                    )
                 except Exception as e:
-                    logger.error(f"Error receiving from WebSocket for task {task_id}: {e}")
+                    logger.error(
+                        f"Error receiving from WebSocket for task {task_id}: {e}"
+                    )
                     break
 
         # 9. Run I/O tasks concurrently
@@ -314,7 +338,9 @@ async def task_terminal_websocket_endpoint(
         except Exception:
             pass
     except Exception as e:
-        logger.exception(f"Unexpected error in terminal websocket for task {task_id}: {e}")
+        logger.exception(
+            f"Unexpected error in terminal websocket for task {task_id}: {e}"
+        )
         try:
             await websocket.send_json(
                 WebSocketOutputMessage(
@@ -324,13 +350,17 @@ async def task_terminal_websocket_endpoint(
         except Exception:
             pass
     finally:
-        logger.info(f"Closing WebSocket connection and cleaning up resources for task {task_id}.")
+        logger.info(
+            f"Closing WebSocket connection and cleaning up resources for task {task_id}."
+        )
         if socket_stream and hasattr(socket_stream, "_sock") and socket_stream._sock:
             try:
                 socket_stream._sock.close()
                 logger.debug(f"Closed Docker exec socket for task {task_id}.")
             except Exception as close_exc:
-                logger.warning(f"Error closing Docker exec socket for task {task_id}: {close_exc}")
+                logger.warning(
+                    f"Error closing Docker exec socket for task {task_id}: {close_exc}"
+                )
         try:
             await websocket.close(code=1000)
         except Exception:

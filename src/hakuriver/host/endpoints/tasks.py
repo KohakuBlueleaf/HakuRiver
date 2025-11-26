@@ -490,12 +490,14 @@ async def list_tasks(
 
     Returns all fields that frontend expects (matching old code behavior).
     """
-    logger.debug(
-        f"list_tasks called: status={status}, limit={limit}, offset={offset}"
-    )
+    logger.debug(f"list_tasks called: status={status}, limit={limit}, offset={offset}")
 
     # Always exclude VPS tasks - they have their own /vps endpoint
-    query = Task.select().where(Task.task_type == "command").order_by(Task.submitted_at.desc())
+    query = (
+        Task.select()
+        .where(Task.task_type == "command")
+        .order_by(Task.submitted_at.desc())
+    )
     logger.debug(f"Initial query created (VPS excluded)")
 
     if status:

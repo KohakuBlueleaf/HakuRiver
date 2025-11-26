@@ -19,7 +19,16 @@ from typing import Annotated
 import typer
 
 from hakuriver.cli import config as cli_config
-from hakuriver.cli.commands import config_cmd, connect, docker, node, ssh, task, terminal, vps
+from hakuriver.cli.commands import (
+    config_cmd,
+    connect,
+    docker,
+    node,
+    ssh,
+    task,
+    terminal,
+    vps,
+)
 from hakuriver.cli.output import console
 
 app = typer.Typer(

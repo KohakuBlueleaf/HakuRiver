@@ -116,7 +116,9 @@ async def task_terminal_proxy_endpoint(
         try:
             runner_ws = await websockets.connect(runner_ws_url)
         except Exception as e:
-            logger.error(f"Failed to connect to runner WebSocket at {runner_ws_url}: {e}")
+            logger.error(
+                f"Failed to connect to runner WebSocket at {runner_ws_url}: {e}"
+            )
             await websocket.send_json(
                 WebSocketOutputMessage(
                     type="error", data=f"Failed to connect to runner: {e}"

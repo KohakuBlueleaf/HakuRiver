@@ -73,7 +73,9 @@ async def _run_terminal_session(task_id: str):
     - Exit by typing 'exit' command in shell
     """
     # Construct WebSocket URL
-    ws_url = f"ws://{cli_config.HOST_ADDRESS}:{cli_config.HOST_PORT}/task/{task_id}/terminal"
+    ws_url = (
+        f"ws://{cli_config.HOST_ADDRESS}:{cli_config.HOST_PORT}/task/{task_id}/terminal"
+    )
 
     console.print(f"[dim]Connecting to {ws_url}...[/dim]")
 
