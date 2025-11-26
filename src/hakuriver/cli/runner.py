@@ -1,60 +1,14 @@
+"""
+CLI entry point for the HakuRiver Runner agent.
+
+Usage:
+    hakuriver.runner --config ~/.hakuriver/runner_config.py
+"""
 import argparse
-import os
+import logging
 import sys
 
-import toml
-import uvicorn
-import hakuriver.core.runner as runner_core
-from hakuriver.utils.logger import logger
-
-
-def update_config(config_instance, custom_config_data):
-    """Updates attributes of the config instance based on custom data."""
-    logger = None
-    try:
-        # Runner's logger might include hostname, potentially set up during import
-        from hakuriver.utils.logger import logger
-    except ImportError:
-        pass  # Logger might not be set up yet
-
-    if not config_instance or not isinstance(custom_config_data, dict):
-        return
-
-    log_prefix = f"{type(config_instance).__name__}"  # e.g., "RUNNER_CONFIG"
-
-    for key, value in custom_config_data.items():
-        if isinstance(value, dict):
-            for sub_key, sub_value in value.items():
-                if hasattr(config_instance, sub_key):
-                    current_sub_value = getattr(config_instance, sub_key)
-                    msg = f"Overriding {log_prefix}.{sub_key} from section '{key}': {current_sub_value} -> {sub_value}"
-                    if logger:
-                        logger.info(msg)
-                    else:
-                        print(msg)
-                    try:
-                        setattr(config_instance, sub_key, sub_value)
-                    except AttributeError:
-                        warn_msg = f"Could not set {log_prefix}.{sub_key} (read-only?)"
-                        if logger:
-                            logger.warning(warn_msg)
-                        else:
-                            print(f"Warning: {warn_msg}")
-        elif hasattr(config_instance, key):
-            current_value = getattr(config_instance, key)
-            msg = f"Overriding {log_prefix}.{key}: {current_value} -> {value}"
-            if logger:
-                logger.info(msg)
-            else:
-                print(msg)
-            try:
-                setattr(config_instance, key, value)
-            except AttributeError:
-                warn_msg = f"Could not set {log_prefix}.{key} (read-only?)"
-                if logger:
-                    logger.warning(warn_msg)
-                else:
-                    print(f"Warning: {warn_msg}")
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -64,58 +18,43 @@ def main():
         "-c",
         "--config",
         metavar="PATH",
-        help="Path to a custom TOML configuration file to override defaults.",
+        help="Path to a Python configuration file (KohakuEngine format).",
         default=None,
     )
     args = parser.parse_args()
 
-    custom_config_data = None
+    # Load and apply config
     if args.config:
-        config_path = os.path.abspath(args.config)
-        if not os.path.exists(config_path):
-            print(
-                f"Error: Custom config file not found: {config_path}", file=sys.stderr
-            )
-            sys.exit(1)
+        print(f"Loading configuration from: {args.config}")
         try:
-            with open(config_path, "r") as f:
-                custom_config_data = toml.load(f)
-            print(f"Loaded custom configuration from: {config_path}")
-        except (toml.TomlDecodeError, IOError) as e:
-            print(
-                f"Error loading or reading config file '{config_path}': {e}",
-                file=sys.stderr,
-            )
+            from kohakuengine import Config as KohakuConfig
+
+            kohaku_config = KohakuConfig.from_file(args.config)
+
+            # Apply globals to our config instance
+            from hakuriver.runner.config import config
+
+            for key, value in kohaku_config.globals_dict.items():
+                if hasattr(config, key):
+                    setattr(config, key, value)
+
+        except ImportError:
+            print("WARNING: KohakuEngine not found, config file ignored.")
+        except Exception as e:
+            logger.error(f"Failed to load config: {e}")
             sys.exit(1)
 
-    # --- Apply Custom Config Overrides ---
-    if custom_config_data:
-        print("Applying custom configuration overrides...")
-        update_config(runner_core.RUNNER_CONFIG, custom_config_data)
-        print("Custom configuration applied.")
-
-    # --- Execute: Run Uvicorn ---
-    # Runner typically binds to 0.0.0.0
-    runner_bind_ip = "0.0.0.0"
-    runner_port = runner_core.RUNNER_CONFIG.RUNNER_PORT
-    print(f"Starting HakuRiver Runner agent on {runner_bind_ip}:{runner_port}...")
+    # Run the server
     try:
-        uvicorn.run(
-            runner_core.app,  # Pass the app instance
-            host=runner_bind_ip,
-            port=runner_port,
-            log_config=None,  # Use logger configured by setup_logging
-        )
+        print("Starting HakuRiver Runner agent...")
+        from hakuriver.runner.app import run
+
+        run()
+
     except Exception as e:
-        logger = getattr(runner_core, "logger", None)
-        log_msg = f"FATAL: Runner agent failed to start: {e}"
-        if logger:
-            logger.critical(log_msg, exc_info=True)
-        else:
-            print(log_msg, file=sys.stderr)
+        logger.critical(f"FATAL: Runner agent failed to start: {e}", exc_info=True)
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    logger.setLevel("DEBUG")
     main()

@@ -13,16 +13,17 @@ authors = [
     {name = "Shih-Ying Yeh(KohakuBlueLeaf)", email = "apolloyeh0123@gmail.com"},
 ]
 dependencies = [
-    "hakustore",
+    "kohaku-engine",
+    "kohakuvault",
     "peewee",
     "fastapi",
     "httpx",
     "psutil",
-    "toml",
     "uvicorn[standard]",
     "snowflake-id",
     "docker",
     "websockets",
+    "pydantic>=2.0",
 ]
 
 [project.optional-dependencies]

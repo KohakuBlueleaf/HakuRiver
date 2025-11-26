@@ -1,15 +1,20 @@
-# src/hakuriver/cli/docker_shell.py
+"""
+HakuRiver Docker Shell: Connect to a Host-side container terminal via WebSocket.
+
+Usage:
+    hakuriver.docker-shell CONTAINER_NAME
+"""
 import argparse
-import os
-import sys
-import json
-import toml
 import asyncio
+import json
+import logging
+import sys
+
 import websockets
 
-# HakuRiver imports (assume they exist in the package)
-from hakuriver.core.client import CLIENT_CONFIG
-from hakuriver.utils.logger import logger
+from hakuriver.cli import config as CLI_CONFIG
+
+logger = logging.getLogger(__name__)
 
 
 async def receive_messages(websocket):
@@ -72,11 +77,20 @@ async def main_shell():
         usage="%(prog)s [options] <container-name>",
         allow_abbrev=False,
     )
+
+    # Global arguments
     parser.add_argument(
-        "--config",
-        metavar="PATH",
-        help="Path to a custom TOML configuration file to override defaults.",
+        "--host",
+        metavar="HOST",
         default=None,
+        help=f"Host address (default: {CLI_CONFIG.HOST_ADDRESS})",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        metavar="PORT",
+        default=None,
+        help=f"Host port (default: {CLI_CONFIG.HOST_PORT})",
     )
     parser.add_argument(
         "container_name", help="Name of the Host container to connect to."
@@ -84,34 +98,15 @@ async def main_shell():
 
     args = parser.parse_args()
 
-    # --- Load and Apply Custom Config ---
-    custom_config_data = None
-    if args.config:
-        config_path = os.path.abspath(args.config)
-        if not os.path.exists(config_path):
-            logger.error(f"Custom config file not found: {config_path}")
-            sys.exit(1)
-        try:
-
-            def _load_config():
-                with open(config_path, "r") as f:
-                    return toml.load(f)
-
-            custom_config_data = await asyncio.to_thread(_load_config)
-            logger.info(f"Loaded custom configuration from: {config_path}")
-        except (toml.TomlDecodeError, IOError) as e:
-            logger.error(f"Error loading or reading config file '{config_path}': {e}")
-            sys.exit(1)
-
-    if custom_config_data:
-        for key, value in custom_config_data.items():
-            CLIENT_CONFIG.update_setting(key, value)
+    # Apply host/port overrides
+    if args.host:
+        CLI_CONFIG.HOST_ADDRESS = args.host
+    if args.port:
+        CLI_CONFIG.HOST_PORT = args.port
 
     # --- Construct WebSocket URL ---
-    # Assuming Host is running on ws:// or wss:// based on its configuration/setup
-    # Current HakuRiver doesn't have TLS config, so assume ws://
     ws_protocol = "ws"  # Or "wss" if Host is configured for TLS
-    ws_url = f"{ws_protocol}://{CLIENT_CONFIG.host_address}:{CLIENT_CONFIG.host_port}/docker/host/containers/{args.container_name}/terminal"
+    ws_url = f"{ws_protocol}://{CLI_CONFIG.HOST_ADDRESS}:{CLI_CONFIG.HOST_PORT}/docker/host/containers/{args.container_name}/terminal"
 
     logger.info(
         f"Connecting to WebSocket terminal for container '{args.container_name}' at {ws_url}"
@@ -130,7 +125,6 @@ async def main_shell():
             await asyncio.gather(
                 receive_messages(websocket),
                 send_input(websocket),
-                # Add a task to monitor the input thread/queue if needed for graceful exit
             )
 
     except websockets.exceptions.ConnectionClosed as e:

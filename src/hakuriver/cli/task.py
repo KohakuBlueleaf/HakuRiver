@@ -1,15 +1,24 @@
+"""
+HakuRiver Task CLI: Submit and manage standard tasks.
+
+Usage:
+    hakuriver.task submit --target HOST[:NUMA_ID][::GPU_IDS] [options] COMMAND ARGS...
+    hakuriver.task kill TASK_ID
+    hakuriver.task command TASK_ID pause|resume
+    hakuriver.task stdout TASK_ID
+    hakuriver.task stderr TASK_ID
+"""
 import argparse
-import os
+import logging
 import sys
 import time
-import toml
+
 import httpx
 
-import hakuriver.core.client as client_core
-from hakuriver.core.config import CLIENT_CONFIG
+from hakuriver.cli import api_client, config as CLI_CONFIG
 from hakuriver.utils.cli import parse_key_value, parse_memory_string
-from hakuriver.utils.logger import logger
-from .client import update_client_config_from_toml
+
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -20,12 +29,19 @@ def main():
         allow_abbrev=False,
     )
 
-    # Global Configuration Argument
+    # Global arguments
     parser.add_argument(
-        "--config",
-        metavar="PATH",
-        help="Path to a custom TOML configuration file to override defaults.",
+        "--host",
+        metavar="HOST",
         default=None,
+        help=f"Host address (default: {CLI_CONFIG.HOST_ADDRESS})",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        metavar="PORT",
+        default=None,
+        help=f"Host port (default: {CLI_CONFIG.HOST_PORT})",
     )
 
     # Subcommands for standard task operations
@@ -144,23 +160,11 @@ def main():
 
     args = parser.parse_args()
 
-    # Load and apply custom config
-    custom_config_data = None
-    if args.config:
-        config_path = os.path.abspath(args.config)
-        if not os.path.exists(config_path):
-            logger.error(f"Error: Custom config file not found: {config_path}")
-            sys.exit(1)
-        try:
-            with open(config_path, "r") as f:
-                custom_config_data = toml.load(f)
-            logger.info(f"Loaded custom configuration from: {config_path}")
-        except (toml.TomlDecodeError, IOError) as e:
-            logger.error(f"Error loading or reading config file '{config_path}': {e}")
-            sys.exit(1)
-
-    if custom_config_data:
-        update_client_config_from_toml(CLIENT_CONFIG, custom_config_data)
+    # Apply host/port overrides
+    if args.host:
+        CLI_CONFIG.HOST_ADDRESS = args.host
+    if args.port:
+        CLI_CONFIG.HOST_PORT = args.port
 
     # Dispatch based on command
     try:
@@ -194,9 +198,17 @@ def main():
             targets = []
             gpus = []
             if args.target:
+                # Flatten the nested list from action='append' with nargs='+'
+                flat_targets = []
+                for target_list in args.target:
+                    if isinstance(target_list, list):
+                        flat_targets.extend(target_list)
+                    else:
+                        flat_targets.append(target_list)
+
                 processed_targets = []
                 processed_gpus = []
-                for target_str in args.target:
+                for target_str in flat_targets:
                     if "::" in target_str:
                         target_host_numa, gpu_str = target_str.split("::", 1)
                         processed_targets.append(target_host_numa)
@@ -220,16 +232,17 @@ def main():
                     "Internal error: Mismatch between parsed targets and GPU lists."
                 )
 
+            target_display = ", ".join(flat_targets) if flat_targets else "none"
             logger.info(
                 f"Submitting command task '{command_to_run}' "
-                f"to targets: {', '.join(args.target)}. "
+                f"to targets: {target_display}. "
                 f"Cores: {args.cores}, Memory: {args.memory}, GPUs: {gpus}. "
                 f"Container: {args.container if args.container else 'default'}, "
                 f"Privileged: {privileged_override if privileged_override is not None else 'default'}, "
                 f"Mounts: {additional_mounts_override if additional_mounts_override is not None else 'default'}."
             )
 
-            task_ids = client_core.submit_task(
+            task_ids = api_client.submit_task(
                 command=command_to_run,
                 args=command_arguments,
                 env=env_vars,
@@ -258,6 +271,7 @@ def main():
 
                 task_final_status = {}
                 waiting_tasks_info = {tid: {"status": "pending"} for tid in task_ids}
+                all_finished_normally = True
 
                 while waiting_tasks_info:
                     waiting_for_ids = list(waiting_tasks_info.keys())
@@ -266,7 +280,7 @@ def main():
                         if i > 0 and len(waiting_for_ids) > 5:
                             time.sleep(0.05)
 
-                        current_status_data = client_core.check_status(task_id_to_check)
+                        current_status_data = api_client.get_task_status(task_id_to_check)
                         if current_status_data is None:
                             logger.warning(
                                 f"Could not get status for task {task_id_to_check}. Retrying..."
@@ -297,33 +311,28 @@ def main():
                     logger.info(f"  Task {tid}: {status}")
                 if not all_finished_normally:
                     logger.warning("One or more tasks did not complete successfully.")
-                    # sys.exit(1)
 
         elif args.command == "kill":
-            # argparse handles required task_id
             logger.info(f"Requesting kill for task: {args.task_id}")
-            client_core.kill_task(args.task_id)
+            api_client.kill_task(args.task_id)
 
         elif args.command == "command":
-            # argparse handles required args
             logger.info(f"Sending '{args.action}' command to task {args.task_id}...")
-            client_core.send_task_command(args.task_id, args.action)
+            api_client.send_task_command(args.task_id, args.action)
 
         elif args.command == "stdout":
-            # argparse handles required task_id
             logger.info(f"Fetching stdout for task: {args.task_id}")
-            client_core.get_task_stdout(args.task_id)
+            api_client.get_task_stdout(args.task_id)
 
         elif args.command == "stderr":
-            # argparse handles required task_id
             logger.info(f"Fetching stderr for task: {args.task_id}")
-            client_core.get_task_stderr(args.task_id)
+            api_client.get_task_stderr(args.task_id)
 
-    except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error occurred.")
+    except httpx.HTTPStatusError:
+        logger.error("HTTP error occurred.")
         sys.exit(1)
-    except httpx.RequestError as e:
-        logger.error(f"Network error occurred.")
+    except httpx.RequestError:
+        logger.error("Network error occurred.")
         sys.exit(1)
     except Exception as e:
         logger.exception(

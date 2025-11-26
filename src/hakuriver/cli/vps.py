@@ -1,15 +1,24 @@
+"""
+HakuRiver VPS CLI: Submit and manage VPS tasks.
+
+Usage:
+    hakuriver.vps submit --target HOST[:NUMA_ID][::GPU_IDS] [options]
+    hakuriver.vps status
+    hakuriver.vps kill TASK_ID
+    hakuriver.vps command TASK_ID pause|resume
+"""
 import argparse
+import logging
 import os
 import sys
-import toml
+
 import httpx
 
-import hakuriver.core.client as client_core
-from hakuriver.core.config import CLIENT_CONFIG
-from hakuriver.utils.logger import logger
-from hakuriver.utils.ssh_key import read_public_key_file
+from hakuriver.cli import api_client, config as CLI_CONFIG
 from hakuriver.utils.cli import parse_memory_string
-from .client import update_client_config_from_toml
+from hakuriver.utils.ssh_key import read_public_key_file
+
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -20,12 +29,19 @@ def main():
         allow_abbrev=False,
     )
 
-    # Global Configuration Argument
+    # Global arguments
     parser.add_argument(
-        "--config",
-        metavar="PATH",
-        help="Path to a custom TOML configuration file to override defaults.",
+        "--host",
+        metavar="HOST",
         default=None,
+        help=f"Host address (default: {CLI_CONFIG.HOST_ADDRESS})",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        metavar="PORT",
+        default=None,
+        help=f"Host port (default: {CLI_CONFIG.HOST_PORT})",
     )
 
     # Subcommands for VPS operations
@@ -35,7 +51,7 @@ def main():
     parser_submit = subparsers.add_parser("submit", help="Submit a new VPS task.")
     parser_submit.add_argument(
         "--target",
-        metavar="HOST[:NUMA_ID][::GPU_ID1[,GPU_ID2,...]]",  # Keep same format for consistency
+        metavar="HOST[:NUMA_ID][::GPU_ID1[,GPU_ID2,...]]",
         help="Target node or node:numa_id. Only one target allowed for VPS.",
         default=None,
     )
@@ -73,9 +89,7 @@ def main():
     )
 
     # Options for public key input - mutually exclusive group
-    pubkey_group = parser_submit.add_mutually_exclusive_group(
-        required=False
-    )  # Not required initially due to implicit default
+    pubkey_group = parser_submit.add_mutually_exclusive_group(required=False)
     pubkey_group.add_argument(
         "--public-key-string",
         metavar="KEY_STRING",
@@ -116,23 +130,11 @@ def main():
 
     args = parser.parse_args()
 
-    # Load and apply custom config
-    custom_config_data = None
-    if args.config:
-        config_path = os.path.abspath(args.config)
-        if not os.path.exists(config_path):
-            logger.error(f"Error: Custom config file not found: {config_path}")
-            sys.exit(1)
-        try:
-            with open(config_path, "r") as f:
-                custom_config_data = toml.load(f)
-            logger.info(f"Loaded custom configuration from: {config_path}")
-        except (toml.TomlDecodeError, IOError) as e:
-            logger.error(f"Error loading or reading config file '{config_path}': {e}")
-            sys.exit(1)
-
-    if custom_config_data:
-        update_client_config_from_toml(CLIENT_CONFIG, custom_config_data)
+    # Apply host/port overrides
+    if args.host:
+        CLI_CONFIG.HOST_ADDRESS = args.host
+    if args.port:
+        CLI_CONFIG.HOST_PORT = args.port
 
     # Dispatch based on command
     try:
@@ -158,7 +160,6 @@ def main():
                 default_keys = [
                     os.path.join(os.path.expanduser("~"), ".ssh", "id_rsa.pub"),
                     os.path.join(os.path.expanduser("~"), ".ssh", "id_ed25519.pub"),
-                    # Add other common key types here if needed
                 ]
                 for default_path in default_keys:
                     if os.path.exists(default_path):
@@ -167,14 +168,12 @@ def main():
                             logger.info(
                                 f"Using default public key file: {default_path}"
                             )
-                            break  # Found and read a key, stop searching
+                            break
                         except (IOError, Exception) as e:
                             logger.warning(
                                 f"Could not read default key file '{default_path}': {e}. Trying next default..."
                             )
-                            public_key_string = (
-                                None  # Ensure it's None if reading failed
-                            )
+                            public_key_string = None
 
             if not public_key_string:
                 parser_submit.error(
@@ -184,13 +183,7 @@ def main():
                 )
 
             # --- Parse Target and GPUs ---
-            # VPS only supports a single target currently as per Host logic
-            if isinstance(args.target, list) and len(args.target) > 1:
-                parser_submit.error("Only one --target is allowed for VPS submission.")
-
-            target_str = (
-                args.target[0] if isinstance(args.target, list) else args.target
-            )
+            target_str = args.target
             vps_gpu_ids = []
             target_host_numa = target_str
             if target_str and "::" in target_str:
@@ -225,11 +218,11 @@ def main():
                 f"Mounts: {additional_mounts_override if additional_mounts_override is not None else 'default'}."
             )
 
-            task_ids = client_core.create_vps(
+            task_ids = api_client.create_vps(
                 public_key=public_key_string,
                 cores=args.cores,
                 memory_bytes=memory_bytes,
-                targets=target_host_numa,
+                target=target_host_numa,
                 container_name=args.container,
                 privileged=privileged_override,
                 additional_mounts=additional_mounts_override,
@@ -242,35 +235,27 @@ def main():
                 )
                 sys.exit(1)
 
-            # Host's create_vps returns response including ssh_port in runner_response field
-            # The submit_payload function called by create_vps already prints the full response
-            # including runner_response, so no extra print needed here for the port.
-
             logger.info(f"Host accepted VPS submission. Created Task ID: {task_ids[0]}")
 
         elif args.command == "status":
             logger.info("Fetching active VPS tasks...")
-            client_core.get_active_vps_status()  # Call the new core client function
+            api_client.get_active_vps_status()
 
         elif args.command == "kill":
-            # argparse handles required task_id
             logger.info(f"Requesting kill for VPS task: {args.task_id}")
-            # Call the general kill function, Host handles the type
-            client_core.kill_task(args.task_id)
+            api_client.kill_task(args.task_id)
 
         elif args.command == "command":
-            # argparse handles required args
             logger.info(
                 f"Sending '{args.action}' command to VPS task {args.task_id}..."
             )
-            # Call the general command function, Host handles the type/state check
-            client_core.send_task_command(args.task_id, args.action)
+            api_client.send_task_command(args.task_id, args.action)
 
-    except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error occurred.")
+    except httpx.HTTPStatusError:
+        logger.error("HTTP error occurred.")
         sys.exit(1)
-    except httpx.RequestError as e:
-        logger.error(f"Network error occurred.")
+    except httpx.RequestError:
+        logger.error("Network error occurred.")
         sys.exit(1)
     except Exception as e:
         logger.exception(

@@ -1,28 +1,30 @@
-# src/hakuriver/cli/docker.py
+"""
+HakuRiver Docker Client: Manage Host-side Docker containers and tarballs.
+
+Usage:
+    hakuriver.docker list-containers
+    hakuriver.docker create-container IMAGE_NAME CONTAINER_NAME
+    hakuriver.docker delete-container CONTAINER_NAME
+    hakuriver.docker stop-container CONTAINER_NAME
+    hakuriver.docker start-container CONTAINER_NAME
+    hakuriver.docker list-tars
+    hakuriver.docker create-tar CONTAINER_NAME
+"""
 import argparse
-import os
-import sys
 import json
-import toml
+import logging
+import sys
+
 import httpx
 
-# HakuRiver imports (assume they exist in the package)
-from hakuriver.core.client import CLIENT_CONFIG
-from hakuriver.utils.logger import logger
+from hakuriver.cli import config as CLI_CONFIG
+
+logger = logging.getLogger(__name__)
 
 
-def parse_key_value(items: list[str]) -> dict[str, str]:
-    """Parses ['KEY1=VAL1', 'KEY2=VAL2'] into {'KEY1': 'VAL1', 'KEY2': 'VAL2'}"""
-    result = {}
-    if not items:
-        return result
-    for item in items:
-        parts = item.split("=", 1)
-        if len(parts) == 2:
-            result[parts[0].strip()] = parts[1].strip()
-        else:
-            logger.warning(f"Ignoring invalid environment variable format: {item}")
-    return result
+def _get_host_url() -> str:
+    """Get the host URL from config."""
+    return f"http://{CLI_CONFIG.HOST_ADDRESS}:{CLI_CONFIG.HOST_PORT}"
 
 
 def print_json_response(response: httpx.Response):
@@ -46,12 +48,19 @@ def main():
         allow_abbrev=False,
     )
 
-    # --- Configuration Argument ---
+    # Global arguments
     parser.add_argument(
-        "--config",
-        metavar="PATH",
-        help="Path to a custom TOML configuration file to override defaults.",
+        "--host",
+        metavar="HOST",
         default=None,
+        help=f"Host address (default: {CLI_CONFIG.HOST_ADDRESS})",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        metavar="PORT",
+        default=None,
+        help=f"Host port (default: {CLI_CONFIG.HOST_PORT})",
     )
 
     # --- Subcommands ---
@@ -112,36 +121,23 @@ def main():
 
     args = parser.parse_args()
 
-    # --- Load and Apply Custom Config ---
-    custom_config_data = None
-    if args.config:
-        config_path = os.path.abspath(args.config)
-        if not os.path.exists(config_path):
-            logger.error(f"Custom config file not found: {config_path}")
-            sys.exit(1)
-        try:
-            with open(config_path, "r") as f:
-                custom_config_data = toml.load(f)
-            logger.info(f"Loaded custom configuration from: {config_path}")
-        except (toml.TomlDecodeError, IOError) as e:
-            logger.error(f"Error loading or reading config file '{config_path}': {e}")
-            sys.exit(1)
+    # Apply host/port overrides
+    if args.host:
+        CLI_CONFIG.HOST_ADDRESS = args.host
+    if args.port:
+        CLI_CONFIG.HOST_PORT = args.port
 
-    if custom_config_data:
-        for key, val in custom_config_data.items():
-            CLIENT_CONFIG.update_setting(key, val)
+    host_url = _get_host_url()
+    default_timeout = 10.0
 
     # --- Execute Command ---
-    host_url = CLIENT_CONFIG.host_url
-    timeout = CLIENT_CONFIG.default_timeout  # Use default timeout
-
     try:
-        # some command require longer execution time
-        with httpx.Client(
-            base_url=host_url,
-            timeout=timeout
-            + 180 * (args.command in {"create-container", "create-tar"}),
-        ) as client:
+        # some commands require longer execution time
+        timeout = default_timeout
+        if args.command in {"create-container", "create-tar"}:
+            timeout += 180
+
+        with httpx.Client(base_url=host_url, timeout=timeout) as client:
             if args.command == "list-containers":
                 logger.info(
                     f"Listing Host containers from {host_url}/docker/host/containers..."
