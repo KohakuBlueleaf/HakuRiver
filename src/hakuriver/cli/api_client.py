@@ -3,6 +3,7 @@ API client for CLI commands.
 
 Provides functions to interact with the HakuRiver host API.
 """
+
 import json
 import logging
 
@@ -244,7 +245,8 @@ def get_task_stderr(task_id: str):
 
 
 def create_vps(
-    public_key: str,
+    ssh_key_mode: str,
+    public_key: str | None,
     cores: int,
     memory_bytes: int | None,
     target: str | None,
@@ -252,27 +254,58 @@ def create_vps(
     privileged: bool | None,
     additional_mounts: list[str] | None,
     gpu_ids: list[int],
-) -> list[str]:
-    """Create a VPS task and return task IDs."""
+) -> dict | None:
+    """
+    Create a VPS task and return result dict.
+
+    Args:
+        ssh_key_mode: "none", "upload", or "generate"
+        public_key: SSH public key (required if ssh_key_mode is "upload")
+        cores: Number of CPU cores
+        memory_bytes: Memory limit in bytes
+        target: Target node specification
+        container_name: Container environment name
+        privileged: Run with --privileged
+        additional_mounts: Additional mount directories
+        gpu_ids: List of GPU IDs to allocate
+
+    Returns:
+        Dict with task_id, ssh_port, and optionally ssh_private_key/ssh_public_key
+        for generate mode.
+    """
     url = f"{_get_host_url()}/vps/create"
 
+    # Parse target to extract hostname and numa_id
+    target_hostname = None
+    target_numa_id = None
+    if target:
+        if ":" in target:
+            parts = target.split(":", 1)
+            target_hostname = parts[0] if parts[0] else None
+            try:
+                target_numa_id = int(parts[1]) if parts[1] else None
+            except ValueError:
+                target_numa_id = None
+        else:
+            target_hostname = target
+
     payload = {
-        "public_key": public_key,
-        "cores": cores,
-        "memory_bytes": memory_bytes,
-        "target": target,
+        "ssh_key_mode": ssh_key_mode,
+        "ssh_public_key": public_key,
+        "required_cores": cores,
+        "required_memory_bytes": memory_bytes,
+        "target_hostname": target_hostname,
+        "target_numa_node_id": target_numa_id,
         "container_name": container_name,
-        "privileged": privileged,
-        "additional_mounts": additional_mounts,
-        "gpu_ids": gpu_ids,
+        "required_gpus": gpu_ids if gpu_ids else None,
     }
 
     try:
-        response = httpx.post(url, json=payload, timeout=30.0)
+        response = httpx.post(url, json=payload, timeout=60.0)
         response.raise_for_status()
         result = response.json()
         print(json.dumps(result, indent=2))
-        return result.get("task_ids", [])
+        return result
 
     except httpx.HTTPStatusError as e:
         logger.error(f"HTTP error: {e.response.status_code}")

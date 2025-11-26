@@ -1,4 +1,5 @@
 """Docker client wrapper using docker-py SDK."""
+
 import datetime
 import os
 import re
@@ -280,7 +281,9 @@ class DockerManager:
             case "apk":
                 install_cmd = "apk update && apk add --no-cache openssh"
             case "apt" | "apt-get":
-                install_cmd = f"{pkg_manager} update && {pkg_manager} install -y openssh-server"
+                install_cmd = (
+                    f"{pkg_manager} update && {pkg_manager} install -y openssh-server"
+                )
             case "dnf":
                 install_cmd = "dnf install -y openssh-server"
             case "yum":
@@ -549,9 +552,7 @@ class DockerManager:
             image = self.client.images.get(tag)
             created_str = image.attrs.get("Created", "")
             if created_str:
-                dt = datetime.datetime.fromisoformat(
-                    created_str.replace("Z", "+00:00")
-                )
+                dt = datetime.datetime.fromisoformat(created_str.replace("Z", "+00:00"))
                 return int(dt.timestamp())
             return None
         except ImageNotFound:
@@ -682,7 +683,9 @@ class DockerManager:
             self.stop_container(source_container)
 
             # Commit container to image
-            self.commit_container(source_container, f"hakuriver/{hakuriver_name}", "base")
+            self.commit_container(
+                source_container, f"hakuriver/{hakuriver_name}", "base"
+            )
 
             # Save to tarball
             self.save_image(hakuriver_tag, tarball_path)

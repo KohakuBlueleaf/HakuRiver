@@ -4,6 +4,7 @@ CLI entry point for the HakuRiver Runner agent.
 Usage:
     hakuriver.runner --config ~/.hakuriver/runner_config.py
 """
+
 import argparse
 import logging
 import sys

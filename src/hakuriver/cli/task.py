@@ -8,6 +8,7 @@ Usage:
     hakuriver.task stdout TASK_ID
     hakuriver.task stderr TASK_ID
 """
+
 import argparse
 import logging
 import sys
@@ -280,7 +281,9 @@ def main():
                         if i > 0 and len(waiting_for_ids) > 5:
                             time.sleep(0.05)
 
-                        current_status_data = api_client.get_task_status(task_id_to_check)
+                        current_status_data = api_client.get_task_status(
+                            task_id_to_check
+                        )
                         if current_status_data is None:
                             logger.warning(
                                 f"Could not get status for task {task_id_to_check}. Retrying..."

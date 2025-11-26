@@ -3,6 +3,7 @@ Health data collection background task.
 
 Collects and aggregates cluster health metrics.
 """
+
 import asyncio
 import datetime
 import logging
@@ -71,7 +72,8 @@ async def collate_health_data():
 
                 if (
                     node.last_heartbeat
-                    and node.last_heartbeat.isoformat() > aggregate_health["lastUpdated"]
+                    and node.last_heartbeat.isoformat()
+                    > aggregate_health["lastUpdated"]
                 ):
                     aggregate_health["lastUpdated"] = node.last_heartbeat.isoformat()
 

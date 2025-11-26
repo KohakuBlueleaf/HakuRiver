@@ -3,6 +3,7 @@ NUMA topology detection.
 
 Detects NUMA nodes and their CPU/memory assignments.
 """
+
 import logging
 import re
 import subprocess

@@ -8,6 +8,7 @@ Usage:
     hakuriver.client kill TASK_ID
     hakuriver.client command TASK_ID pause|resume
 """
+
 import argparse
 import logging
 import sys

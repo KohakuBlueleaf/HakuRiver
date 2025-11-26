@@ -4,6 +4,7 @@ Node management endpoints.
 Handles node registration, heartbeats, and status queries.
 Matches old core/host.py behavior for compatibility.
 """
+
 import datetime
 import json
 import logging
@@ -29,9 +30,7 @@ async def register_node(request: RegisterRequest):
     numa_topology = request.numa_topology
     gpu_info = request.gpu_info
 
-    logger.info(
-        f"Registering node: {hostname} at {url} with {total_cores} cores"
-    )
+    logger.info(f"Registering node: {hostname} at {url} with {total_cores} cores")
 
     # Upsert node
     node, created = Node.get_or_create(
@@ -108,10 +107,19 @@ async def heartbeat(hostname: str, request: HeartbeatRequest):
 
     # --- 1. Process killed tasks reported by runner ---
     if request.killed_tasks:
-        logger.info(f"Heartbeat from {hostname} reported killed tasks: {request.killed_tasks}")
+        logger.info(
+            f"Heartbeat from {hostname} reported killed tasks: {request.killed_tasks}"
+        )
         for killed_info in request.killed_tasks:
             task: Task | None = Task.get_or_none(Task.task_id == killed_info.task_id)
-            if task and task.status not in ["completed", "failed", "killed", "lost", "killed_oom", "stopped"]:
+            if task and task.status not in [
+                "completed",
+                "failed",
+                "killed",
+                "lost",
+                "killed_oom",
+                "stopped",
+            ]:
                 original_status = task.status
                 new_status = "killed_oom" if killed_info.reason == "oom" else "failed"
                 task.status = new_status
@@ -145,13 +153,15 @@ async def heartbeat(hostname: str, request: HeartbeatRequest):
             f"Reconciling {len(assigning_tasks)} assigning tasks on {hostname}. "
             f"Runner reports running: {runner_running_set}"
         )
-        heartbeat_interval = getattr(config, 'HEARTBEAT_INTERVAL_SECONDS', 30)
+        heartbeat_interval = getattr(config, "HEARTBEAT_INTERVAL_SECONDS", 30)
 
         for task in assigning_tasks:
             if task.task_id not in runner_running_set:
                 time_since_submit = now - task.submitted_at
                 # Increase suspicion if assigning for too long without confirmation
-                if time_since_submit > datetime.timedelta(seconds=heartbeat_interval * 3):
+                if time_since_submit > datetime.timedelta(
+                    seconds=heartbeat_interval * 3
+                ):
                     if task.assignment_suspicion_count < 2:
                         task.assignment_suspicion_count += 1
                         logger.warning(

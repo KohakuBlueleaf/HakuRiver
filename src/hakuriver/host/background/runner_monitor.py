@@ -3,6 +3,7 @@ Runner monitoring background task.
 
 Detects dead runners and marks their tasks as lost.
 """
+
 import asyncio
 import datetime
 import logging
@@ -25,15 +26,15 @@ async def check_dead_runners():
 
         # Calculate timeout threshold
         timeout_threshold = datetime.datetime.now() - datetime.timedelta(
-            seconds=config.HEARTBEAT_INTERVAL_SECONDS
-            * config.HEARTBEAT_TIMEOUT_FACTOR
+            seconds=config.HEARTBEAT_INTERVAL_SECONDS * config.HEARTBEAT_TIMEOUT_FACTOR
         )
 
         try:
             # Find nodes marked 'online' with stale heartbeats
             dead_nodes: list[Node] = list(
                 Node.select().where(
-                    (Node.status == "online") & (Node.last_heartbeat < timeout_threshold)
+                    (Node.status == "online")
+                    & (Node.last_heartbeat < timeout_threshold)
                 )
             )
 

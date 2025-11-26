@@ -4,6 +4,7 @@ Heartbeat background task.
 Sends periodic heartbeats to the host server.
 Matches old core/runner.py behavior for compatibility.
 """
+
 import asyncio
 import logging
 from typing import Callable
@@ -26,7 +27,9 @@ def report_killed_task(task_id: int, reason: str):
     killed_tasks_pending_report.append(
         HeartbeatKilledTaskInfo(task_id=task_id, reason=reason)
     )
-    logger.debug(f"Task {task_id} added to killed tasks pending report (reason: {reason})")
+    logger.debug(
+        f"Task {task_id} added to killed tasks pending report (reason: {reason})"
+    )
 
 
 async def send_heartbeat(

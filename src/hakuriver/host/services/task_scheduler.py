@@ -3,6 +3,7 @@ Task scheduling service.
 
 Handles task submission, assignment, and control operations.
 """
+
 import asyncio
 import datetime
 import json
@@ -36,7 +37,9 @@ async def send_task_to_runner(
     Returns:
         Runner response dict or None on failure.
     """
-    logger.debug(f"send_task_to_runner called: task_id={task.task_id}, runner_url={runner_url}")
+    logger.debug(
+        f"send_task_to_runner called: task_id={task.task_id}, runner_url={runner_url}"
+    )
     logger.debug(f"  container_name={container_name}, working_dir={working_dir}")
 
     payload = {
@@ -100,7 +103,9 @@ async def send_vps_task_to_runner(
     Returns:
         Runner response dict or None on failure.
     """
-    logger.debug(f"send_vps_task_to_runner called: task_id={task.task_id}, runner_url={runner_url}")
+    logger.debug(
+        f"send_vps_task_to_runner called: task_id={task.task_id}, runner_url={runner_url}"
+    )
     logger.debug(f"  container_name={container_name}")
 
     payload = {
@@ -113,7 +118,9 @@ async def send_vps_task_to_runner(
         "ssh_public_key": ssh_public_key,
         "ssh_port": task.ssh_port,
     }
-    logger.debug(f"  payload (truncated): task_id={task.task_id}, ssh_port={task.ssh_port}")
+    logger.debug(
+        f"  payload (truncated): task_id={task.task_id}, ssh_port={task.ssh_port}"
+    )
 
     logger.info(f"Sending VPS {task.task_id} to runner at {runner_url}")
 
@@ -173,9 +180,7 @@ async def send_kill_to_runner(runner_url: str, task_id: int, container_name: str
         # Update task message
         task: Task | None = Task.get_or_none(Task.task_id == task_id)
         if task and task.status == "killed":
-            task.error_message = (
-                f"{task.error_message or ''} | Runner unreachable: {e}"
-            )
+            task.error_message = f"{task.error_message or ''} | Runner unreachable: {e}"
             task.save()
 
     except httpx.HTTPStatusError as e:

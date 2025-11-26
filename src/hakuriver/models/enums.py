@@ -1,4 +1,5 @@
 """Enumeration types for HakuRiver."""
+
 from enum import Enum
 
 
@@ -38,3 +39,11 @@ class LogLevel(str, Enum):
     DEBUG = "debug"  # Debug and above
     INFO = "info"  # Info and above
     WARNING = "warning"  # Warning and above only
+
+
+class SSHKeyMode(str, Enum):
+    """SSH key mode for VPS creation."""
+
+    NONE = "none"  # No SSH key, passwordless root login
+    UPLOAD = "upload"  # User provides their public key
+    GENERATE = "generate"  # Generate keypair, return private key to user

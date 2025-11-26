@@ -3,6 +3,7 @@ Health monitoring endpoints.
 
 Provides cluster health metrics and history.
 """
+
 import logging
 
 from fastapi import APIRouter, HTTPException, Query

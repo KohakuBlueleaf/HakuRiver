@@ -3,6 +3,7 @@ Docker utility functions for image management.
 
 Provides functions for container tarball management and image syncing.
 """
+
 import datetime
 import json
 import logging
@@ -75,9 +76,7 @@ def get_local_image_timestamp(container_name: str) -> int | None:
         created_str = image.attrs.get("Created")
 
         if created_str:
-            dt_obj = datetime.datetime.fromisoformat(
-                created_str.replace("Z", "+00:00")
-            )
+            dt_obj = datetime.datetime.fromisoformat(created_str.replace("Z", "+00:00"))
             return int(dt_obj.timestamp())
         return None
 

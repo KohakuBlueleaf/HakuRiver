@@ -3,6 +3,7 @@ Runner configuration.
 
 A global Config instance that can be modified at runtime.
 """
+
 import getpass
 import os
 import socket

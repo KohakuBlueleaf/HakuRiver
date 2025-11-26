@@ -6,6 +6,7 @@ Usage:
     hakuriver.init config --generate   # Generate example config files
     hakuriver.init service --all       # Generate systemd service files
 """
+
 import argparse
 import getpass
 import logging
@@ -339,9 +340,12 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
 
     # Config subcommand
-    config_parser = subparsers.add_parser("config", help="Initialize configuration files")
+    config_parser = subparsers.add_parser(
+        "config", help="Initialize configuration files"
+    )
     config_parser.add_argument(
-        "--generate", "-g",
+        "--generate",
+        "-g",
         action="store_true",
         help="Generate example configuration files",
     )
@@ -356,14 +360,17 @@ def main():
         help="Generate runner configuration only",
     )
     config_parser.add_argument(
-        "--output-dir", "-o",
+        "--output-dir",
+        "-o",
         type=str,
         default=None,
         help=f"Output directory for config files (default: {get_default_config_dir()})",
     )
 
     # Service subcommand
-    service_parser = subparsers.add_parser("service", help="Create systemd service files")
+    service_parser = subparsers.add_parser(
+        "service", help="Create systemd service files"
+    )
     service_parser.add_argument(
         "--host",
         action="store_true",
@@ -415,7 +422,9 @@ def main():
         print()
         print("Examples:")
         print("  hakuriver.init config --generate       # Generate config files")
-        print("  hakuriver.init service --all --install # Create and install systemd services")
+        print(
+            "  hakuriver.init service --all --install # Create and install systemd services"
+        )
         return
 
     if args.command == "config":

@@ -1,4 +1,5 @@
 """Database models and utilities for HakuRiver."""
+
 from hakuriver.db.base import (
     BaseModel,
     close_database,

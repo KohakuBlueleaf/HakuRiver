@@ -3,6 +3,7 @@ SSH Proxy Server for Host.
 
 Handles incoming VPS SSH connections and routes them to the correct runner.
 """
+
 import asyncio
 import logging
 import re
@@ -44,7 +45,7 @@ async def handle_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
                 raise ValueError("Invalid request format.")
 
             # Extract and validate task_id
-            task_id_bytes = initial_request[len(REQUEST_TUNNEL_PREFIX):].strip()
+            task_id_bytes = initial_request[len(REQUEST_TUNNEL_PREFIX) :].strip()
 
             if not re.fullmatch(rb"\d+", task_id_bytes):
                 logger.warning(
@@ -108,9 +109,7 @@ async def handle_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
                 f"{log_prefix} Assigned node {task.assigned_node} "
                 f"for task {task_id_str} is not online."
             )
-            raise ValueError(
-                f"Assigned node for VPS task {task_id_str} is not online."
-            )
+            raise ValueError(f"Assigned node for VPS task {task_id_str} is not online.")
 
         # Extract Runner IP from node URL
         try:
@@ -127,9 +126,7 @@ async def handle_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
             )
 
         except Exception as url_e:
-            logger.error(
-                f"{log_prefix} Error parsing runner URL {node.url}: {url_e}"
-            )
+            logger.error(f"{log_prefix} Error parsing runner URL {node.url}: {url_e}")
             raise ValueError(f"Error parsing runner URL for node {node.hostname}.")
 
         # Connect to the Runner/VPS SSH Port

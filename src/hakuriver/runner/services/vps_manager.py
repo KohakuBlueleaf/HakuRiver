@@ -4,6 +4,7 @@ VPS management service.
 Handles VPS container creation and lifecycle management.
 Uses subprocess-based Docker execution (matching old behavior).
 """
+
 import asyncio
 import datetime
 import logging
@@ -46,7 +47,8 @@ def _detect_package_manager(image_name: str) -> str:
 def _build_vps_docker_command(
     docker_image_tag: str,
     task_id: int,
-    ssh_public_key: str,
+    ssh_key_mode: str,
+    ssh_public_key: str | None,
     mount_dirs: list[str],
     working_dir: str,
     cpu_cores: int,
@@ -57,8 +59,20 @@ def _build_vps_docker_command(
     """
     Build docker run command for VPS container.
 
-    Matches old vps_command_for_docker behavior.
-    Uses -p 0:22 to let Docker assign a random host port.
+    Args:
+        docker_image_tag: Docker image tag to use.
+        task_id: Task ID for the VPS.
+        ssh_key_mode: SSH key mode ("none", "upload", or "generate").
+        ssh_public_key: SSH public key (None for "none" mode).
+        mount_dirs: List of mount directories.
+        working_dir: Working directory in container.
+        cpu_cores: Number of CPU cores.
+        memory_limit_bytes: Memory limit in bytes.
+        gpu_ids: List of GPU indices.
+        privileged: Run with --privileged.
+
+    Returns:
+        Docker command as list of strings.
     """
     docker_cmd = ["docker", "run", "--restart", "unless-stopped", "-d"]
 
@@ -83,10 +97,12 @@ def _build_vps_docker_command(
             continue
         host_path, container_path, *options = parts
         option_str = ("," + ",".join(options)) if options else ""
-        docker_cmd.extend([
-            "--mount",
-            f"type=bind,source={host_path},target={container_path}{option_str}",
-        ])
+        docker_cmd.extend(
+            [
+                "--mount",
+                f"type=bind,source={host_path},target={container_path}{option_str}",
+            ]
+        )
 
     # Working directory
     if working_dir:
@@ -124,20 +140,47 @@ def _build_vps_docker_command(
         case _:
             setup_cmd = "apt update && apt install -y openssh-server"
 
-    # SSH setup and start
-    setup_cmd += (
-        " && "
-        "ssh-keygen -A && "
-        "echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config && "
-        "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "
-        "mkdir -p /run/sshd && "
-        "chmod 0755 /run/sshd && "
-        "mkdir -p /root/.ssh && "
-        f"echo '{ssh_public_key}' > /root/.ssh/authorized_keys && "
-        "chmod 700 /root/.ssh && "
-        "chmod 600 /root/.ssh/authorized_keys && "
-        "/usr/sbin/sshd -D -e"
-    )
+    # SSH setup based on key mode
+    setup_cmd += " && ssh-keygen -A && "
+
+    match ssh_key_mode:
+        case "none":
+            # No SSH key mode - enable password-less root login
+            # Allow empty password and permit root login without password
+            setup_cmd += (
+                "echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config && "
+                "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "
+                "echo 'PermitEmptyPasswords yes' >> /etc/ssh/sshd_config && "
+                # Remove root password (allow empty password login)
+                "passwd -d root && "
+                "mkdir -p /run/sshd && "
+                "chmod 0755 /run/sshd && "
+                "/usr/sbin/sshd -D -e"
+            )
+            logger.info(
+                f"VPS {task_id}: Configured for passwordless root login (no SSH key)"
+            )
+
+        case "upload" | "generate":
+            # SSH key mode - standard pubkey auth
+            if not ssh_public_key:
+                raise ValueError(f"ssh_public_key required for mode '{ssh_key_mode}'")
+
+            setup_cmd += (
+                "echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config && "
+                "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "
+                "mkdir -p /run/sshd && "
+                "chmod 0755 /run/sshd && "
+                "mkdir -p /root/.ssh && "
+                f"echo '{ssh_public_key}' > /root/.ssh/authorized_keys && "
+                "chmod 700 /root/.ssh && "
+                "chmod 600 /root/.ssh/authorized_keys && "
+                "/usr/sbin/sshd -D -e"
+            )
+            logger.info(f"VPS {task_id}: Configured with SSH public key authentication")
+
+        case _:
+            raise ValueError(f"Invalid ssh_key_mode: {ssh_key_mode}")
 
     # Add image and command
     docker_cmd.append(docker_image_tag)
@@ -174,7 +217,8 @@ async def create_vps(
     required_memory_bytes: int | None,
     target_numa_node_id: int | None,
     container_name: str,
-    ssh_public_key: str,
+    ssh_key_mode: str,
+    ssh_public_key: str | None,
     ssh_port: int,
     task_store: TaskStateStore,
 ) -> dict:
@@ -188,7 +232,8 @@ async def create_vps(
         required_memory_bytes: Memory limit in bytes.
         target_numa_node_id: Target NUMA node ID.
         container_name: Base container image name.
-        ssh_public_key: SSH public key for access.
+        ssh_key_mode: SSH key mode ("none", "upload", or "generate").
+        ssh_public_key: SSH public key for access (None for "none" mode).
         ssh_port: SSH port to expose.
         task_store: Task state store.
 
@@ -198,25 +243,31 @@ async def create_vps(
     start_time = datetime.datetime.now()
 
     # Report pending status
-    await report_status_to_host(TaskStatusUpdate(
-        task_id=task_id,
-        status="pending",
-    ))
+    await report_status_to_host(
+        TaskStatusUpdate(
+            task_id=task_id,
+            status="pending",
+        )
+    )
 
     # =========================================================================
     # Step 1: Ensure Docker image is synced from shared storage
     # =========================================================================
-    logger.info(f"VPS {task_id}: Checking Docker image sync status for '{container_name}'")
+    logger.info(
+        f"VPS {task_id}: Checking Docker image sync status for '{container_name}'"
+    )
 
     if not await ensure_docker_image_synced(task_id, container_name):
         error_message = f"Docker image sync failed for container '{container_name}'"
         logger.error(f"VPS {task_id}: {error_message}")
-        await report_status_to_host(TaskStatusUpdate(
-            task_id=task_id,
-            status="failed",
-            message=error_message,
-            completed_at=datetime.datetime.now(),
-        ))
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="failed",
+                message=error_message,
+                completed_at=datetime.datetime.now(),
+            )
+        )
         return {
             "success": False,
             "error": error_message,
@@ -241,6 +292,7 @@ async def create_vps(
     docker_cmd = _build_vps_docker_command(
         docker_image_tag=docker_image_tag,
         task_id=task_id,
+        ssh_key_mode=ssh_key_mode,
         ssh_public_key=ssh_public_key,
         mount_dirs=mount_dirs,
         working_dir="/shared",
@@ -267,15 +319,19 @@ async def create_vps(
         )
 
         if exit_code != 0:
-            error_message = f"Docker run failed: {stderr.decode(errors='replace').strip()}"
+            error_message = (
+                f"Docker run failed: {stderr.decode(errors='replace').strip()}"
+            )
             logger.error(f"VPS {task_id}: {error_message}")
-            await report_status_to_host(TaskStatusUpdate(
-                task_id=task_id,
-                status="failed",
-                message=error_message,
-                exit_code=exit_code,
-                completed_at=datetime.datetime.now(),
-            ))
+            await report_status_to_host(
+                TaskStatusUpdate(
+                    task_id=task_id,
+                    status="failed",
+                    message=error_message,
+                    exit_code=exit_code,
+                    completed_at=datetime.datetime.now(),
+                )
+            )
             return {
                 "success": False,
                 "error": error_message,
@@ -288,12 +344,14 @@ async def create_vps(
         if not actual_ssh_port:
             error_message = "Failed to find SSH port after container started"
             logger.error(f"VPS {task_id}: {error_message}")
-            await report_status_to_host(TaskStatusUpdate(
-                task_id=task_id,
-                status="failed",
-                message=error_message,
-                completed_at=datetime.datetime.now(),
-            ))
+            await report_status_to_host(
+                TaskStatusUpdate(
+                    task_id=task_id,
+                    status="failed",
+                    message=error_message,
+                    completed_at=datetime.datetime.now(),
+                )
+            )
             return {
                 "success": False,
                 "error": error_message,
@@ -309,14 +367,18 @@ async def create_vps(
         )
 
         # Report running status with SSH port
-        await report_status_to_host(TaskStatusUpdate(
-            task_id=task_id,
-            status="running",
-            started_at=start_time,
-            ssh_port=actual_ssh_port,
-        ))
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="running",
+                started_at=start_time,
+                ssh_port=actual_ssh_port,
+            )
+        )
 
-        logger.info(f"VPS {task_id} started in container {container_name_full}, SSH port: {actual_ssh_port}")
+        logger.info(
+            f"VPS {task_id} started in container {container_name_full}, SSH port: {actual_ssh_port}"
+        )
 
         return {
             "success": True,
@@ -330,12 +392,14 @@ async def create_vps(
         logger.debug(format_traceback(e))
 
         # Report failure
-        await report_status_to_host(TaskStatusUpdate(
-            task_id=task_id,
-            status="failed",
-            message=error_message,
-            completed_at=datetime.datetime.now(),
-        ))
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="failed",
+                message=error_message,
+                completed_at=datetime.datetime.now(),
+            )
+        )
 
         return {
             "success": False,
@@ -383,7 +447,9 @@ def stop_vps(
         return True
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to stop VPS {task_id}: {e.stderr.decode() if e.stderr else e}")
+        logger.error(
+            f"Failed to stop VPS {task_id}: {e.stderr.decode() if e.stderr else e}"
+        )
         return False
     except Exception as e:
         logger.error(f"Failed to stop VPS {task_id}: {e}")
@@ -417,7 +483,9 @@ def pause_vps(
         return True
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to pause VPS {task_id}: {e.stderr.decode() if e.stderr else e}")
+        logger.error(
+            f"Failed to pause VPS {task_id}: {e.stderr.decode() if e.stderr else e}"
+        )
         return False
     except Exception as e:
         logger.error(f"Failed to pause VPS {task_id}: {e}")
@@ -451,7 +519,9 @@ def resume_vps(
         return True
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to resume VPS {task_id}: {e.stderr.decode() if e.stderr else e}")
+        logger.error(
+            f"Failed to resume VPS {task_id}: {e.stderr.decode() if e.stderr else e}"
+        )
         return False
     except Exception as e:
         logger.error(f"Failed to resume VPS {task_id}: {e}")

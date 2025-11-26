@@ -4,6 +4,7 @@ CLI entry point for the HakuRiver Host server.
 Usage:
     hakuriver.host --config ~/.hakuriver/host_config.py
 """
+
 import argparse
 import logging
 import sys

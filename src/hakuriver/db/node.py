@@ -1,4 +1,5 @@
 """Node database model."""
+
 import datetime
 import json
 
@@ -109,7 +110,9 @@ class Node(BaseModel):
             "total_cores": self.total_cores,
             "memory_total_bytes": self.memory_total_bytes,
             "status": self.status,
-            "last_heartbeat": self.last_heartbeat.isoformat() if self.last_heartbeat else None,
+            "last_heartbeat": (
+                self.last_heartbeat.isoformat() if self.last_heartbeat else None
+            ),
             "cpu_percent": self.cpu_percent,
             "memory_percent": self.memory_percent,
             "memory_used_bytes": self.memory_used_bytes,

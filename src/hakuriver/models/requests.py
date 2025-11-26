@@ -1,4 +1,5 @@
 """Pydantic models for API requests and responses."""
+
 import datetime
 
 from pydantic import BaseModel, Field
@@ -16,15 +17,29 @@ class TaskSubmitRequest(BaseModel):
 
     command: str = Field(..., description="Command to execute")
     arguments: list[str] = Field(default_factory=list, description="Command arguments")
-    env_vars: dict[str, str] = Field(default_factory=dict, description="Environment variables")
-    required_cores: int = Field(default=1, ge=1, description="Number of CPU cores required")
+    env_vars: dict[str, str] = Field(
+        default_factory=dict, description="Environment variables"
+    )
+    required_cores: int = Field(
+        default=1, ge=1, description="Number of CPU cores required"
+    )
     required_gpus: int = Field(default=0, ge=0, description="Number of GPUs required")
-    required_memory_bytes: int | None = Field(default=None, description="Memory requirement in bytes")
-    target_node: str | None = Field(default=None, description="Target node hostname (None=auto)")
-    target_numa_node_id: int | None = Field(default=None, description="Target NUMA node ID")
-    container_name: str | None = Field(default=None, description="Container environment name")
+    required_memory_bytes: int | None = Field(
+        default=None, description="Memory requirement in bytes"
+    )
+    target_node: str | None = Field(
+        default=None, description="Target node hostname (None=auto)"
+    )
+    target_numa_node_id: int | None = Field(
+        default=None, description="Target NUMA node ID"
+    )
+    container_name: str | None = Field(
+        default=None, description="Container environment name"
+    )
     docker_privileged: bool = Field(default=False, description="Run with --privileged")
-    docker_mount_dirs: list[str] = Field(default_factory=list, description="Additional mount dirs")
+    docker_mount_dirs: list[str] = Field(
+        default_factory=list, description="Additional mount dirs"
+    )
 
 
 class TaskSubmission(BaseModel):
@@ -34,31 +49,39 @@ class TaskSubmission(BaseModel):
     Supports both 'command' and 'vps' task types.
     For VPS: command field stores the SSH public key.
     """
-    task_type: str = Field(default="command", description="Task type: 'command' or 'vps'")
-    command: str = Field(default="", description="Command to execute (or SSH public key for VPS)")
+
+    task_type: str = Field(
+        default="command", description="Task type: 'command' or 'vps'"
+    )
+    command: str = Field(
+        default="", description="Command to execute (or SSH public key for VPS)"
+    )
     arguments: list[str] = Field(default_factory=list, description="Command arguments")
-    env_vars: dict[str, str] = Field(default_factory=dict, description="Environment variables")
-    required_cores: int = Field(default=1, ge=0, description="Number of CPU cores required")
+    env_vars: dict[str, str] = Field(
+        default_factory=dict, description="Environment variables"
+    )
+    required_cores: int = Field(
+        default=1, ge=0, description="Number of CPU cores required"
+    )
     required_gpus: list[list[int]] | None = Field(
         default=None,
-        description="List of GPU IDs for each target (one list per target)"
+        description="List of GPU IDs for each target (one list per target)",
     )
-    required_memory_bytes: int | None = Field(default=None, ge=0, description="Memory limit in bytes")
+    required_memory_bytes: int | None = Field(
+        default=None, ge=0, description="Memory limit in bytes"
+    )
     targets: list[str] | None = Field(
         default=None,
-        description='List of targets, e.g., ["host1", "host2:0", "host1:1"]'
+        description='List of targets, e.g., ["host1", "host2:0", "host1:1"]',
     )
     container_name: str | None = Field(
-        default=None,
-        description="Override default container name"
+        default=None, description="Override default container name"
     )
     privileged: bool | None = Field(
-        default=None,
-        description="Override default privileged setting"
+        default=None, description="Override default privileged setting"
     )
     additional_mounts: list[str] | None = Field(
-        default=None,
-        description="Override default additional mounts"
+        default=None, description="Override default additional mounts"
     )
 
 
@@ -80,7 +103,13 @@ class TaskExecuteRequest(BaseModel):
 
 
 class VPSSubmission(BaseModel):
-    """VPS submission request (host API) - kept for backward compatibility."""
+    """VPS submission request (host API).
+
+    Supports three SSH key modes:
+    - none: No SSH key, passwordless root login (uses task_id as implicit auth)
+    - upload: User provides their public key (default behavior)
+    - generate: Server generates keypair, returns private key
+    """
 
     required_cores: int = 1
     required_gpus: list[int] | None = None  # GPU indices as integers
@@ -88,7 +117,8 @@ class VPSSubmission(BaseModel):
     target_hostname: str | None = None
     target_numa_node_id: int | None = None
     container_name: str | None = None
-    ssh_public_key: str
+    ssh_key_mode: str = "upload"  # "none", "upload", or "generate"
+    ssh_public_key: str | None = None  # Required if ssh_key_mode is "upload"
 
 
 class VPSCreateRequest(BaseModel):
@@ -100,14 +130,17 @@ class VPSCreateRequest(BaseModel):
     required_memory_bytes: int | None = None
     target_numa_node_id: int | None = None
     container_name: str
-    ssh_public_key: str
+    ssh_key_mode: str = "upload"  # "none", "upload", or "generate"
+    ssh_public_key: str | None = None  # Required if ssh_key_mode is "upload"
     ssh_port: int
 
 
 class TaskKillRequest(BaseModel):
     """Request body for task kill."""
 
-    signal: str = Field(default="SIGTERM", description="Signal to send (SIGTERM, SIGKILL, etc.)")
+    signal: str = Field(
+        default="SIGTERM", description="Signal to send (SIGTERM, SIGKILL, etc.)"
+    )
 
 
 class TaskControlRequest(BaseModel):
@@ -206,8 +239,12 @@ class HeartbeatRequest(BaseModel):
     Matches old HeartbeatData model for compatibility.
     """
 
-    running_tasks: list[int] = Field(default_factory=list, description="List of running task IDs on this runner")
-    killed_tasks: list[HeartbeatKilledTaskInfo] = Field(default_factory=list, description="Tasks killed by runner")
+    running_tasks: list[int] = Field(
+        default_factory=list, description="List of running task IDs on this runner"
+    )
+    killed_tasks: list[HeartbeatKilledTaskInfo] = Field(
+        default_factory=list, description="Tasks killed by runner"
+    )
     cpu_percent: float | None = None
     memory_percent: float | None = None
     memory_used_bytes: int | None = None

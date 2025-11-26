@@ -1,4 +1,5 @@
 """Database base configuration and utilities."""
+
 import asyncio
 
 import peewee

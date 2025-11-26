@@ -3,6 +3,7 @@ Node management service.
 
 Handles node registration, heartbeats, and resource calculations.
 """
+
 import json
 import logging
 from collections import defaultdict
@@ -57,7 +58,9 @@ def get_node_available_gpus(node: Node) -> set[int]:
             gpus = json.loads(task.required_gpus)
             used_gpus.update(gpus)
 
-    logger.debug(f"Node {node.hostname}: all_gpus={all_gpu_ids}, used={used_gpus}, available={all_gpu_ids - used_gpus}")
+    logger.debug(
+        f"Node {node.hostname}: all_gpus={all_gpu_ids}, used={used_gpus}, available={all_gpu_ids - used_gpus}"
+    )
     return all_gpu_ids - used_gpus
 
 
@@ -202,18 +205,20 @@ def get_all_nodes_status() -> list[dict]:
             used = cores_in_use.get(node.hostname, 0)
             available = node.total_cores - used
 
-        result.append({
-            "hostname": node.hostname,
-            "url": node.url,
-            "total_cores": node.total_cores,
-            "cores_in_use": used,
-            "available_cores": available,
-            "status": node.status,
-            "last_heartbeat": (
-                node.last_heartbeat.isoformat() if node.last_heartbeat else None
-            ),
-            "numa_topology": node.get_numa_topology(),
-            "gpu_info": node.get_gpu_info(),
-        })
+        result.append(
+            {
+                "hostname": node.hostname,
+                "url": node.url,
+                "total_cores": node.total_cores,
+                "cores_in_use": used,
+                "available_cores": available,
+                "status": node.status,
+                "last_heartbeat": (
+                    node.last_heartbeat.isoformat() if node.last_heartbeat else None
+                ),
+                "numa_topology": node.get_numa_topology(),
+                "gpu_info": node.get_gpu_info(),
+            }
+        )
 
     return result

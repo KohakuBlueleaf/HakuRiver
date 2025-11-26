@@ -4,6 +4,7 @@ Startup check background task.
 Verifies running containers on startup and reports status.
 Handles VPS port recovery after runner restart.
 """
+
 import datetime
 import logging
 import subprocess
@@ -78,13 +79,15 @@ async def startup_check(task_store: TaskStateStore):
                 "Reporting as stopped."
             )
 
-            await report_status_to_host(TaskStatusUpdate(
-                task_id=task_id,
-                status="stopped",
-                exit_code=-1,
-                message="Container not found on runner startup (runner may have restarted).",
-                completed_at=datetime.datetime.now(),
-            ))
+            await report_status_to_host(
+                TaskStatusUpdate(
+                    task_id=task_id,
+                    status="stopped",
+                    exit_code=-1,
+                    message="Container not found on runner startup (runner may have restarted).",
+                    completed_at=datetime.datetime.now(),
+                )
+            )
 
             task_store.remove_task(task_id)
 
@@ -122,13 +125,15 @@ async def startup_check(task_store: TaskStateStore):
                     except Exception as e:
                         logger.error(f"Failed to stop broken VPS container: {e}")
 
-                    await report_status_to_host(TaskStatusUpdate(
-                        task_id=task_id,
-                        status="stopped",
-                        exit_code=-1,
-                        message="VPS lost SSH port binding after restart.",
-                        completed_at=datetime.datetime.now(),
-                    ))
+                    await report_status_to_host(
+                        TaskStatusUpdate(
+                            task_id=task_id,
+                            status="stopped",
+                            exit_code=-1,
+                            message="VPS lost SSH port binding after restart.",
+                            completed_at=datetime.datetime.now(),
+                        )
+                    )
 
                     task_store.remove_task(task_id)
                     continue
@@ -174,12 +179,14 @@ async def startup_check(task_store: TaskStateStore):
                         numa_node=None,
                     )
                     # Report running status to host with SSH port
-                    await report_status_to_host(TaskStatusUpdate(
-                        task_id=task_id,
-                        status="running",
-                        message=f"VPS recovered after runner restart",
-                        ssh_port=ssh_port,
-                    ))
+                    await report_status_to_host(
+                        TaskStatusUpdate(
+                            task_id=task_id,
+                            status="running",
+                            message=f"VPS recovered after runner restart",
+                            ssh_port=ssh_port,
+                        )
+                    )
                 else:
                     # VPS without SSH port - clean up
                     logger.warning(
@@ -189,9 +196,13 @@ async def startup_check(task_store: TaskStateStore):
                     try:
                         docker_manager.stop_container(container.name, timeout=10)
                         docker_manager.remove_container(container.name)
-                        logger.info(f"Successfully cleaned up broken VPS {container.name}")
+                        logger.info(
+                            f"Successfully cleaned up broken VPS {container.name}"
+                        )
                     except Exception as e:
-                        logger.error(f"Failed to cleanup broken VPS {container.name}: {e}")
+                        logger.error(
+                            f"Failed to cleanup broken VPS {container.name}: {e}"
+                        )
             else:
                 # Regular task container - clean up
                 logger.warning(
@@ -201,6 +212,10 @@ async def startup_check(task_store: TaskStateStore):
                 try:
                     docker_manager.stop_container(container.name, timeout=10)
                     docker_manager.remove_container(container.name)
-                    logger.info(f"Successfully cleaned up orphan container {container.name}")
+                    logger.info(
+                        f"Successfully cleaned up orphan container {container.name}"
+                    )
                 except Exception as e:
-                    logger.error(f"Failed to cleanup orphan container {container.name}: {e}")
+                    logger.error(
+                        f"Failed to cleanup orphan container {container.name}: {e}"
+                    )

@@ -1,4 +1,5 @@
 """Task database model."""
+
 import datetime
 import json
 
@@ -202,7 +203,11 @@ class Task(BaseModel):
             "stderr_path": self.stderr_path,
             "exit_code": self.exit_code,
             "error_message": self.error_message,
-            "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,
+            "submitted_at": (
+                self.submitted_at.isoformat() if self.submitted_at else None
+            ),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
         }

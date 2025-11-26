@@ -2,11 +2,19 @@
 VPS (Virtual Private Server) endpoints.
 
 Handles VPS container creation and management.
+
+Supports three SSH key modes:
+- none: No SSH key, passwordless root login
+- upload: User provides their public key
+- generate: Server generates keypair, returns private key to CLI
 """
+
 import asyncio
 import datetime
 import json
 import logging
+import subprocess
+import tempfile
 
 import peewee
 from fastapi import APIRouter, HTTPException
@@ -27,11 +35,60 @@ router = APIRouter()
 background_tasks: set[asyncio.Task] = set()
 
 
+def _generate_ssh_keypair_for_vps(task_id: int) -> tuple[str, str]:
+    """
+    Generate an SSH keypair for VPS.
+
+    Args:
+        task_id: Task ID to use in key comment.
+
+    Returns:
+        Tuple of (private_key_content, public_key_content).
+
+    Raises:
+        RuntimeError: If key generation fails.
+    """
+    import os
+
+    # Create temp directory for key generation
+    with tempfile.TemporaryDirectory() as tmpdir:
+        key_path = os.path.join(tmpdir, "id_ed25519")
+
+        cmd = [
+            "ssh-keygen",
+            "-t",
+            "ed25519",
+            "-f",
+            key_path,
+            "-N",
+            "",  # Empty passphrase
+            "-q",  # Quiet
+            "-C",
+            f"hakuriver-vps-{task_id}",
+        ]
+
+        try:
+            subprocess.run(cmd, check=True, capture_output=True)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to generate SSH keypair: {e.stderr.decode()}")
+        except FileNotFoundError:
+            raise RuntimeError("ssh-keygen not found. Please install OpenSSH.")
+
+        # Read generated keys
+        with open(key_path, "r") as f:
+            private_key = f.read()
+        with open(f"{key_path}.pub", "r") as f:
+            public_key = f.read().strip()
+
+        return private_key, public_key
+
+
 async def send_vps_to_runner(
     runner_url: str,
     task: Task,
     container_name: str,
-    ssh_public_key: str,
+    ssh_key_mode: str,
+    ssh_public_key: str | None,
 ) -> dict | None:
     """
     Send VPS creation request to a runner.
@@ -40,7 +97,8 @@ async def send_vps_to_runner(
         runner_url: Runner's HTTP URL.
         task: Task record for the VPS.
         container_name: Docker container base image.
-        ssh_public_key: SSH public key for VPS access.
+        ssh_key_mode: SSH key mode ("none", "upload", or "generate").
+        ssh_public_key: SSH public key for VPS access (None for "none" mode).
 
     Returns:
         Runner response dict or None on failure.
@@ -54,11 +112,14 @@ async def send_vps_to_runner(
         "required_memory_bytes": task.required_memory_bytes,
         "target_numa_node_id": task.target_numa_node_id,
         "container_name": container_name,
+        "ssh_key_mode": ssh_key_mode,
         "ssh_public_key": ssh_public_key,
         "ssh_port": task.ssh_port,
     }
 
-    logger.info(f"Sending VPS {task.task_id} to runner at {runner_url}")
+    logger.info(
+        f"Sending VPS {task.task_id} to runner at {runner_url} (ssh_key_mode={ssh_key_mode})"
+    )
 
     try:
         async with httpx.AsyncClient() as client:
@@ -110,7 +171,25 @@ def allocate_ssh_port() -> int:
 @router.post("/vps/create")
 async def submit_vps(submission: VPSSubmission):
     """Submit a new VPS for creation."""
-    logger.info(f"Received VPS submission for {submission.required_cores} cores")
+    logger.info(
+        f"Received VPS submission for {submission.required_cores} cores "
+        f"(ssh_key_mode={submission.ssh_key_mode})"
+    )
+
+    # Validate SSH key mode
+    ssh_key_mode = submission.ssh_key_mode or "upload"
+    if ssh_key_mode not in ("none", "upload", "generate"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid ssh_key_mode: {ssh_key_mode}. Must be 'none', 'upload', or 'generate'.",
+        )
+
+    # Validate public key is provided for upload mode
+    if ssh_key_mode == "upload" and not submission.ssh_public_key:
+        raise HTTPException(
+            status_code=400,
+            detail="ssh_public_key is required when ssh_key_mode is 'upload'.",
+        )
 
     # Find suitable node
     node = find_suitable_node(
@@ -134,13 +213,41 @@ async def submit_vps(submission: VPSSubmission):
     # Get container name
     container_name = submission.container_name or config.DEFAULT_CONTAINER_NAME
 
+    # Handle SSH key based on mode
+    ssh_public_key = None
+    ssh_private_key = None
+
+    match ssh_key_mode:
+        case "none":
+            # No SSH key - passwordless root
+            ssh_public_key = None
+            logger.info(f"VPS {task_id}: No SSH key mode (passwordless root)")
+
+        case "upload":
+            # User provided key
+            ssh_public_key = submission.ssh_public_key
+            logger.info(f"VPS {task_id}: Using uploaded SSH key")
+
+        case "generate":
+            # Generate keypair on host
+            try:
+                ssh_private_key, ssh_public_key = _generate_ssh_keypair_for_vps(task_id)
+                logger.info(f"VPS {task_id}: Generated SSH keypair")
+            except RuntimeError as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to generate SSH keypair: {e}",
+                )
+
     # Create task record
     task = Task.create(
         task_id=task_id,
         task_type="vps",
         command="vps",
         required_cores=submission.required_cores,
-        required_gpus=json.dumps(submission.required_gpus) if submission.required_gpus else "[]",
+        required_gpus=(
+            json.dumps(submission.required_gpus) if submission.required_gpus else "[]"
+        ),
         required_memory_bytes=submission.required_memory_bytes,
         target_numa_node_id=submission.target_numa_node_id,
         assigned_node=node.hostname,
@@ -156,7 +263,8 @@ async def submit_vps(submission: VPSSubmission):
         runner_url=node.url,
         task=task,
         container_name=container_name,
-        ssh_public_key=submission.ssh_public_key,
+        ssh_key_mode=ssh_key_mode,
+        ssh_public_key=ssh_public_key,
     )
 
     if result is None:
@@ -169,9 +277,10 @@ async def submit_vps(submission: VPSSubmission):
             detail="Failed to create VPS on runner.",
         )
 
-    return {
+    response = {
         "message": "VPS created successfully.",
         "task_id": str(task_id),
+        "ssh_key_mode": ssh_key_mode,
         "ssh_port": ssh_port,
         "assigned_node": {
             "hostname": node.hostname,
@@ -179,6 +288,13 @@ async def submit_vps(submission: VPSSubmission):
         },
         "runner_response": result,
     }
+
+    # Include generated keys in response (for "generate" mode)
+    if ssh_key_mode == "generate" and ssh_private_key:
+        response["ssh_private_key"] = ssh_private_key
+        response["ssh_public_key"] = ssh_public_key
+
+    return response
 
 
 @router.get("/vps")
@@ -198,25 +314,29 @@ async def get_vps_list():
 
         vps_list = []
         for task in query:
-            node_hostname = task.assigned_node if isinstance(task.assigned_node, str) else (
-                task.assigned_node.hostname if task.assigned_node else None
+            node_hostname = (
+                task.assigned_node
+                if isinstance(task.assigned_node, str)
+                else (task.assigned_node.hostname if task.assigned_node else None)
             )
-            vps_list.append({
-                "task_id": str(task.task_id),
-                "required_cores": task.required_cores,
-                "required_gpus": (
-                    json.loads(task.required_gpus) if task.required_gpus else []
-                ),
-                "required_memory_bytes": task.required_memory_bytes,
-                "status": task.status,
-                "assigned_node": node_hostname,
-                "target_numa_node_id": task.target_numa_node_id,
-                "exit_code": task.exit_code,
-                "error_message": task.error_message,
-                "submitted_at": task.submitted_at,
-                "started_at": task.started_at,
-                "completed_at": task.completed_at,
-            })
+            vps_list.append(
+                {
+                    "task_id": str(task.task_id),
+                    "required_cores": task.required_cores,
+                    "required_gpus": (
+                        json.loads(task.required_gpus) if task.required_gpus else []
+                    ),
+                    "required_memory_bytes": task.required_memory_bytes,
+                    "status": task.status,
+                    "assigned_node": node_hostname,
+                    "target_numa_node_id": task.target_numa_node_id,
+                    "exit_code": task.exit_code,
+                    "error_message": task.error_message,
+                    "submitted_at": task.submitted_at,
+                    "started_at": task.started_at,
+                    "completed_at": task.completed_at,
+                }
+            )
 
         return vps_list
 
@@ -246,24 +366,26 @@ async def get_active_vps_status():
 
         vps_list = []
         for task in query:
-            vps_list.append({
-                "task_id": str(task.task_id),
-                "status": task.status,
-                "assigned_node": task.assigned_node,
-                "target_numa_node_id": task.target_numa_node_id,
-                "required_cores": task.required_cores,
-                "required_gpus": (
-                    json.loads(task.required_gpus) if task.required_gpus else []
-                ),
-                "required_memory_bytes": task.required_memory_bytes,
-                "submitted_at": (
-                    task.submitted_at.isoformat() if task.submitted_at else None
-                ),
-                "started_at": (
-                    task.started_at.isoformat() if task.started_at else None
-                ),
-                "ssh_port": task.ssh_port,
-            })
+            vps_list.append(
+                {
+                    "task_id": str(task.task_id),
+                    "status": task.status,
+                    "assigned_node": task.assigned_node,
+                    "target_numa_node_id": task.target_numa_node_id,
+                    "required_cores": task.required_cores,
+                    "required_gpus": (
+                        json.loads(task.required_gpus) if task.required_gpus else []
+                    ),
+                    "required_memory_bytes": task.required_memory_bytes,
+                    "submitted_at": (
+                        task.submitted_at.isoformat() if task.submitted_at else None
+                    ),
+                    "started_at": (
+                        task.started_at.isoformat() if task.started_at else None
+                    ),
+                    "ssh_port": task.ssh_port,
+                }
+            )
 
         return vps_list
 
@@ -313,8 +435,7 @@ async def stop_vps(task_id: int):
         node = Node.get_or_none(Node.hostname == task.assigned_node)
         if node and node.status == "online":
             logger.info(
-                f"Requesting stop from runner {node.hostname} "
-                f"for VPS {task_id}"
+                f"Requesting stop from runner {node.hostname} " f"for VPS {task_id}"
             )
             stop_task = asyncio.create_task(
                 send_kill_to_runner(node.url, task_id, container_name)

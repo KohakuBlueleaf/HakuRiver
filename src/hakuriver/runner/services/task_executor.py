@@ -4,6 +4,7 @@ Task execution service.
 Handles Docker container creation and task lifecycle management.
 Uses subprocess-based Docker execution for task containers (matching old behavior).
 """
+
 import asyncio
 import datetime
 import functools
@@ -28,7 +29,9 @@ logger = logging.getLogger(__name__)
 docker_sync_lock = asyncio.Lock()
 
 
-def _run_docker_command(cmd: list[str], check: bool = False, timeout: int | None = None) -> subprocess.CompletedProcess:
+def _run_docker_command(
+    cmd: list[str], check: bool = False, timeout: int | None = None
+) -> subprocess.CompletedProcess:
     """
     Run a Docker command via subprocess.
 
@@ -76,8 +79,12 @@ async def report_status_to_host(update: TaskStatusUpdate):
         update: Task status update data.
     """
     host_url = f"http://{config.HOST_ADDRESS}:{config.HOST_PORT}"
-    logger.debug(f"[Task {update.task_id}] report_status_to_host called: status={update.status}")
-    logger.info(f"[Task {update.task_id}] Reporting status '{update.status}' to host {host_url}")
+    logger.debug(
+        f"[Task {update.task_id}] report_status_to_host called: status={update.status}"
+    )
+    logger.info(
+        f"[Task {update.task_id}] Reporting status '{update.status}' to host {host_url}"
+    )
 
     try:
         async with httpx.AsyncClient() as client:
@@ -87,19 +94,21 @@ async def report_status_to_host(update: TaskStatusUpdate):
                 timeout=15.0,
             )
             response.raise_for_status()
-        logger.info(f"[Task {update.task_id}] Host acknowledged status update: {update.status}")
+        logger.info(
+            f"[Task {update.task_id}] Host acknowledged status update: {update.status}"
+        )
 
     except httpx.RequestError as e:
-        logger.error(
-            f"[Task {update.task_id}] Failed to report status to host: {e}"
-        )
+        logger.error(f"[Task {update.task_id}] Failed to report status to host: {e}")
     except httpx.HTTPStatusError as e:
         logger.error(
             f"[Task {update.task_id}] Host rejected status update: "
             f"{e.response.status_code} - {e.response.text}"
         )
     except Exception as e:
-        logger.exception(f"[Task {update.task_id}] Unexpected error reporting status: {e}")
+        logger.exception(
+            f"[Task {update.task_id}] Unexpected error reporting status: {e}"
+        )
 
 
 async def ensure_docker_image_synced(task_id: int, container_name: str) -> bool:
@@ -119,7 +128,9 @@ async def ensure_docker_image_synced(task_id: int, container_name: str) -> bool:
         True if image is ready, False if sync failed.
     """
     container_tar_dir = config.get_container_tar_dir()
-    logger.debug(f"[Task {task_id}] ensure_docker_image_synced: container={container_name}, tar_dir={container_tar_dir}")
+    logger.debug(
+        f"[Task {task_id}] ensure_docker_image_synced: container={container_name}, tar_dir={container_tar_dir}"
+    )
 
     try:
         async with docker_sync_lock:
@@ -130,7 +141,9 @@ async def ensure_docker_image_synced(task_id: int, container_name: str) -> bool:
             needs_sync, sync_path = docker_utils.needs_sync(
                 container_name, container_tar_dir
             )
-            logger.debug(f"[Task {task_id}] needs_sync={needs_sync}, sync_path={sync_path}")
+            logger.debug(
+                f"[Task {task_id}] needs_sync={needs_sync}, sync_path={sync_path}"
+            )
 
             if not needs_sync:
                 logger.info(
@@ -222,7 +235,9 @@ def build_docker_run_command(
     logger.debug(f"[Task {task_id}]   working_dir={working_dir}")
     logger.debug(f"[Task {task_id}]   stdout={stdout_path}, stderr={stderr_path}")
     logger.debug(f"[Task {task_id}]   numa_prefix={numa_prefix}")
-    logger.debug(f"[Task {task_id}]   cores={required_cores}, mem={required_memory_bytes}, gpus={required_gpus}")
+    logger.debug(
+        f"[Task {task_id}]   cores={required_cores}, mem={required_memory_bytes}, gpus={required_gpus}"
+    )
     logger.debug(f"[Task {task_id}]   privileged={privileged}")
 
     container_name_full = task_container_name(task_id)
@@ -239,7 +254,9 @@ def build_docker_run_command(
     # Privileged mode
     if privileged:
         docker_cmd.append("--privileged")
-        logger.warning(f"Task {task_id}: Running Docker container with --privileged flag!")
+        logger.warning(
+            f"Task {task_id}: Running Docker container with --privileged flag!"
+        )
     else:
         docker_cmd.extend(["--cap-add", "SYS_NICE"])
 
@@ -258,10 +275,12 @@ def build_docker_run_command(
             continue
         host_path, container_path, *options = parts
         option_str = ("," + ",".join(options)) if options else ""
-        docker_cmd.extend([
-            "--mount",
-            f"type=bind,source={host_path},target={container_path}{option_str}",
-        ])
+        docker_cmd.extend(
+            [
+                "--mount",
+                f"type=bind,source={host_path},target={container_path}{option_str}",
+            ]
+        )
 
     # Working directory
     if working_dir:
@@ -348,7 +367,9 @@ async def execute_task(
     logger.info(f"[Task {task_id}] Arguments: {arguments}")
     logger.info(f"[Task {task_id}] Container: {container_name}")
     logger.info(f"[Task {task_id}] Working dir: {working_dir}")
-    logger.info(f"[Task {task_id}] Cores: {required_cores}, GPUs: {required_gpus}, Memory: {required_memory_bytes}")
+    logger.info(
+        f"[Task {task_id}] Cores: {required_cores}, GPUs: {required_gpus}, Memory: {required_memory_bytes}"
+    )
     logger.info(f"[Task {task_id}] NUMA node: {target_numa_node_id}")
     logger.info(f"[Task {task_id}] Stdout: {stdout_path}")
     logger.info(f"[Task {task_id}] Stderr: {stderr_path}")
@@ -358,11 +379,13 @@ async def execute_task(
 
     # Report pending status
     logger.info(f"[Task {task_id}] Reporting pending status to host...")
-    await report_status_to_host(TaskStatusUpdate(
-        task_id=task_id,
-        status="pending",
-        started_at=start_time,
-    ))
+    await report_status_to_host(
+        TaskStatusUpdate(
+            task_id=task_id,
+            status="pending",
+            started_at=start_time,
+        )
+    )
 
     # Ensure output directories exist
     logger.info(f"[Task {task_id}] Creating output directories...")
@@ -374,18 +397,24 @@ async def execute_task(
     # =========================================================================
     # Step 1: Ensure Docker image is synced from shared storage
     # =========================================================================
-    logger.info(f"[Task {task_id}] Step 1: Checking Docker image sync status for '{container_name}'")
+    logger.info(
+        f"[Task {task_id}] Step 1: Checking Docker image sync status for '{container_name}'"
+    )
 
     if not await ensure_docker_image_synced(task_id, container_name):
         error_message = f"Docker image sync failed for container '{container_name}'"
         logger.error(f"[Task {task_id}] {error_message}")
-        await report_status_to_host(TaskStatusUpdate(
-            task_id=task_id,
-            status="failed",
-            message=error_message,
-            completed_at=datetime.datetime.now(),
-        ))
-        logger.info(f"[Task {task_id}] ========== TASK EXECUTION FAILED (image sync) ==========")
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="failed",
+                message=error_message,
+                completed_at=datetime.datetime.now(),
+            )
+        )
+        logger.info(
+            f"[Task {task_id}] ========== TASK EXECUTION FAILED (image sync) =========="
+        )
         return
 
     logger.info(f"[Task {task_id}] Step 1 complete: Docker image ready")
@@ -406,7 +435,9 @@ async def execute_task(
 
     # Get NUMA prefix if applicable
     numa_prefix = get_numa_prefix(target_numa_node_id, numa_topology)
-    logger.info(f"[Task {task_id}] NUMA prefix: {numa_prefix if numa_prefix else 'None'}")
+    logger.info(
+        f"[Task {task_id}] NUMA prefix: {numa_prefix if numa_prefix else 'None'}"
+    )
 
     # Convert host paths to container paths for stdout/stderr
     # Host path: /Yamiyoru/cluster-share/logs/... -> Container path: /shared/logs/...
@@ -456,13 +487,17 @@ async def execute_task(
 
         # Report running status
         logger.info(f"[Task {task_id}] Reporting running status to host...")
-        await report_status_to_host(TaskStatusUpdate(
-            task_id=task_id,
-            status="running",
-            started_at=start_time,
-        ))
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="running",
+                started_at=start_time,
+            )
+        )
 
-        logger.info(f"[Task {task_id}] Starting subprocess: {' '.join(shlex.quote(c) for c in docker_cmd[:10])}...")
+        logger.info(
+            f"[Task {task_id}] Starting subprocess: {' '.join(shlex.quote(c) for c in docker_cmd[:10])}..."
+        )
 
         # Run the docker command via async subprocess
         process = await asyncio.create_subprocess_exec(
@@ -480,9 +515,13 @@ async def execute_task(
 
         logger.info(f"[Task {task_id}] Container finished with exit code: {exit_code}")
         if stdout_data:
-            logger.debug(f"[Task {task_id}] Docker stdout: {stdout_data.decode(errors='replace').strip()}")
+            logger.debug(
+                f"[Task {task_id}] Docker stdout: {stdout_data.decode(errors='replace').strip()}"
+            )
         if stderr_data:
-            logger.debug(f"[Task {task_id}] Docker stderr: {stderr_data.decode(errors='replace').strip()}")
+            logger.debug(
+                f"[Task {task_id}] Docker stderr: {stderr_data.decode(errors='replace').strip()}"
+            )
 
         # Check if task was killed by host (kill_task removes from store before we get here)
         # If task is no longer in store, it was killed externally - don't report status
@@ -494,7 +533,9 @@ async def execute_task(
                 "Skipping status report."
             )
             elapsed = (datetime.datetime.now() - start_time).total_seconds()
-            logger.info(f"[Task {task_id}] ========== TASK KILLED EXTERNALLY ({elapsed:.2f}s) ==========")
+            logger.info(
+                f"[Task {task_id}] ========== TASK KILLED EXTERNALLY ({elapsed:.2f}s) =========="
+            )
             return
 
         # Remove from tracking (task still exists, so this is normal completion)
@@ -518,7 +559,7 @@ async def execute_task(
             message = f"Container exited with code {exit_code}."
             # Include docker stderr in error message if present
             if stderr_data:
-                stderr_str = stderr_data.decode(errors='replace').strip()
+                stderr_str = stderr_data.decode(errors="replace").strip()
                 if stderr_str:
                     message += f" Docker stderr: {stderr_str[:500]}"
 
@@ -528,17 +569,21 @@ async def execute_task(
 
         # Report completion
         logger.info(f"[Task {task_id}] Reporting completion status to host...")
-        await report_status_to_host(TaskStatusUpdate(
-            task_id=task_id,
-            status=status,
-            exit_code=exit_code,
-            message=message,
-            started_at=start_time,
-            completed_at=datetime.datetime.now(),
-        ))
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status=status,
+                exit_code=exit_code,
+                message=message,
+                started_at=start_time,
+                completed_at=datetime.datetime.now(),
+            )
+        )
 
         elapsed = (datetime.datetime.now() - start_time).total_seconds()
-        logger.info(f"[Task {task_id}] ========== TASK EXECUTION COMPLETED ({elapsed:.2f}s) ==========")
+        logger.info(
+            f"[Task {task_id}] ========== TASK EXECUTION COMPLETED ({elapsed:.2f}s) =========="
+        )
 
     except Exception as e:
         error_message = f"Task execution failed: {e}"
@@ -549,13 +594,15 @@ async def execute_task(
         task_store.remove_task(task_id)
 
         # Report failure
-        await report_status_to_host(TaskStatusUpdate(
-            task_id=task_id,
-            status="failed",
-            message=error_message,
-            started_at=start_time,
-            completed_at=datetime.datetime.now(),
-        ))
+        await report_status_to_host(
+            TaskStatusUpdate(
+                task_id=task_id,
+                status="failed",
+                message=error_message,
+                started_at=start_time,
+                completed_at=datetime.datetime.now(),
+            )
+        )
         logger.info(f"[Task {task_id}] ========== TASK EXECUTION FAILED ==========")
 
 
@@ -589,7 +636,9 @@ def kill_task(
             logger.info(f"Killed task {task_id}")
             return True
         else:
-            logger.warning(f"docker kill returned {result.returncode} for task {task_id}: {result.stderr}")
+            logger.warning(
+                f"docker kill returned {result.returncode} for task {task_id}: {result.stderr}"
+            )
             return True  # Still return True since task was removed from tracking
 
     except Exception as e:

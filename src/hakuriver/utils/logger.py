@@ -1,4 +1,5 @@
 """Logging utilities for HakuRiver with beautiful traceback formatting."""
+
 import copy
 import logging
 import sys
@@ -47,7 +48,9 @@ class ColoredFormatter(logging.Formatter):
         colored_module = f"{dim}[{colored_record.name}]{reset}"
 
         # Build final message
-        colored_record.msg = f"{colored_time}{colored_level}{colored_module} {colored_record.msg}"
+        colored_record.msg = (
+            f"{colored_time}{colored_level}{colored_module} {colored_record.msg}"
+        )
 
         # Use a minimal format string since we built everything manually
         self._style._fmt = "%(message)s"

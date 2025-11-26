@@ -3,6 +3,7 @@ Host configuration.
 
 A global Config instance that can be modified at runtime.
 """
+
 import os
 from dataclasses import dataclass, field
 

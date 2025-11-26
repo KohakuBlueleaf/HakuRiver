@@ -4,6 +4,7 @@ SSH CLI for connecting to VPS tasks.
 Usage:
     hakuriver.ssh TASK_ID --host HOST --proxy-port PORT
 """
+
 import argparse
 import asyncio
 import logging

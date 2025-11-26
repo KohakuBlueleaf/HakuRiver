@@ -6,7 +6,14 @@ Usage:
     hakuriver.vps status
     hakuriver.vps kill TASK_ID
     hakuriver.vps command TASK_ID pause|resume
+
+SSH Key Modes:
+    --no-ssh-key       Create VPS without SSH key (passwordless root)
+    --gen-ssh-key      Generate SSH keypair (saves private key locally)
+    --public-key-file  Upload existing public key (default behavior)
+    --public-key-string  Upload public key as string
 """
+
 import argparse
 import logging
 import os
@@ -16,7 +23,11 @@ import httpx
 
 from hakuriver.cli import api_client, config as CLI_CONFIG
 from hakuriver.utils.cli import parse_memory_string
-from hakuriver.utils.ssh_key import read_public_key_file
+from hakuriver.utils.ssh_key import (
+    generate_ssh_keypair,
+    get_default_key_output_path,
+    read_public_key_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,17 +99,36 @@ def main():
         help="Additional host directories to mount into the container (repeatable). Overrides default mounts.",
     )
 
-    # Options for public key input - mutually exclusive group
-    pubkey_group = parser_submit.add_mutually_exclusive_group(required=False)
-    pubkey_group.add_argument(
+    # Options for SSH key mode - mutually exclusive group
+    ssh_key_group = parser_submit.add_mutually_exclusive_group(required=False)
+    ssh_key_group.add_argument(
+        "--no-ssh-key",
+        action="store_true",
+        help="Create VPS without SSH key authentication (passwordless root login).",
+    )
+    ssh_key_group.add_argument(
+        "--gen-ssh-key",
+        action="store_true",
+        help="Generate a new SSH keypair. Private key saved to --key-out-file location.",
+    )
+    ssh_key_group.add_argument(
         "--public-key-string",
         metavar="KEY_STRING",
         help="Provide the SSH public key directly as a string.",
     )
-    pubkey_group.add_argument(
+    ssh_key_group.add_argument(
         "--public-key-file",
         metavar="PATH",
-        help="Path to a file containing the SSH public key (e.g., ~/.ssh/id_rsa.pub). Reads ~/.ssh/id_rsa.pub or ~/.ssh/id_ed25519.pub by default if neither --public-key-string nor --public-key-file is specified.",
+        help="Path to a file containing the SSH public key (e.g., ~/.ssh/id_rsa.pub). "
+        "Reads ~/.ssh/id_rsa.pub or ~/.ssh/id_ed25519.pub by default.",
+    )
+
+    # Key output path for --gen-ssh-key mode
+    parser_submit.add_argument(
+        "--key-out-file",
+        metavar="PATH",
+        help="Path to save generated private key (default: ~/.ssh/id-hakuriver-<task_id>). "
+        "Only used with --gen-ssh-key.",
     )
 
     # Status Command (List active VPS tasks)
@@ -143,20 +173,44 @@ def main():
             sys.exit(1)
 
         elif args.command == "submit":
-            # --- Get Public Key ---
+            # --- Determine SSH Key Mode ---
+            ssh_key_mode = "upload"  # Default mode
             public_key_string = None
-            if args.public_key_string:
+            key_out_file = args.key_out_file if hasattr(args, "key_out_file") else None
+
+            if args.no_ssh_key:
+                # No SSH key mode - passwordless root login
+                ssh_key_mode = "none"
+                public_key_string = None
+                logger.info(
+                    "VPS will be created without SSH key (passwordless root login)."
+                )
+
+            elif args.gen_ssh_key:
+                # Generate SSH key mode - will generate after we get task_id
+                ssh_key_mode = "generate"
+                public_key_string = None
+                logger.info("SSH keypair will be generated for this VPS.")
+
+            elif args.public_key_string:
+                # Direct public key string
+                ssh_key_mode = "upload"
                 public_key_string = args.public_key_string.strip()
                 logger.debug("Using public key provided as string.")
+
             elif args.public_key_file:
+                # Public key from file
+                ssh_key_mode = "upload"
                 try:
                     public_key_string = read_public_key_file(args.public_key_file)
                     logger.debug(f"Using public key from file: {args.public_key_file}")
                 except (FileNotFoundError, IOError, Exception) as e:
                     logger.error(f"Failed to read public key file: {e}")
                     sys.exit(1)
+
             else:
-                # Try default locations
+                # Try default locations (default upload mode)
+                ssh_key_mode = "upload"
                 default_keys = [
                     os.path.join(os.path.expanduser("~"), ".ssh", "id_rsa.pub"),
                     os.path.join(os.path.expanduser("~"), ".ssh", "id_ed25519.pub"),
@@ -175,12 +229,16 @@ def main():
                             )
                             public_key_string = None
 
-            if not public_key_string:
-                parser_submit.error(
-                    "No SSH public key provided. Use --public-key-string, "
-                    "--public-key-file, or place a key in ~/.ssh/id_rsa.pub "
-                    "or ~/.ssh/id_ed25519.pub."
-                )
+                # If no default key found and no explicit mode, error
+                if not public_key_string:
+                    parser_submit.error(
+                        "No SSH public key provided. Use one of:\n"
+                        "  --no-ssh-key          (passwordless root login)\n"
+                        "  --gen-ssh-key         (generate new keypair)\n"
+                        "  --public-key-file     (upload existing key)\n"
+                        "  --public-key-string   (provide key as string)\n"
+                        "Or place a key in ~/.ssh/id_rsa.pub or ~/.ssh/id_ed25519.pub."
+                    )
 
             # --- Parse Target and GPUs ---
             target_str = args.target
@@ -212,13 +270,15 @@ def main():
 
             logger.info(
                 f"Submitting VPS task to target: {target_str}. "
+                f"SSH Key Mode: {ssh_key_mode}. "
                 f"Cores: {args.cores}, Memory: {args.memory}, GPUs: {vps_gpu_ids}. "
                 f"Container: {args.container if args.container else 'default'}, "
                 f"Privileged: {privileged_override if privileged_override is not None else 'default'}, "
                 f"Mounts: {additional_mounts_override if additional_mounts_override is not None else 'default'}."
             )
 
-            task_ids = api_client.create_vps(
+            result = api_client.create_vps(
+                ssh_key_mode=ssh_key_mode,
                 public_key=public_key_string,
                 cores=args.cores,
                 memory_bytes=memory_bytes,
@@ -229,13 +289,42 @@ def main():
                 gpu_ids=vps_gpu_ids,
             )
 
-            if not task_ids:
+            if not result or not result.get("task_id"):
                 logger.error(
-                    "VPS task submission failed. No task IDs received from host."
+                    "VPS task submission failed. No task ID received from host."
                 )
                 sys.exit(1)
 
-            logger.info(f"Host accepted VPS submission. Created Task ID: {task_ids[0]}")
+            task_id = result.get("task_id")
+            logger.info(f"Host accepted VPS submission. Created Task ID: {task_id}")
+
+            # Handle generated SSH key if mode is "generate"
+            if ssh_key_mode == "generate" and result.get("ssh_private_key"):
+                # Determine output path
+                out_path = key_out_file or get_default_key_output_path(task_id)
+                out_path = os.path.expanduser(out_path)
+
+                # Ensure ~/.ssh directory exists
+                ssh_dir = os.path.dirname(out_path)
+                if ssh_dir:
+                    os.makedirs(ssh_dir, exist_ok=True)
+
+                # Write private key
+                with open(out_path, "w") as f:
+                    f.write(result["ssh_private_key"])
+                os.chmod(out_path, 0o600)
+
+                # Write public key
+                public_key_path = f"{out_path}.pub"
+                if result.get("ssh_public_key"):
+                    with open(public_key_path, "w") as f:
+                        f.write(result["ssh_public_key"])
+                    os.chmod(public_key_path, 0o644)
+
+                logger.info(f"SSH private key saved to: {out_path}")
+                print(f"\nSSH private key saved to: {out_path}")
+                print(f"SSH public key saved to: {public_key_path}")
+                print(f"\nTo connect: ssh -i {out_path} root@<host> -p <ssh_port>")
 
         elif args.command == "status":
             logger.info("Fetching active VPS tasks...")

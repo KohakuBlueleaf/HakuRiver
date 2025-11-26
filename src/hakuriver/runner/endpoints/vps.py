@@ -3,6 +3,7 @@ VPS management endpoints.
 
 Handles VPS creation and control requests.
 """
+
 import logging
 import os
 
@@ -45,17 +46,16 @@ async def create_vps_endpoint(request: VPSCreateRequest):
 
     # Check local temp directory
     if not os.path.isdir(config.LOCAL_TEMP_DIR):
-        logger.error(
-            f"Local temp directory '{config.LOCAL_TEMP_DIR}' not found."
-        )
+        logger.error(f"Local temp directory '{config.LOCAL_TEMP_DIR}' not found.")
         raise HTTPException(
             status_code=500,
             detail=f"Configuration error: LOCAL_TEMP_DIR missing on node.",
         )
 
+    ssh_key_mode = request.ssh_key_mode or "upload"
     logger.info(
         f"Creating VPS {task_id} with {request.required_cores} cores, "
-        f"SSH port {request.ssh_port}"
+        f"SSH port {request.ssh_port}, ssh_key_mode={ssh_key_mode}"
     )
 
     result = await create_vps(
@@ -65,6 +65,7 @@ async def create_vps_endpoint(request: VPSCreateRequest):
         required_memory_bytes=request.required_memory_bytes,
         target_numa_node_id=request.target_numa_node_id,
         container_name=request.container_name,
+        ssh_key_mode=ssh_key_mode,
         ssh_public_key=request.ssh_public_key,
         ssh_port=request.ssh_port,
         task_store=task_store,

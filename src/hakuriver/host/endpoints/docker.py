@@ -5,6 +5,7 @@ Handles:
 - Host Docker container management (list, create, start, stop, delete)
 - HakuRiver container tarball management (list, create, download, delete)
 """
+
 import logging
 import os
 
@@ -22,6 +23,7 @@ router = APIRouter()
 
 class CreateContainerRequest(BaseModel):
     """Request body for creating a container."""
+
     image_name: str
     container_name: str
 
@@ -49,13 +51,15 @@ async def list_host_containers():
             image_tags = container.image.tags if container.image.tags else []
             image_name = image_tags[0] if image_tags else container.image.short_id
 
-            result.append({
-                "id": container.short_id,
-                "name": container.name,
-                "image": image_name,
-                "status": container.status,
-                "created": container.attrs.get("Created"),
-            })
+            result.append(
+                {
+                    "id": container.short_id,
+                    "name": container.name,
+                    "image": image_name,
+                    "status": container.status,
+                    "created": container.attrs.get("Created"),
+                }
+            )
 
         # Frontend expects array directly
         return result
@@ -68,7 +72,9 @@ async def list_host_containers():
 @router.post("/host/create")
 async def create_host_container(request: CreateContainerRequest):
     """Create a persistent Docker container on the Host."""
-    logger.info(f"Creating container '{request.container_name}' from image '{request.image_name}'")
+    logger.info(
+        f"Creating container '{request.container_name}' from image '{request.image_name}'"
+    )
 
     try:
         docker_manager = DockerManager()
@@ -235,11 +241,13 @@ async def list_tarballs():
             # No valid timestamp pattern, skip this file
             continue
 
-        containers[container_name].append({
-            "timestamp": timestamp,
-            "tarball": filename,
-            "size_bytes": stat.st_size,
-        })
+        containers[container_name].append(
+            {
+                "timestamp": timestamp,
+                "tarball": filename,
+                "size_bytes": stat.st_size,
+            }
+        )
 
     # Build result object with latest_timestamp, latest_tarball, all_versions
     result = {}

@@ -3,6 +3,7 @@ Resource monitoring service.
 
 Monitors system resources (CPU, memory, temperature, GPU).
 """
+
 import logging
 
 import psutil
@@ -66,7 +67,9 @@ def get_gpu_stats() -> list[dict]:
     """
     try:
         gpu_info = get_gpu_info()
-        return [gpu.model_dump() if hasattr(gpu, "model_dump") else gpu for gpu in gpu_info]
+        return [
+            gpu.model_dump() if hasattr(gpu, "model_dump") else gpu for gpu in gpu_info
+        ]
     except Exception as e:
         logger.warning(f"Failed to get GPU info: {e}")
         return []

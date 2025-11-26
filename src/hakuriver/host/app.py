@@ -3,6 +3,7 @@ HakuRiver Host FastAPI Application.
 
 Main entry point for the host server.
 """
+
 import asyncio
 import logging
 import os

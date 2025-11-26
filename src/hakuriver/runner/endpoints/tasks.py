@@ -3,6 +3,7 @@ Task execution endpoints.
 
 Handles task execution, control, and status requests.
 """
+
 import asyncio
 import logging
 import os
@@ -51,9 +52,7 @@ async def execute_task_endpoint(
 
     # Check local temp directory
     if not os.path.isdir(config.LOCAL_TEMP_DIR):
-        logger.error(
-            f"Local temp directory '{config.LOCAL_TEMP_DIR}' not found."
-        )
+        logger.error(f"Local temp directory '{config.LOCAL_TEMP_DIR}' not found.")
         raise HTTPException(
             status_code=500,
             detail=f"Configuration error: LOCAL_TEMP_DIR missing on node.",

@@ -3,6 +3,7 @@ SSH Proxy Client.
 
 Client-side proxy that connects local SSH client to VPS through the host proxy.
 """
+
 import asyncio
 import logging
 import socket
@@ -104,10 +105,8 @@ class ClientProxy:
                 logger.info(f"{log_prefix} Bidirectional forwarding ended.")
 
             elif response.startswith(b"ERROR"):
-                error_message = response_str[len("ERROR "):]
-                logger.error(
-                    f"{log_prefix} Host proxy returned error: {error_message}"
-                )
+                error_message = response_str[len("ERROR ") :]
+                logger.error(f"{log_prefix} Host proxy returned error: {error_message}")
                 writer.write(f"Proxy Error: {error_message}\r\n".encode())
                 await writer.drain()
 
@@ -119,9 +118,7 @@ class ClientProxy:
                 await writer.drain()
 
         except asyncio.TimeoutError:
-            logger.error(
-                f"{log_prefix} Timeout during communication with Host proxy."
-            )
+            logger.error(f"{log_prefix} Timeout during communication with Host proxy.")
             writer.write(b"Proxy Error: Timeout communicating with server.\r\n")
             try:
                 await writer.drain()
@@ -140,9 +137,7 @@ class ClientProxy:
                 pass
 
         except Exception as e:
-            logger.exception(
-                f"{log_prefix} Unexpected error during local handler: {e}"
-            )
+            logger.exception(f"{log_prefix} Unexpected error during local handler: {e}")
             writer.write(b"Proxy Error: Internal client proxy error.\r\n")
             try:
                 await writer.drain()
@@ -212,6 +207,4 @@ class ClientProxy:
         """Shut down the local server."""
         if self._local_server:
             self._local_server.close()
-            logger.info(
-                f"Client proxy server shutting down on port {self.local_port}."
-            )
+            logger.info(f"Client proxy server shutting down on port {self.local_port}.")

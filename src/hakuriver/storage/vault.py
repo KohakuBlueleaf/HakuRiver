@@ -1,4 +1,5 @@
 """KohakuVault-based persistent storage for HakuRiver."""
+
 from kohakuvault import KVault
 
 from hakuriver.exceptions import StorageError

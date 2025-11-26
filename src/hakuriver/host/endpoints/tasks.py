@@ -4,6 +4,7 @@ Task management endpoints.
 Handles task submission, status queries, and control operations.
 Matches old behavior from core/host.py for compatibility.
 """
+
 import asyncio
 import datetime
 import json
@@ -79,7 +80,9 @@ async def submit_task(req: TaskSubmission):
 
     This matches the old /submit endpoint behavior.
     """
-    logger.info(f"Received task submission: type={req.task_type}, command={req.command[:50] if req.command else 'N/A'}...")
+    logger.info(
+        f"Received task submission: type={req.task_type}, command={req.command[:50] if req.command else 'N/A'}..."
+    )
     logger.debug(f"Full submission: {req.model_dump()}")
 
     # Validate task type
@@ -122,12 +125,24 @@ async def submit_task(req: TaskSubmission):
     else:
         task_container_name_str = req.container_name or config.DEFAULT_CONTAINER_NAME
 
-    task_docker_image_tag = f"hakuriver/{task_container_name_str}:base" if task_container_name_str else None
-    task_privileged = config.TASKS_PRIVILEGED if req.privileged is None else req.privileged
-    task_additional_mounts = config.ADDITIONAL_MOUNTS if req.additional_mounts is None else req.additional_mounts
+    task_docker_image_tag = (
+        f"hakuriver/{task_container_name_str}:base" if task_container_name_str else None
+    )
+    task_privileged = (
+        config.TASKS_PRIVILEGED if req.privileged is None else req.privileged
+    )
+    task_additional_mounts = (
+        config.ADDITIONAL_MOUNTS
+        if req.additional_mounts is None
+        else req.additional_mounts
+    )
 
-    logger.debug(f"Container: {task_container_name_str}, Image: {task_docker_image_tag}")
-    logger.debug(f"Privileged: {task_privileged}, Additional mounts: {task_additional_mounts}")
+    logger.debug(
+        f"Container: {task_container_name_str}, Image: {task_docker_image_tag}"
+    )
+    logger.debug(
+        f"Privileged: {task_privileged}, Additional mounts: {task_additional_mounts}"
+    )
 
     # Determine targets
     targets = req.targets
@@ -178,60 +193,99 @@ async def submit_task(req: TaskSubmission):
                 if target_numa_id < 0:
                     raise ValueError("NUMA ID cannot be negative")
             except ValueError:
-                logger.warning(f"Invalid NUMA ID format in target '{target_str}'. Skipping.")
-                failed_targets.append({"target": target_str, "reason": "Invalid NUMA ID format"})
+                logger.warning(
+                    f"Invalid NUMA ID format in target '{target_str}'. Skipping."
+                )
+                failed_targets.append(
+                    {"target": target_str, "reason": "Invalid NUMA ID format"}
+                )
                 continue
 
         # Find and validate node
         node: Node | None = Node.get_or_none(Node.hostname == target_hostname)
         if not node:
             logger.warning(f"Target node '{target_hostname}' not registered. Skipping.")
-            failed_targets.append({"target": target_str, "reason": "Node not registered"})
+            failed_targets.append(
+                {"target": target_str, "reason": "Node not registered"}
+            )
             continue
         if node.status != "online":
-            logger.warning(f"Target node '{target_hostname}' is not online (status: {node.status}). Skipping.")
-            failed_targets.append({"target": target_str, "reason": f"Node status is {node.status}"})
+            logger.warning(
+                f"Target node '{target_hostname}' is not online (status: {node.status}). Skipping."
+            )
+            failed_targets.append(
+                {"target": target_str, "reason": f"Node status is {node.status}"}
+            )
             continue
 
         # Validate NUMA target (if specified)
         node_topology = node.get_numa_topology()
         if target_numa_id is not None:
             if node_topology is None:
-                logger.warning(f"Target '{target_str}' specified NUMA ID but node has no NUMA topology. Skipping.")
-                failed_targets.append({"target": target_str, "reason": "Node has no NUMA topology"})
+                logger.warning(
+                    f"Target '{target_str}' specified NUMA ID but node has no NUMA topology. Skipping."
+                )
+                failed_targets.append(
+                    {"target": target_str, "reason": "Node has no NUMA topology"}
+                )
                 continue
             if target_numa_id not in node_topology:
-                logger.warning(f"Invalid NUMA ID {target_numa_id} for node (Valid: {list(node_topology.keys())}). Skipping.")
-                failed_targets.append({"target": target_str, "reason": f"Invalid NUMA ID (Valid: {list(node_topology.keys())})"})
+                logger.warning(
+                    f"Invalid NUMA ID {target_numa_id} for node (Valid: {list(node_topology.keys())}). Skipping."
+                )
+                failed_targets.append(
+                    {
+                        "target": target_str,
+                        "reason": f"Invalid NUMA ID (Valid: {list(node_topology.keys())})",
+                    }
+                )
                 continue
 
         # Validate GPU allocation
         gpu_info = node.get_gpu_info()
         if gpu_info and target_gpus:
-            invalid_gpus = [gpu_id for gpu_id in target_gpus if gpu_id >= len(gpu_info) or gpu_id < 0]
+            invalid_gpus = [
+                gpu_id
+                for gpu_id in target_gpus
+                if gpu_id >= len(gpu_info) or gpu_id < 0
+            ]
             if invalid_gpus:
-                logger.warning(f"Invalid GPU IDs {invalid_gpus} for target '{target_str}'. Skipping.")
-                failed_targets.append({"target": target_str, "reason": f"Invalid GPU IDs: {invalid_gpus}"})
+                logger.warning(
+                    f"Invalid GPU IDs {invalid_gpus} for target '{target_str}'. Skipping."
+                )
+                failed_targets.append(
+                    {"target": target_str, "reason": f"Invalid GPU IDs: {invalid_gpus}"}
+                )
                 continue
             available_gpus = get_node_available_gpus(node)
             if set(target_gpus) - available_gpus:
                 logger.warning(f"Requested GPUs {target_gpus} not available. Skipping.")
-                failed_targets.append({"target": target_str, "reason": "Requested GPUs not available"})
+                failed_targets.append(
+                    {"target": target_str, "reason": "Requested GPUs not available"}
+                )
                 continue
 
         # Check available cores
         available_cores = get_node_available_cores(node)
         if req.required_cores and available_cores < req.required_cores:
-            logger.warning(f"Insufficient cores on node '{target_hostname}' ({available_cores} < {req.required_cores}). Skipping.")
-            failed_targets.append({"target": target_str, "reason": "Insufficient available cores"})
+            logger.warning(
+                f"Insufficient cores on node '{target_hostname}' ({available_cores} < {req.required_cores}). Skipping."
+            )
+            failed_targets.append(
+                {"target": target_str, "reason": "Insufficient available cores"}
+            )
             continue
 
         # Check available memory
         if req.required_memory_bytes:
             available_memory = get_node_available_memory(node)
             if available_memory < req.required_memory_bytes:
-                logger.warning(f"Insufficient memory on node '{target_hostname}'. Skipping.")
-                failed_targets.append({"target": target_str, "reason": "Insufficient available memory"})
+                logger.warning(
+                    f"Insufficient memory on node '{target_hostname}'. Skipping."
+                )
+                failed_targets.append(
+                    {"target": target_str, "reason": "Insufficient available memory"}
+                )
                 continue
 
         # Generate task ID
@@ -250,7 +304,9 @@ async def submit_task(req: TaskSubmission):
         if req.task_type == "vps":
             ssh_port = allocate_ssh_port()
 
-        logger.debug(f"Task {task_id}: stdout={stdout_path}, stderr={stderr_path}, ssh_port={ssh_port}")
+        logger.debug(
+            f"Task {task_id}: stdout={stdout_path}, stderr={stderr_path}, ssh_port={ssh_port}"
+        )
 
         # Create task record
         try:
@@ -273,14 +329,22 @@ async def submit_task(req: TaskSubmission):
                 container_name=task_container_name_str,
                 docker_image_name=task_docker_image_tag,
                 docker_privileged=task_privileged,
-                docker_mount_dirs=json.dumps(task_additional_mounts) if task_additional_mounts else "[]",
+                docker_mount_dirs=(
+                    json.dumps(task_additional_mounts)
+                    if task_additional_mounts
+                    else "[]"
+                ),
                 ssh_port=ssh_port,
             )
             logger.info(f"Task {task_id} created, assigned to {node.hostname}")
 
         except Exception as e:
-            logger.exception(f"Failed to create task record for target '{target_str}': {e}")
-            failed_targets.append({"target": target_str, "reason": "Database error during task creation"})
+            logger.exception(
+                f"Failed to create task record for target '{target_str}': {e}"
+            )
+            failed_targets.append(
+                {"target": target_str, "reason": "Database error during task creation"}
+            )
             continue
 
         # Dispatch task to runner
@@ -298,7 +362,9 @@ async def submit_task(req: TaskSubmission):
                 task.error_message = "Failed to create VPS on runner."
                 task.completed_at = datetime.datetime.now()
                 task.save()
-                failed_targets.append({"target": target_str, "reason": "Runner failed to create VPS"})
+                failed_targets.append(
+                    {"target": target_str, "reason": "Runner failed to create VPS"}
+                )
                 continue
         else:
             # Regular command tasks - dispatch in background
@@ -319,19 +385,25 @@ async def submit_task(req: TaskSubmission):
     # Construct response
     if not created_task_ids and failed_targets:
         detail = f"Failed to schedule task for any target. Failures: {failed_targets}"
-        logger.error(f"Task submission failed for all targets. Failures: {failed_targets}")
+        logger.error(
+            f"Task submission failed for all targets. Failures: {failed_targets}"
+        )
         raise HTTPException(status_code=503, detail=detail)
 
     if failed_targets:
         message = f"Task batch submitted. {len(created_task_ids)} tasks created. Some targets failed."
-        logger.warning(f"Partial submission. Succeeded: {created_task_ids}. Failed: {failed_targets}")
+        logger.warning(
+            f"Partial submission. Succeeded: {created_task_ids}. Failed: {failed_targets}"
+        )
         return {
             "message": message,
             "task_ids": created_task_ids,
             "failed_targets": failed_targets,
         }
 
-    message = f"Task batch submitted successfully. {len(created_task_ids)} tasks created."
+    message = (
+        f"Task batch submitted successfully. {len(created_task_ids)} tasks created."
+    )
     logger.info(f"Task batch submission successful. Task IDs: {created_task_ids}")
     response = {
         "message": message,
@@ -426,7 +498,9 @@ async def list_tasks(
 
     Returns all fields that frontend expects (matching old code behavior).
     """
-    logger.debug(f"list_tasks called: status={status}, task_type={task_type}, limit={limit}, offset={offset}")
+    logger.debug(
+        f"list_tasks called: status={status}, task_type={task_type}, limit={limit}, offset={offset}"
+    )
 
     query = Task.select().order_by(Task.submitted_at.desc())
     logger.debug(f"Initial query created")
@@ -447,7 +521,9 @@ async def list_tasks(
     try:
         total_count = Task.select().count()
         filtered_count = query.count()
-        logger.debug(f"Total tasks in DB: {total_count}, After filters: {filtered_count}")
+        logger.debug(
+            f"Total tasks in DB: {total_count}, After filters: {filtered_count}"
+        )
         # Show distinct task_types in DB for debugging
         distinct_types = [t.task_type for t in Task.select(Task.task_type).distinct()]
         logger.debug(f"Distinct task_types in DB: {distinct_types}")
@@ -456,30 +532,40 @@ async def list_tasks(
 
     tasks = []
     for task in query:
-        logger.debug(f"Processing task: id={task.task_id}, type={task.task_type}, status={task.status}")
-        tasks.append({
-            "task_id": str(task.task_id),
-            "batch_id": str(task.batch_id) if task.batch_id else None,
-            "task_type": task.task_type,
-            "command": task.command,
-            "arguments": task.get_arguments(),
-            "env_vars": task.get_env_vars(),
-            "required_cores": task.required_cores,
-            "required_gpus": json.loads(task.required_gpus) if task.required_gpus else [],
-            "required_memory_bytes": task.required_memory_bytes,
-            "status": task.status,
-            "assigned_node": task.assigned_node,
-            "target_numa_node_id": task.target_numa_node_id,
-            "stdout_path": task.stdout_path,
-            "stderr_path": task.stderr_path,
-            "exit_code": task.exit_code,
-            "error_message": task.error_message,
-            "submitted_at": task.submitted_at.isoformat() if task.submitted_at else None,
-            "started_at": task.started_at.isoformat() if task.started_at else None,
-            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-            "assignment_suspicion_count": task.assignment_suspicion_count,
-            "ssh_port": task.ssh_port,
-        })
+        logger.debug(
+            f"Processing task: id={task.task_id}, type={task.task_type}, status={task.status}"
+        )
+        tasks.append(
+            {
+                "task_id": str(task.task_id),
+                "batch_id": str(task.batch_id) if task.batch_id else None,
+                "task_type": task.task_type,
+                "command": task.command,
+                "arguments": task.get_arguments(),
+                "env_vars": task.get_env_vars(),
+                "required_cores": task.required_cores,
+                "required_gpus": (
+                    json.loads(task.required_gpus) if task.required_gpus else []
+                ),
+                "required_memory_bytes": task.required_memory_bytes,
+                "status": task.status,
+                "assigned_node": task.assigned_node,
+                "target_numa_node_id": task.target_numa_node_id,
+                "stdout_path": task.stdout_path,
+                "stderr_path": task.stderr_path,
+                "exit_code": task.exit_code,
+                "error_message": task.error_message,
+                "submitted_at": (
+                    task.submitted_at.isoformat() if task.submitted_at else None
+                ),
+                "started_at": task.started_at.isoformat() if task.started_at else None,
+                "completed_at": (
+                    task.completed_at.isoformat() if task.completed_at else None
+                ),
+                "assignment_suspicion_count": task.assignment_suspicion_count,
+                "ssh_port": task.ssh_port,
+            }
+        )
 
     logger.debug(f"Returning {len(tasks)} tasks")
     return tasks
@@ -519,8 +605,7 @@ async def request_kill_task(task_id: int):
         node = Node.get_or_none(Node.hostname == task.assigned_node)
         if node and node.status == "online":
             logger.info(
-                f"Requesting kill from runner {node.hostname} "
-                f"for task {task_id}"
+                f"Requesting kill from runner {node.hostname} " f"for task {task_id}"
             )
             kill_task = asyncio.create_task(
                 send_kill_to_runner(node.url, task_id, container_name)
@@ -551,18 +636,14 @@ async def send_command_to_task(task_id: int, command: str):
 
     match (command, task.status):
         case ("pause", "running"):
-            response = await send_pause_to_runner(
-                node.url, task_id, container_name
-            )
+            response = await send_pause_to_runner(node.url, task_id, container_name)
             if "successfully" in response:
                 task.status = "paused"
                 task.save()
             return {"message": f"Pause for task {task_id}: {response}"}
 
         case ("resume", "paused"):
-            response = await send_resume_to_runner(
-                node.url, task_id, container_name
-            )
+            response = await send_resume_to_runner(node.url, task_id, container_name)
             if "successfully" in response:
                 task.status = "running"
                 task.save()
