@@ -12,6 +12,7 @@ Or via KohakuEngine:
     script = Script("hakuriver.host.app", config=config)
     script.run()
 """
+
 from kohakuengine import Config
 
 from hakuriver.models.enums import LogLevel
