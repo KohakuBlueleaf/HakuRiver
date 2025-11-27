@@ -275,9 +275,10 @@ async def create_vps(
 
     # =========================================================================
     # Step 2: Build mount directories
+    # shared_data subdirectory is mounted as /shared inside container
     # =========================================================================
     mount_dirs = [
-        f"{config.SHARED_DIR}:/shared",
+        f"{config.SHARED_DIR}/shared_data:/shared",
         f"{config.LOCAL_TEMP_DIR}:/local_temp",
     ]
     mount_dirs.extend(config.ADDITIONAL_MOUNTS)

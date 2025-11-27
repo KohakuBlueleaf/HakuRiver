@@ -157,6 +157,12 @@ async def startup_event():
             f"Shared directory '{config.SHARED_DIR}' not found. "
             "Runner may not function correctly."
         )
+    else:
+        # Ensure shared_data subdirectory exists (mounted as /shared inside containers)
+        shared_data_dir = os.path.join(config.SHARED_DIR, "shared_data")
+        if not os.path.isdir(shared_data_dir):
+            os.makedirs(shared_data_dir, exist_ok=True)
+            logger.info(f"Created shared data directory: {shared_data_dir}")
 
     # Create local temp directory
     if not os.path.isdir(config.LOCAL_TEMP_DIR):

@@ -1,18 +1,50 @@
 """
-CLI entry point for the HakuRiver Runner agent.
+CLI entry point for the KohakuRiver Runner agent.
 
 Usage:
     kohakuriver.runner [--config PATH]
+
+If no --config is specified, automatically loads ~/.kohakuriver/runner_config.py if it exists.
 """
 
 import logging
+import os
 import sys
 from typing import Annotated
 
 import typer
 
-app = typer.Typer(help="HakuRiver Runner agent")
+app = typer.Typer(help="KohakuRiver Runner agent")
 logger = logging.getLogger(__name__)
+
+DEFAULT_RUNNER_CONFIG = os.path.expanduser("~/.kohakuriver/runner_config.py")
+
+
+def load_config(config_path: str) -> bool:
+    """Load configuration from a KohakuEngine config file.
+
+    Returns True if config was loaded successfully, False otherwise.
+    """
+    try:
+        from kohakuengine import Config as KohakuConfig
+
+        kohaku_config = KohakuConfig.from_file(config_path)
+
+        # Apply globals to our config instance
+        from kohakuriver.runner.config import config as runner_config
+
+        for key, value in kohaku_config.globals_dict.items():
+            if hasattr(runner_config, key):
+                setattr(runner_config, key, value)
+
+        return True
+
+    except ImportError:
+        print("WARNING: KohakuEngine not found, config file ignored.")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to load config: {e}")
+        return False
 
 
 @app.command()
@@ -26,31 +58,30 @@ def run(
         ),
     ] = None,
 ):
-    """Run the HakuRiver Runner agent."""
-    # Load and apply config
-    if config:
-        print(f"Loading configuration from: {config}")
-        try:
-            from kohakuengine import Config as KohakuConfig
+    """Run the KohakuRiver Runner agent."""
+    # Determine which config to load
+    config_path = config
 
-            kohaku_config = KohakuConfig.from_file(config)
-
-            # Apply globals to our config instance
-            from kohakuriver.runner.config import config as runner_config
-
-            for key, value in kohaku_config.globals_dict.items():
-                if hasattr(runner_config, key):
-                    setattr(runner_config, key, value)
-
-        except ImportError:
-            print("WARNING: KohakuEngine not found, config file ignored.")
-        except Exception as e:
-            logger.error(f"Failed to load config: {e}")
+    if config_path:
+        # Explicitly specified config
+        print(f"Loading configuration from: {config_path}")
+        if not os.path.exists(config_path):
+            print(f"ERROR: Config file not found: {config_path}")
             raise typer.Exit(1)
+        if not load_config(config_path):
+            raise typer.Exit(1)
+    elif os.path.exists(DEFAULT_RUNNER_CONFIG):
+        # Auto-load default config if exists
+        print(f"Loading default configuration from: {DEFAULT_RUNNER_CONFIG}")
+        if not load_config(DEFAULT_RUNNER_CONFIG):
+            print("WARNING: Failed to load default config, using built-in defaults.")
+    else:
+        print("No config file specified and no default config found.")
+        print(f"Using built-in defaults. Run 'kohakuriver init config --runner' to generate config.")
 
     # Run the server
     try:
-        print("Starting HakuRiver Runner agent...")
+        print("Starting KohakuRiver Runner agent...")
         from kohakuriver.runner.app import run as run_server
 
         run_server()

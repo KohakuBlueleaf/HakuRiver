@@ -261,8 +261,9 @@ def build_docker_run_command(
         docker_cmd.extend(["--cap-add", "SYS_NICE"])
 
     # Mount directories
+    # shared_data subdirectory is mounted as /shared inside container
     mount_dirs = [
-        f"{config.SHARED_DIR}:/shared",
+        f"{config.SHARED_DIR}/shared_data:/shared",
         f"{config.LOCAL_TEMP_DIR}:/local_temp",
     ]
     for mount_spec in config.ADDITIONAL_MOUNTS:

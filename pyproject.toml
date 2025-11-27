@@ -30,7 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gpu = [
-    "pynvml"
+    "nvidia-ml-py"
 ]
 
 [project.urls]
