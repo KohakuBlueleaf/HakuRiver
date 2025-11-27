@@ -195,9 +195,9 @@
   </g>
   
   <!-- Project Name and Tagline, moved left to align properly -->
-  <g transform="translate(320, 100)">
+  <g transform="translate(300, 100)">
     <text font-family="'Segoe UI', Tahoma, sans-serif" font-size="42" font-weight="700" fill="#0c4a6e" filter="url(#textShadow)">
-      HakuRiver
+      KohakuRiver
     </text>
     <text y="30" font-family="'Segoe UI', Tahoma, sans-serif" font-size="16" font-weight="400" fill="#334155">
       Mini Resource Orchestrator
