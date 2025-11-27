@@ -1,0 +1,48 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="riverGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color: #0c4a6e" />
+      <stop offset="50%" style="stop-color: #0ea5e9" />
+      <stop offset="100%" style="stop-color: #0d9488" />
+    </linearGradient>
+    <linearGradient id="nodeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color: #ffffff" />
+      <stop offset="100%" style="stop-color: #f0f9ff" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="#0c4a6e"/>
+
+  <!-- River flow -->
+  <path d="M 12 20 C 20 28, 25 15, 32 25 S 40 35, 52 28"
+        fill="none"
+        stroke="url(#riverGradient)"
+        stroke-width="5"
+        stroke-linecap="round"/>
+
+  <!-- Tributary 1 -->
+  <path d="M 18 38 C 22 32, 26 34, 32 25"
+        fill="none"
+        stroke="#38bdf8"
+        stroke-width="3"
+        stroke-linecap="round"/>
+
+  <!-- Tributary 2 -->
+  <path d="M 42 42 C 40 36, 36 32, 32 25"
+        fill="none"
+        stroke="#2dd4bf"
+        stroke-width="3"
+        stroke-linecap="round"/>
+
+  <!-- Central node -->
+  <circle cx="32" cy="25" r="8" fill="url(#nodeGrad)" stroke="#0ea5e9" stroke-width="2"/>
+  <circle cx="30" cy="23" r="2" fill="#0ea5e9"/>
+  <circle cx="34" cy="27" r="2" fill="#0ea5e9"/>
+
+  <!-- Source nodes -->
+  <circle cx="12" cy="20" r="5" fill="url(#nodeGrad)" stroke="#1e40af" stroke-width="1.5"/>
+  <circle cx="18" cy="38" r="4" fill="url(#nodeGrad)" stroke="#0369a1" stroke-width="1.5"/>
+  <circle cx="42" cy="42" r="4" fill="url(#nodeGrad)" stroke="#0f766e" stroke-width="1.5"/>
+  <circle cx="52" cy="28" r="5" fill="url(#nodeGrad)" stroke="#0d9488" stroke-width="1.5"/>
+</svg>

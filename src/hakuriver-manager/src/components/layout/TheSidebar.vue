@@ -55,8 +55,8 @@ function navigateTo(path) {
     <!-- Logo -->
     <div class="h-16 flex items-center justify-between px-4 border-b border-gray-800">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-blue-600 rounded-lg flex-center text-white font-bold flex-shrink-0">H</div>
-        <span v-if="!uiStore.sidebarCollapsed || uiStore.isMobile" class="font-semibold text-lg">HakuRiver</span>
+        <div class="w-8 h-8 bg-gradient-to-br from-sky-600 to-teal-600 rounded-lg flex-center text-white font-bold flex-shrink-0">K</div>
+        <span v-if="!uiStore.sidebarCollapsed || uiStore.isMobile" class="font-semibold text-lg">KohakuRiver</span>
       </div>
       <!-- Close button for mobile -->
       <button v-if="uiStore.isMobile" @click="uiStore.closeMobileMenu" class="p-1 rounded hover:bg-gray-800">

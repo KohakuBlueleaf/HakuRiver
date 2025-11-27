@@ -15,7 +15,7 @@ const pageTitle = computed(() => {
     '/stats': 'Statistics',
   }
   // Check for exact match first, then prefix match
-  return titles[route.path] || titles[Object.keys(titles).find((k) => route.path.startsWith(k))] || 'HakuRiver'
+  return titles[route.path] || titles[Object.keys(titles).find((k) => route.path.startsWith(k))] || 'KohakuRiver'
 })
 
 const themeOptions = [

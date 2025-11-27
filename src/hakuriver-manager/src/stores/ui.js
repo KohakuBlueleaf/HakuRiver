@@ -5,7 +5,7 @@ export const useUIStore = defineStore('ui', () => {
   const sidebarCollapsed = ref(false)
   const mobileMenuOpen = ref(false)
   const isMobile = ref(false)
-  const theme = ref(localStorage.getItem('hakuriver-theme') || 'system')
+  const theme = ref(localStorage.getItem('kohakuriver-theme') || 'system')
 
   // Computed
   const isDark = computed(() => {
@@ -37,7 +37,7 @@ export const useUIStore = defineStore('ui', () => {
 
   function setTheme(newTheme) {
     theme.value = newTheme
-    localStorage.setItem('hakuriver-theme', newTheme)
+    localStorage.setItem('kohakuriver-theme', newTheme)
     applyTheme()
   }
 
