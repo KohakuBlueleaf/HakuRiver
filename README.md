@@ -5,7 +5,7 @@
 
 ![KohakuRiver logo svg](image/logo.svg)
 
-**KohakuRiver** is a lightweight, self-hosted cluster manager designed for distributing command-line tasks and launching persistent interactive sessions (referred to as **VPS Tasks**) across compute nodes. It primarily leverages **Docker** to manage reproducible task environments, allowing users to treat containers like portable "virtual environments". KohakuRiver orchestrates the creation, packaging (via tarballs), distribution, and execution of these containerized environments across your nodes.
+**KohakuRiver** is a lightweight, self-hosted cluster manager designed for distributing command-line tasks and launching persistent interactive sessions (referred to as **VPS Tasks**, named after Virtual Private Server due to the similar user experience) across compute nodes. It primarily leverages **Docker** to manage reproducible task environments, allowing users to treat containers like portable "virtual environments". KohakuRiver orchestrates the creation, packaging (via tarballs), distribution, and execution of these containerized environments across your nodes.
 
 It provides resource allocation (CPU/memory/GPU limits), multi-node/NUMA/GPU task submission, and status tracking, making it ideal for research labs, small-to-medium teams, home labs, or development environments needing simple, reproducible distributed task execution and on-demand interactive compute environments without the overhead of complex HPC schedulers.
 
