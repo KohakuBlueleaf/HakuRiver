@@ -218,6 +218,12 @@ def get_all_nodes_status() -> list[dict]:
                 ),
                 "numa_topology": node.get_numa_topology(),
                 "gpu_info": node.get_gpu_info(),
+                "cpu_percent": node.cpu_percent,
+                "memory_percent": node.memory_percent,
+                "memory_used_bytes": node.memory_used_bytes,
+                "memory_total_bytes": node.memory_total_bytes,
+                "current_avg_temp": node.current_avg_temp,
+                "current_max_temp": node.current_max_temp,
             }
         )
 

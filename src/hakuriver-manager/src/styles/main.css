@@ -1,0 +1,506 @@
+/* Global styles */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* Reset native button styles */
+button {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Dark mode base */
+html.dark,
+.dark {
+  color-scheme: dark;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+html.dark ::-webkit-scrollbar-thumb,
+.dark ::-webkit-scrollbar-thumb {
+  background: #555;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover,
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* ============================================
+   Element Plus Dark Mode Overrides
+   ============================================ */
+
+html.dark,
+.dark {
+  /* Custom background colors */
+  --el-bg-color: #1f2937;
+  --el-bg-color-page: #111827;
+  --el-bg-color-overlay: #1f2937;
+
+  /* Custom fill colors for buttons */
+  --el-fill-color: #4b5563;
+  --el-fill-color-light: #374151;
+  --el-fill-color-lighter: #1f2937;
+  --el-fill-color-dark: #6b7280;
+  --el-fill-color-darker: #9ca3af;
+
+  /* Border colors */
+  --el-border-color: #374151;
+  --el-border-color-light: #4b5563;
+  --el-border-color-lighter: #6b7280;
+  --el-border-color-dark: #1f2937;
+}
+
+html.dark .el-card,
+.dark .el-card {
+  --el-card-bg-color: #1f2937;
+  --el-card-border-color: #374151;
+}
+
+html.dark .el-table,
+.dark .el-table {
+  --el-table-bg-color: #1f2937;
+  --el-table-tr-bg-color: #1f2937;
+  --el-table-header-bg-color: #111827;
+  --el-table-border-color: #374151;
+  --el-table-text-color: #e5e7eb;
+}
+
+html.dark .el-dialog,
+.dark .el-dialog {
+  --el-dialog-bg-color: #1f2937;
+  --el-dialog-border-radius: 8px;
+}
+
+html.dark .el-input__wrapper,
+.dark .el-input__wrapper {
+  background-color: #374151;
+  box-shadow: 0 0 0 1px #4b5563 inset;
+}
+
+html.dark .el-select__wrapper,
+.dark .el-select__wrapper {
+  background-color: #374151;
+  box-shadow: 0 0 0 1px #4b5563 inset;
+}
+
+html.dark .el-textarea__inner,
+.dark .el-textarea__inner {
+  background-color: #374151;
+  box-shadow: 0 0 0 1px #4b5563 inset;
+}
+
+/* ============================================
+   Element Plus Tabs - Modern Style
+   ============================================ */
+.el-tabs {
+  --el-tabs-header-height: 40px;
+}
+
+.el-tabs__header {
+  margin: 0 0 16px 0;
+}
+
+.el-tabs__nav-wrap::after {
+  display: none;
+}
+
+.el-tabs__active-bar {
+  height: 2px;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  border-radius: 2px;
+}
+
+.el-tabs__item {
+  padding: 0 20px;
+  font-weight: 500;
+  color: #6b7280;
+  transition: color 0.2s;
+}
+
+.el-tabs__item:hover {
+  color: #3b82f6;
+}
+
+.el-tabs__item.is-active {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+html.dark .el-tabs__item,
+.dark .el-tabs__item {
+  color: #9ca3af;
+}
+
+html.dark .el-tabs__item:hover,
+.dark .el-tabs__item:hover {
+  color: #60a5fa;
+}
+
+html.dark .el-tabs__item.is-active,
+.dark .el-tabs__item.is-active {
+  color: #60a5fa;
+}
+
+.el-tabs__content {
+  background: transparent;
+}
+
+.el-tab-pane {
+  background: transparent;
+}
+
+/* ============================================
+   Element Plus Buttons - Complete Override
+   ============================================ */
+
+/* Remove all borders from buttons */
+.el-button {
+  border: none !important;
+  border-radius: 8px !important;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+/* Override the inner wrapper that creates the border effect */
+.el-button > span {
+  border: none !important;
+}
+
+/* Default button - uses fill color */
+.el-button--default {
+  --el-button-bg-color: #e5e7eb !important;
+  --el-button-text-color: #1f2937 !important;
+  --el-button-hover-bg-color: #d1d5db !important;
+  --el-button-hover-text-color: #111827 !important;
+  --el-button-border-color: transparent !important;
+  --el-button-hover-border-color: transparent !important;
+  --el-button-active-border-color: transparent !important;
+  background-color: #e5e7eb !important;
+  color: #1f2937 !important;
+}
+
+.el-button--default:hover,
+.el-button--default:focus {
+  background-color: #d1d5db !important;
+  color: #111827 !important;
+}
+
+/* Default button in dark mode - MORE contrast */
+html.dark .el-button--default,
+.dark .el-button--default {
+  --el-button-bg-color: #4b5563 !important;
+  --el-button-text-color: #f9fafb !important;
+  --el-button-hover-bg-color: #6b7280 !important;
+  --el-button-hover-text-color: #ffffff !important;
+  --el-button-border-color: transparent !important;
+  --el-button-hover-border-color: transparent !important;
+  background-color: #4b5563 !important;
+  color: #f9fafb !important;
+}
+
+html.dark .el-button--default:hover,
+html.dark .el-button--default:focus,
+.dark .el-button--default:hover,
+.dark .el-button--default:focus {
+  background-color: #6b7280 !important;
+  color: #ffffff !important;
+}
+
+/* Primary button */
+.el-button--primary {
+  --el-button-bg-color: #3b82f6 !important;
+  --el-button-hover-bg-color: #2563eb !important;
+  --el-button-border-color: transparent !important;
+  --el-button-hover-border-color: transparent !important;
+  background-color: #3b82f6 !important;
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus {
+  background-color: #2563eb !important;
+}
+
+/* Success button */
+.el-button--success {
+  --el-button-bg-color: #10b981 !important;
+  --el-button-hover-bg-color: #059669 !important;
+  --el-button-border-color: transparent !important;
+  --el-button-hover-border-color: transparent !important;
+  background-color: #10b981 !important;
+}
+
+.el-button--success:hover,
+.el-button--success:focus {
+  background-color: #059669 !important;
+}
+
+/* Warning button */
+.el-button--warning {
+  --el-button-bg-color: #f59e0b !important;
+  --el-button-hover-bg-color: #d97706 !important;
+  --el-button-border-color: transparent !important;
+  --el-button-hover-border-color: transparent !important;
+  background-color: #f59e0b !important;
+}
+
+.el-button--warning:hover,
+.el-button--warning:focus {
+  background-color: #d97706 !important;
+}
+
+/* Danger button */
+.el-button--danger {
+  --el-button-bg-color: #ef4444 !important;
+  --el-button-hover-bg-color: #dc2626 !important;
+  --el-button-border-color: transparent !important;
+  --el-button-hover-border-color: transparent !important;
+  background-color: #ef4444 !important;
+}
+
+.el-button--danger:hover,
+.el-button--danger:focus {
+  background-color: #dc2626 !important;
+}
+
+/* Info button */
+.el-button--info {
+  --el-button-bg-color: #6b7280 !important;
+  --el-button-hover-bg-color: #4b5563 !important;
+  --el-button-border-color: transparent !important;
+  --el-button-hover-border-color: transparent !important;
+  background-color: #6b7280 !important;
+}
+
+.el-button--info:hover,
+.el-button--info:focus {
+  background-color: #4b5563 !important;
+}
+
+/* Text button variant */
+.el-button.is-text {
+  background-color: transparent !important;
+  --el-button-bg-color: transparent !important;
+}
+
+.el-button.is-text:hover,
+.el-button.is-text:focus {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Link button variant */
+.el-button.is-link {
+  background-color: transparent !important;
+}
+
+/* Disabled buttons */
+.el-button.is-disabled,
+.el-button.is-disabled:hover {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Button groups - fix border radius */
+.el-button-group .el-button {
+  border-radius: 0 !important;
+}
+
+.el-button-group .el-button:first-child {
+  border-radius: 8px 0 0 8px !important;
+}
+
+.el-button-group .el-button:last-child {
+  border-radius: 0 8px 8px 0 !important;
+}
+
+/* ============================================
+   Element Plus Other Components
+   ============================================ */
+
+/* Dropdown */
+.el-dropdown-menu {
+  border: none !important;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+html.dark .el-dropdown-menu,
+.dark .el-dropdown-menu {
+  background-color: #1f2937;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.el-dropdown-menu__item {
+  padding: 10px 16px;
+  transition: background-color 0.15s;
+}
+
+html.dark .el-dropdown-menu__item,
+.dark .el-dropdown-menu__item {
+  color: #e5e7eb;
+}
+
+html.dark .el-dropdown-menu__item:hover,
+.dark .el-dropdown-menu__item:hover {
+  background-color: #374151;
+  color: #f9fafb;
+}
+
+/* Dialog */
+.el-dialog {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.el-dialog__header {
+  padding: 20px 24px 16px;
+  margin-right: 0;
+}
+
+.el-dialog__body {
+  padding: 0 24px 24px;
+}
+
+.el-dialog__footer {
+  padding: 16px 24px 20px;
+}
+
+html.dark .el-dialog__header,
+.dark .el-dialog__header {
+  border-bottom: 1px solid #374151;
+}
+
+/* Tag */
+.el-tag {
+  border: none !important;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+/* Message Box */
+.el-message-box {
+  border-radius: 12px;
+  border: none !important;
+}
+
+html.dark .el-message-box,
+.dark .el-message-box {
+  background-color: #1f2937;
+}
+
+/* Popover */
+.el-popover {
+  border: none !important;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+html.dark .el-popover,
+.dark .el-popover {
+  background-color: #1f2937;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Tooltip */
+.el-tooltip__trigger {
+  outline: none;
+}
+
+/* Switch */
+.el-switch {
+  --el-switch-on-color: #3b82f6;
+}
+
+/* Radio */
+.el-radio__input.is-checked .el-radio__inner {
+  border-color: #3b82f6;
+  background: #3b82f6;
+}
+
+.el-radio__input.is-checked + .el-radio__label {
+  color: #3b82f6;
+}
+
+/* Checkbox */
+.el-checkbox__input.is-checked .el-checkbox__inner {
+  border-color: #3b82f6;
+  background-color: #3b82f6;
+}
+
+/* ============================================
+   Custom Utility Classes
+   ============================================ */
+
+/* Icon button for header/toolbar */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: rgba(107, 114, 128, 0.1);
+  color: #374151;
+}
+
+html.dark .btn-icon,
+.dark .btn-icon {
+  color: #9ca3af;
+}
+
+html.dark .btn-icon:hover,
+.dark .btn-icon:hover {
+  background: rgba(156, 163, 175, 0.15);
+  color: #e5e7eb;
+}
