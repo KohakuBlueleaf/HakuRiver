@@ -1,0 +1,64 @@
+# config.toml - Shared configuration for Cluster Manager
+
+[network]
+# IP address the Host server binds to (0.0.0.0 usually fine for listening on all interfaces)
+host_bind_ip = "0.0.0.0"
+host_port = 8000
+host_ssh_proxy_port = 8002
+
+# The address clients and runners use to reach the Host server.
+# IMPORTANT: Change this to the actual reachable IP or hostname of the manager node in a real deployment.
+host_reachable_address = "127.0.0.1"
+
+# Port the Runner server listens on
+runner_address = "127.0.1.1"
+runner_port = 8001
+
+[paths]
+# Shared storage accessible by all nodes at the same path
+shared_dir = "test/shared"
+
+# Local fast temporary storage on each compute node
+local_temp_dir = "test/temp"
+
+# Path to the numactl executable
+numactl_path = ""
+
+# Optional: Define specific log file paths, leave empty to log to console
+host_log_file = "host.log"
+runner_log_file = "runner.log" # Runner will append its hostname automatically
+
+[database]
+# Path to the SQLite database file (relative to host_app.py location or absolute)
+db_file = "test/cluster_management.db"
+
+[timing]
+# Intervals in seconds
+heartbeat_interval = 5
+# Runner is marked offline if no heartbeat for interval * timeout_factor seconds
+heartbeat_timeout_factor = 6
+# How often the host checks for dead runners
+cleanup_check_interval = 10
+
+[environment]
+# For better safety, you may want to ensure the tasks are executing under a specific user/group
+# Since the runner is running under sudoers with NOPASSWD
+# By default, the runner will run tasks as the user who started the runner
+runner_user = ""
+
+[docker]
+# The relative path to container tar files (relative to shared_dir)
+container_dir = "kohakuriver-containers"
+# The default base container name for HakuRiver tasks
+default_container_name = "kohakuriver-base"
+
+# The name of the initial Docker image to use if the default container tar
+# does not exist when the host starts. Ignored if the tar exists.
+initial_base_image = "python:3.12.10-alpine3.21"
+
+# Whether tasks should run with --privileged flag inside Docker. Use with caution.
+tasks_privileged = false
+
+# Optional list of additional host directories to mount into the container.
+# Each entry should be "host_path:container_path".
+additional_mounts = []

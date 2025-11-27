@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hakuriver"
-version = "0.3.0"
-description = "A lightweight clustering tool with Docker container as virtual env."
+name = "kohakuriver"
+version = "0.4.0"
+description = "KohakuRiver - A lightweight clustering tool with Docker container as virtual env."
 readme = "README.md"
 requires-python = ">=3.10"
 license-files = ["LICENSE"]
@@ -38,10 +38,10 @@ Homepage = "https://github.com/KohakuBlueleaf/HakuRiver"
 Repository = "https://github.com/KohakuBlueleaf/HakuRiver"
 
 [project.scripts]
-# Main entry points (3 total)
-"hakuriver" = "hakuriver.cli.main:run"
-"hakuriver.host" = "hakuriver.cli.host:main"
-"hakuriver.runner" = "hakuriver.cli.runner:main"
+# Main entry points
+"kohakuriver" = "kohakuriver.cli.main:run"
+"kohakuriver.host" = "kohakuriver.cli.host:main"
+"kohakuriver.runner" = "kohakuriver.cli.runner:main"
 # Keep hakurun for compatibility
 "hakurun" = "hakurun.run:runner"
 
@@ -52,4 +52,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-hakuriver = ["*.toml"]
+kohakuriver = ["*.toml"]

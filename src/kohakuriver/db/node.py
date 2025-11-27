@@ -1,0 +1,123 @@
+"""Node database model."""
+
+import datetime
+import json
+
+import peewee
+
+from kohakuriver.db.base import BaseModel
+from kohakuriver.models.enums import NodeStatus
+
+
+class Node(BaseModel):
+    """
+    Represents a compute node in the cluster.
+
+    Stores node metadata, health status, and resource information.
+    """
+
+    # Primary identification
+    hostname = peewee.CharField(unique=True, primary_key=True)
+    url = peewee.CharField()  # Runner URL, e.g., http://192.168.1.101:8001
+
+    # Hardware resources
+    total_cores = peewee.IntegerField()
+    memory_total_bytes = peewee.BigIntegerField(null=True)
+
+    # Status and health
+    status = peewee.CharField(default=NodeStatus.ONLINE.value)
+    last_heartbeat = peewee.DateTimeField(default=datetime.datetime.now)
+
+    # Runtime metrics (updated via heartbeat)
+    cpu_percent = peewee.FloatField(null=True)
+    memory_percent = peewee.FloatField(null=True)
+    memory_used_bytes = peewee.BigIntegerField(null=True)
+    current_avg_temp = peewee.FloatField(null=True)
+    current_max_temp = peewee.FloatField(null=True)
+
+    # Topology (stored as JSON)
+    numa_topology = peewee.TextField(null=True)
+    gpu_info = peewee.TextField(null=True)
+
+    class Meta:
+        table_name = "nodes"
+
+    def get_numa_topology(self) -> dict[int, list[int]] | None:
+        """
+        Parse stored NUMA topology JSON into a dictionary.
+
+        Returns:
+            Dict mapping NUMA node ID to list of CPU core IDs,
+            or None if not set/invalid.
+        """
+        if not self.numa_topology:
+            return None
+        try:
+            data = json.loads(self.numa_topology)
+            return {int(k): v for k, v in data.items()}
+        except (json.JSONDecodeError, ValueError):
+            return None
+
+    def set_numa_topology(self, topology: dict[int, list[int]] | None) -> None:
+        """Store NUMA topology as JSON."""
+        if topology is None:
+            self.numa_topology = None
+        else:
+            self.numa_topology = json.dumps(topology)
+
+    def get_gpu_info(self) -> list[dict]:
+        """
+        Parse stored GPU info JSON into a list of dictionaries.
+
+        Returns:
+            List of GPU info dicts, or empty list if not set/invalid.
+        """
+        if not self.gpu_info:
+            return []
+        try:
+            return json.loads(self.gpu_info)
+        except json.JSONDecodeError:
+            return []
+
+    def set_gpu_info(self, gpus: list[dict] | None) -> None:
+        """Store GPU info as JSON."""
+        if gpus is None:
+            self.gpu_info = None
+        else:
+            self.gpu_info = json.dumps(gpus)
+
+    def is_online(self) -> bool:
+        """Check if node is online."""
+        return self.status == NodeStatus.ONLINE.value
+
+    def mark_online(self) -> None:
+        """Mark node as online."""
+        self.status = NodeStatus.ONLINE.value
+
+    def mark_offline(self) -> None:
+        """Mark node as offline."""
+        self.status = NodeStatus.OFFLINE.value
+
+    def update_heartbeat(self) -> None:
+        """Update last heartbeat time to now."""
+        self.last_heartbeat = datetime.datetime.now()
+
+    def to_dict(self) -> dict:
+        """Convert node to dictionary for API responses."""
+        return {
+            "hostname": self.hostname,
+            "url": self.url,
+            "total_cores": self.total_cores,
+            "memory_total_bytes": self.memory_total_bytes,
+            "status": self.status,
+            "last_heartbeat": (
+                self.last_heartbeat.isoformat() if self.last_heartbeat else None
+            ),
+            "cpu_percent": self.cpu_percent,
+            "memory_percent": self.memory_percent,
+            "memory_used_bytes": self.memory_used_bytes,
+            "current_avg_temp": self.current_avg_temp,
+            "current_max_temp": self.current_max_temp,
+            "numa_topology": self.get_numa_topology(),
+            "gpu_info": self.get_gpu_info(),
+        }
