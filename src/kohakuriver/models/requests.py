@@ -323,7 +323,7 @@ class DockerCommitRequest(BaseModel):
     """Request body for committing a container to image."""
 
     source_container: str = Field(..., description="Container to commit from")
-    hakuriver_name: str = Field(..., description="HakuRiver environment name")
+    kohakuriver_name: str = Field(..., description="KohakuRiver environment name")
 
 
 # =============================================================================

@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { vpsAPI } from '@/utils/api'
+import { useLoadingStore } from '@/stores/loading'
 
 export const useVpsStore = defineStore('vps', () => {
+  const loadingStore = useLoadingStore()
   // State
   const vpsList = ref([])
   const currentVps = ref(null)
@@ -34,6 +36,8 @@ export const useVpsStore = defineStore('vps', () => {
   async function createVps(vpsData) {
     creating.value = true
     error.value = null
+    const opId = `create-vps-${Date.now()}`
+    loadingStore.startLoading(opId, 'Creating VPS instance...')
     try {
       const { data } = await vpsAPI.create(vpsData)
       // Refresh list after creation
@@ -45,6 +49,7 @@ export const useVpsStore = defineStore('vps', () => {
       throw e
     } finally {
       creating.value = false
+      loadingStore.stopLoading(opId)
     }
   }
 

@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { dockerAPI } from '@/utils/api'
+import { useLoadingStore } from '@/stores/loading'
 
 export const useDockerStore = defineStore('docker', () => {
+  const loadingStore = useLoadingStore()
   // State
   const containers = ref([])
   const tarballs = ref([])
@@ -57,6 +59,8 @@ export const useDockerStore = defineStore('docker', () => {
   }
 
   async function createContainer(data) {
+    const opId = `create-container-${Date.now()}`
+    loadingStore.startLoading(opId, `Creating container "${data.container_name}"...`)
     try {
       await dockerAPI.createContainer(data)
       await fetchContainers()
@@ -64,6 +68,8 @@ export const useDockerStore = defineStore('docker', () => {
     } catch (e) {
       error.value = e.response?.data?.detail || e.message
       throw e
+    } finally {
+      loadingStore.stopLoading(opId)
     }
   }
 
@@ -107,6 +113,8 @@ export const useDockerStore = defineStore('docker', () => {
   }
 
   async function createTarball(envName) {
+    const opId = `create-tarball-${Date.now()}`
+    loadingStore.startLoading(opId, `Creating tarball from "${envName}"...`)
     try {
       await dockerAPI.createTarball(envName)
       await fetchTarballs()
@@ -114,6 +122,8 @@ export const useDockerStore = defineStore('docker', () => {
     } catch (e) {
       error.value = e.response?.data?.detail || e.message
       throw e
+    } finally {
+      loadingStore.stopLoading(opId)
     }
   }
 

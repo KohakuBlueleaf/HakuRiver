@@ -24,7 +24,7 @@ const selectedVps = ref(null)
 
 // Create form
 const createForm = ref({
-  required_cores: 1,
+  required_cores: 0,
   required_memory_bytes: null,
   container_name: null,
   target_hostname: null,
@@ -152,7 +152,7 @@ async function handleCreate() {
 
 function resetCreateForm() {
   createForm.value = {
-    required_cores: 1,
+    required_cores: 0,
     required_memory_bytes: null,
     container_name: null,
     target_hostname: null,
@@ -221,11 +221,30 @@ function showSshInfo(vps) {
   sshInfoDialogVisible.value = true
 }
 
+async function copyToClipboard(text, successMsg) {
+  try {
+    await navigator.clipboard.writeText(text)
+    notify.success(successMsg)
+  } catch (err) {
+    // Fallback for non-secure contexts
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    notify.success(successMsg)
+  }
+}
+
 function copySshCommand(vps) {
-  const node = typeof vps.assigned_node === 'object' ? vps.assigned_node.hostname : vps.assigned_node
-  const cmd = `ssh -p ${vps.ssh_port} root@${node}`
-  navigator.clipboard.writeText(cmd)
-  notify.success('SSH command copied to clipboard')
+  const cmd = `kohakuriver ssh connect ${vps.task_id}`
+  copyToClipboard(cmd, 'SSH command copied')
+}
+
+function copyTerminalCommand(vps) {
+  const cmd = `kohakuriver connect ${vps.task_id}`
+  copyToClipboard(cmd, 'Terminal command copied')
 }
 
 function downloadPrivateKey() {
@@ -246,8 +265,7 @@ function getNodeHostname(node) {
 }
 
 function copyVpsId(taskId) {
-  navigator.clipboard.writeText(taskId)
-  notify.success('VPS ID copied')
+  copyToClipboard(taskId, 'VPS ID copied')
 }
 </script>
 
@@ -354,12 +372,22 @@ function copyVpsId(taskId) {
             </div>
 
             <!-- Control buttons row - 4 equal buttons -->
+            <!-- Copy commands row -->
             <div class="flex gap-2">
-              <el-tooltip content="Copy SSH" placement="top">
+              <el-tooltip content="Copy SSH Command" placement="top">
                 <el-button size="small" @click="copySshCommand(vps)" class="flex-1">
-                  <span class="i-carbon-copy"></span>
+                  <span class="i-carbon-terminal mr-1"></span> SSH
                 </el-button>
               </el-tooltip>
+              <el-tooltip content="Copy Terminal Command" placement="top">
+                <el-button size="small" @click="copyTerminalCommand(vps)" class="flex-1">
+                  <span class="i-carbon-copy mr-1"></span> Terminal
+                </el-button>
+              </el-tooltip>
+            </div>
+
+            <!-- Control buttons row -->
+            <div class="flex gap-2">
               <el-tooltip content="Pause" placement="top">
                 <el-button size="small" @click="handlePause(vps.task_id)" class="flex-1">
                   <span class="i-carbon-pause"></span>
@@ -404,8 +432,8 @@ function copyVpsId(taskId) {
     <el-dialog v-model="createDialogVisible" title="Create VPS" width="600px" destroy-on-close>
       <el-form :model="createForm" label-position="top">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <el-form-item label="CPU Cores" required>
-            <el-input-number v-model="createForm.required_cores" :min="1" :max="128" class="w-full" />
+          <el-form-item label="CPU Cores (0 = no limit)">
+            <el-input-number v-model="createForm.required_cores" :min="0" :max="128" class="w-full" />
           </el-form-item>
 
           <el-form-item label="Memory">
@@ -527,33 +555,34 @@ function copyVpsId(taskId) {
     />
 
     <!-- SSH Info Dialog -->
-    <el-dialog v-model="sshInfoDialogVisible" title="SSH Connection Info" width="500px">
+    <el-dialog v-model="sshInfoDialogVisible" title="Connection Info" width="500px">
       <div v-if="selectedVps" class="space-y-4">
         <div class="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
-          <p class="text-sm text-muted mb-2">SSH Command:</p>
-          <code class="text-sm font-mono break-all">
-            ssh -p {{ selectedVps.ssh_port }} root@{{ getNodeHostname(selectedVps.assigned_node) }}
-          </code>
+          <p class="text-sm text-muted mb-2">SSH Command (via proxy):</p>
+          <code class="text-sm font-mono break-all"> kohakuriver ssh connect {{ selectedVps.task_id }} </code>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+        <div class="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+          <p class="text-sm text-muted mb-2">Terminal Command:</p>
+          <code class="text-sm font-mono break-all"> kohakuriver connect {{ selectedVps.task_id }} </code>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
-            <span class="text-muted">Host:</span>
+            <span class="text-muted">Task ID:</span>
+            <span class="ml-2 font-mono">{{ selectedVps.task_id }}</span>
+          </div>
+          <div>
+            <span class="text-muted">Node:</span>
             <span class="ml-2 break-all">{{ getNodeHostname(selectedVps.assigned_node) }}</span>
-          </div>
-          <div>
-            <span class="text-muted">Port:</span>
-            <span class="ml-2">{{ selectedVps.ssh_port }}</span>
-          </div>
-          <div>
-            <span class="text-muted">User:</span>
-            <span class="ml-2">root</span>
           </div>
         </div>
       </div>
       <template #footer>
         <div class="flex flex-col sm:flex-row gap-2 sm:justify-end">
           <el-button @click="copySshCommand(selectedVps)" class="w-full sm:w-auto">
-            <span class="i-carbon-copy mr-1"></span> Copy Command
+            <span class="i-carbon-terminal mr-1"></span> Copy SSH
+          </el-button>
+          <el-button @click="copyTerminalCommand(selectedVps)" class="w-full sm:w-auto">
+            <span class="i-carbon-copy mr-1"></span> Copy Terminal
           </el-button>
           <el-button type="primary" @click="sshInfoDialogVisible = false" class="w-full sm:w-auto">Close</el-button>
         </div>

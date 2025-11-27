@@ -122,7 +122,7 @@ async def ensure_docker_image_synced(task_id: int, container_name: str) -> bool:
 
     Args:
         task_id: Task ID (for logging).
-        container_name: HakuRiver container name (e.g., "hakuriver-base").
+        container_name: KohakuRiver container name (e.g., "kohakuriver-base").
 
     Returns:
         True if image is ready, False if sync failed.
@@ -426,11 +426,11 @@ async def execute_task(
 
     # Build environment variables
     task_env = env_vars.copy()
-    task_env["HAKURIVER_TASK_ID"] = str(task_id)
-    task_env["HAKURIVER_LOCAL_TEMP_DIR"] = config.LOCAL_TEMP_DIR
-    task_env["HAKURIVER_SHARED_DIR"] = config.SHARED_DIR
+    task_env["KOHAKURIVER_TASK_ID"] = str(task_id)
+    task_env["KOHAKURIVER_LOCAL_TEMP_DIR"] = config.LOCAL_TEMP_DIR
+    task_env["KOHAKURIVER_SHARED_DIR"] = config.SHARED_DIR
     if target_numa_node_id is not None:
-        task_env["HAKURIVER_TARGET_NUMA_NODE"] = str(target_numa_node_id)
+        task_env["KOHAKURIVER_TARGET_NUMA_NODE"] = str(target_numa_node_id)
     logger.debug(f"[Task {task_id}] Environment variables: {list(task_env.keys())}")
 
     # Get NUMA prefix if applicable

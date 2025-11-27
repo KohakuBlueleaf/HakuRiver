@@ -357,6 +357,8 @@ async def get_vps_list():
                     "status": task.status,
                     "assigned_node": node_hostname,
                     "target_numa_node_id": task.target_numa_node_id,
+                    "container_name": task.container_name,
+                    "ssh_port": task.ssh_port,
                     "exit_code": task.exit_code,
                     "error_message": task.error_message,
                     "submitted_at": task.submitted_at,
@@ -404,6 +406,7 @@ async def get_active_vps_status():
                         json.loads(task.required_gpus) if task.required_gpus else []
                     ),
                     "required_memory_bytes": task.required_memory_bytes,
+                    "container_name": task.container_name,
                     "submitted_at": (
                         task.submitted_at.isoformat() if task.submitted_at else None
                     ),
@@ -534,7 +537,7 @@ async def restart_vps(task_id: int):
 
     # Step 3: Re-send VPS creation request to runner
     # We need to get the container name from the original task
-    # The container_name field stores the base image name (e.g., "hakuriver-base")
+    # The container_name field stores the base image name (e.g., "kohakuriver-base")
     base_container_name = task.container_name or config.DEFAULT_CONTAINER_NAME
 
     result = await send_vps_to_runner(

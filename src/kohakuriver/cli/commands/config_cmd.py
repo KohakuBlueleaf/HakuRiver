@@ -67,7 +67,7 @@ def generate_completion(
     import sys
 
     try:
-        # Get the path to the hakuriver entry point
+        # Get the path to the kohakuriver entry point
         result = subprocess.run(
             [sys.executable, "-m", "kohakuriver.cli.main", "--show-completion", shell],
             capture_output=True,
@@ -78,31 +78,31 @@ def generate_completion(
             # Try alternative method
             if shell == "bash":
                 completion_script = """
-# HakuRiver completion for bash
-_hakuriver_completion() {
+# KohakuRiver completion for bash
+_kohakuriver_completion() {
     local IFS=$'\\n'
     COMPREPLY=( $(env COMP_WORDS="${COMP_WORDS[*]}" \\
                   COMP_CWORD=$COMP_CWORD \\
-                  _HAKURIVER_COMPLETE=complete_bash \\
-                  hakuriver) )
+                  _KOHAKURIVER_COMPLETE=complete_bash \\
+                  kohakuriver) )
     return 0
 }
-complete -F _hakuriver_completion hakuriver
+complete -F _kohakuriver_completion kohakuriver
 """
             elif shell == "zsh":
                 completion_script = """
-# HakuRiver completion for zsh
-#compdef hakuriver
+# KohakuRiver completion for zsh
+#compdef kohakuriver
 
-_hakuriver() {
-    eval $(env _HAKURIVER_COMPLETE=complete_zsh hakuriver)
+_kohakuriver() {
+    eval $(env _KOHAKURIVER_COMPLETE=complete_zsh kohakuriver)
 }
-compdef _hakuriver hakuriver
+compdef _kohakuriver kohakuriver
 """
             elif shell == "fish":
                 completion_script = """
-# HakuRiver completion for fish
-complete -c hakuriver -f -a "(env _HAKURIVER_COMPLETE=complete_fish hakuriver)"
+# KohakuRiver completion for fish
+complete -c kohakuriver -f -a "(env _KOHAKURIVER_COMPLETE=complete_fish kohakuriver)"
 """
             else:
                 print_error(f"Unknown shell: {shell}")

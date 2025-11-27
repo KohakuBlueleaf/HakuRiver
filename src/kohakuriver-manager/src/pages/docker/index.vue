@@ -19,8 +19,8 @@ const selectedTarballContainer = ref(null)
 
 // Create container form
 const createContainerForm = ref({
-  env_name: '',
-  base_image: '',
+  container_name: '',
+  image_name: '',
 })
 
 // Polling
@@ -34,7 +34,7 @@ onMounted(() => {
 })
 
 async function handleCreateContainer() {
-  if (!createContainerForm.value.env_name || !createContainerForm.value.base_image) {
+  if (!createContainerForm.value.container_name || !createContainerForm.value.image_name) {
     notify.warning('Please fill in all fields')
     return
   }
@@ -43,7 +43,7 @@ async function handleCreateContainer() {
     await dockerStore.createContainer(createContainerForm.value)
     notify.success('Container created successfully')
     createContainerDialogVisible.value = false
-    createContainerForm.value = { env_name: '', base_image: '' }
+    createContainerForm.value = { container_name: '', image_name: '' }
   } catch (e) {
     notify.error(e.response?.data?.detail || 'Failed to create container')
   }
@@ -180,44 +180,40 @@ const expandedTags = ref(new Set())
           <div v-else class="grid-cards">
             <div v-for="container in dockerStore.containers" :key="container.name" class="card">
               <!-- Header -->
-              <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-3 min-w-0 flex-1">
-                  <span class="i-carbon-container-software text-2xl text-purple-500 flex-shrink-0"></span>
-                  <div class="min-w-0 flex-1">
-                    <div class="flex items-center gap-2">
-                      <h3 class="font-semibold truncate" :title="parseContainerName(container.name).fullName">
-                        {{ parseContainerName(container.name).displayName }}
-                      </h3>
-                      <el-tag v-if="parseContainerName(container.name).hasPrefix" size="small" type="info">
-                        env
-                      </el-tag>
-                    </div>
-                    <!-- Image with expandable tag -->
-                    <div class="text-xs text-muted flex items-center gap-1 min-w-0">
-                      <span class="truncate">{{ parseImageTag(container.image).name }}</span>
-                      <template v-if="parseImageTag(container.image).tag">
-                        <span>:</span>
-                        <span
-                          v-if="parseImageTag(container.image).tag.length > 20 && !expandedTags.has(container.name)"
-                          class="truncate max-w-20 cursor-pointer hover:text-blue-500"
-                          :title="parseImageTag(container.image).tag"
-                          @click="expandedTags.add(container.name)"
-                        >
-                          {{ parseImageTag(container.image).tag.slice(0, 20) }}...
-                        </span>
-                        <span
-                          v-else-if="parseImageTag(container.image).tag.length > 20"
-                          class="cursor-pointer hover:text-blue-500 break-all"
-                          @click="expandedTags.delete(container.name)"
-                        >
-                          {{ parseImageTag(container.image).tag }}
-                        </span>
-                        <span v-else>{{ parseImageTag(container.image).tag }}</span>
-                      </template>
-                    </div>
+              <div class="flex items-start gap-3 mb-4">
+                <span class="i-carbon-container-software text-2xl text-purple-500 flex-shrink-0 mt-0.5"></span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <h3 class="font-semibold" :title="parseContainerName(container.name).fullName">
+                      {{ parseContainerName(container.name).displayName }}
+                    </h3>
+                    <el-tag v-if="parseContainerName(container.name).hasPrefix" size="small" type="info"> env </el-tag>
+                  </div>
+                  <StatusBadge :status="getContainerStatus(container)" class="mt-1" />
+                  <!-- Image with expandable tag -->
+                  <div class="text-xs text-muted flex items-center gap-1 min-w-0 mt-2">
+                    <span class="truncate">{{ parseImageTag(container.image).name }}</span>
+                    <template v-if="parseImageTag(container.image).tag">
+                      <span>:</span>
+                      <span
+                        v-if="parseImageTag(container.image).tag.length > 20 && !expandedTags.has(container.name)"
+                        class="truncate max-w-20 cursor-pointer hover:text-blue-500"
+                        :title="parseImageTag(container.image).tag"
+                        @click="expandedTags.add(container.name)"
+                      >
+                        {{ parseImageTag(container.image).tag.slice(0, 20) }}...
+                      </span>
+                      <span
+                        v-else-if="parseImageTag(container.image).tag.length > 20"
+                        class="cursor-pointer hover:text-blue-500 break-all"
+                        @click="expandedTags.delete(container.name)"
+                      >
+                        {{ parseImageTag(container.image).tag }}
+                      </span>
+                      <span v-else>{{ parseImageTag(container.image).tag }}</span>
+                    </template>
                   </div>
                 </div>
-                <StatusBadge :status="getContainerStatus(container)" class="flex-shrink-0" />
               </div>
 
               <!-- Info -->
@@ -336,11 +332,11 @@ const expandedTags = ref(new Set())
     <el-dialog v-model="createContainerDialogVisible" title="Create Container" width="500px">
       <el-form :model="createContainerForm" label-position="top">
         <el-form-item label="Environment Name" required>
-          <el-input v-model="createContainerForm.env_name" placeholder="e.g., pytorch-env" />
+          <el-input v-model="createContainerForm.container_name" placeholder="e.g., pytorch-env" />
         </el-form-item>
 
         <el-form-item label="Base Image" required>
-          <el-input v-model="createContainerForm.base_image" placeholder="e.g., ubuntu:22.04" />
+          <el-input v-model="createContainerForm.image_name" placeholder="e.g., ubuntu:22.04" />
         </el-form-item>
       </el-form>
 

@@ -11,8 +11,8 @@ export const dockerAPI = {
   /**
    * Create a new environment container
    * @param {Object} data
-   * @param {string} data.env_name - Environment name
-   * @param {string} data.base_image - Base Docker image
+   * @param {string} data.container_name - Container/environment name
+   * @param {string} data.image_name - Base Docker image
    */
   createContainer(data) {
     return apiClient.post('/docker/host/create', data)

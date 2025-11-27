@@ -19,11 +19,11 @@ def terminal_main(
     ctx: typer.Context,
     host: Annotated[
         str | None,
-        typer.Option("--host", "-H", help="Host address", envvar="HAKURIVER_HOST"),
+        typer.Option("--host", "-H", help="Host address", envvar="KOHAKURIVER_HOST"),
     ] = None,
     port: Annotated[
         int | None,
-        typer.Option("--port", "-P", help="Host port", envvar="HAKURIVER_PORT"),
+        typer.Option("--port", "-P", help="Host port", envvar="KOHAKURIVER_PORT"),
     ] = None,
     refresh: Annotated[
         float,
@@ -31,7 +31,7 @@ def terminal_main(
     ] = 2.0,
 ):
     """
-    Launch the HakuRiver Terminal UI.
+    Launch the KohakuRiver Terminal UI.
 
     A full-screen dashboard showing cluster status, nodes, tasks, and VPS instances.
     Updates automatically and supports keyboard navigation.

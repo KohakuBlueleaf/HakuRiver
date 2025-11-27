@@ -356,7 +356,7 @@ def _do_create_tarball(env_name: str, container_dir: str) -> tuple[str, str]:
     # Create tarball using the env_name (without prefix) for the tarball name
     tarball_path = docker_manager.create_container_tarball(
         source_container=actual_name,
-        hakuriver_name=env_name,
+        kohakuriver_name=env_name,
         container_tar_dir=container_dir,
     )
 
@@ -499,7 +499,7 @@ def _do_migrate_container(old_name: str, new_name: str) -> dict:
     container = client.containers.get(old_name)
     container.stop(timeout=60)
 
-    # Commit to a permanent image (hakuriver/{env_name}:base)
+    # Commit to a permanent image (kohakuriver/{env_name}:base)
     # This is the same naming convention used for tarballs
     logger.info(f"Committing container '{old_name}' to image...")
     image_repo = f"kohakuriver/{old_name}"
@@ -520,8 +520,8 @@ def _do_migrate_container(old_name: str, new_name: str) -> dict:
     logger.info(f"Removing old container '{old_name}'...")
     container.remove(force=True)
 
-    # Note: We keep the image (hakuriver/{name}:base) as it's needed by the container
-    # and follows our standard naming convention for HakuRiver images
+    # Note: We keep the image (kohakuriver/{name}:base) as it's needed by the container
+    # and follows our standard naming convention for KohakuRiver images
 
     logger.info(f"Successfully migrated '{old_name}' to '{new_name}'")
 

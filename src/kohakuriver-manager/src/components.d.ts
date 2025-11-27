@@ -40,6 +40,7 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
     EmptyState: typeof import('./components/common/EmptyState.vue')['default']
+    GlobalLoading: typeof import('./components/common/GlobalLoading.vue')['default']
     ResourceBar: typeof import('./components/common/ResourceBar.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

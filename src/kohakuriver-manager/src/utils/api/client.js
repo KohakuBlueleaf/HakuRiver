@@ -1,18 +1,21 @@
 import axios from 'axios'
 
+// Default timeout: 10 minutes for long operations (create env, create tar, submit task/vps)
+const DEFAULT_TIMEOUT = 10 * 60 * 1000
+
 // Main API client
 const apiClient = axios.create({
   baseURL: '/api',
-  timeout: 30000,
+  timeout: DEFAULT_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Log client with longer timeout and text response
+// Log client with same timeout and text response
 const logClient = axios.create({
   baseURL: '/api',
-  timeout: 60000,
+  timeout: DEFAULT_TIMEOUT,
   responseType: 'text',
 })
 

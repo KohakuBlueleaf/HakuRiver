@@ -414,6 +414,24 @@ html.dark .el-dialog__header,
   border-bottom: 1px solid #374151;
 }
 
+/* Dialog overlay - ensure full coverage */
+.el-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.el-overlay-dialog {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: auto;
+}
+
 /* Tag */
 .el-tag {
   border: none !important;

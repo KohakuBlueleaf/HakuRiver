@@ -33,7 +33,7 @@ const submitForm = ref({
   command: '',
   arguments: '',
   env_vars: '',
-  required_cores: 1,
+  required_cores: 0,
   required_memory_bytes: null,
   container_name: null,
   targets: null,
@@ -114,7 +114,7 @@ function resetSubmitForm() {
     command: '',
     arguments: '',
     env_vars: '',
-    required_cores: 1,
+    required_cores: 0,
     required_memory_bytes: null,
     container_name: null,
     targets: null,
@@ -379,8 +379,8 @@ function getNodeName(node) {
         </el-form-item>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <el-form-item label="CPU Cores">
-            <el-input-number v-model="submitForm.required_cores" :min="1" :max="128" class="w-full" />
+          <el-form-item label="CPU Cores (0 = no limit)">
+            <el-input-number v-model="submitForm.required_cores" :min="0" :max="128" class="w-full" />
           </el-form-item>
 
           <el-form-item label="Memory (bytes)">

@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { tasksAPI } from '@/utils/api'
+import { useLoadingStore } from '@/stores/loading'
 
 export const useTasksStore = defineStore('tasks', () => {
+  const loadingStore = useLoadingStore()
   // State
   const tasks = ref([])
   const currentTask = ref(null)
@@ -52,6 +54,8 @@ export const useTasksStore = defineStore('tasks', () => {
   async function submitTask(taskData) {
     submitting.value = true
     error.value = null
+    const opId = `submit-task-${Date.now()}`
+    loadingStore.startLoading(opId, 'Submitting task...')
     try {
       const { data } = await tasksAPI.submit(taskData)
       // Refresh task list after submission
@@ -63,6 +67,7 @@ export const useTasksStore = defineStore('tasks', () => {
       throw e
     } finally {
       submitting.value = false
+      loadingStore.stopLoading(opId)
     }
   }
 

@@ -53,11 +53,11 @@ app.add_typer(config_cmd.app, name="config", help="Configuration")
 def main(
     host: Annotated[
         str | None,
-        typer.Option("--host", "-H", help="Host address", envvar="HAKURIVER_HOST"),
+        typer.Option("--host", "-H", help="Host address", envvar="KOHAKURIVER_HOST"),
     ] = None,
     port: Annotated[
         int | None,
-        typer.Option("--port", "-P", help="Host port", envvar="HAKURIVER_PORT"),
+        typer.Option("--port", "-P", help="Host port", envvar="KOHAKURIVER_PORT"),
     ] = None,
     output_format: Annotated[
         str,
@@ -65,7 +65,7 @@ def main(
     ] = "table",
 ):
     """
-    HakuRiver Cluster Management CLI.
+    KohakuRiver Cluster Management CLI.
 
     Manage tasks, VPS instances, nodes, and Docker containers.
     """

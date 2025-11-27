@@ -2,6 +2,7 @@
 import { useUIStore } from '@/stores/ui'
 import TheSidebar from '@/components/layout/TheSidebar.vue'
 import TheHeader from '@/components/layout/TheHeader.vue'
+import GlobalLoading from '@/components/common/GlobalLoading.vue'
 
 const uiStore = useUIStore()
 
@@ -33,6 +34,9 @@ onMounted(() => {
         </router-view>
       </main>
     </div>
+
+    <!-- Global Loading Indicator -->
+    <GlobalLoading />
   </div>
 </template>
 
