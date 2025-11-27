@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hakuriver"
-version = "0.3.0"
-description = "A lightweight clustering tool with Docker container as virtual env."
+name = "kohakuriver"
+version = "0.4.0"
+description = "KohakuRiver - A lightweight clustering tool with Docker container as virtual env."
 readme = "README.md"
 requires-python = ">=3.10"
 license-files = ["LICENSE"]
@@ -13,21 +13,24 @@ authors = [
     {name = "Shih-Ying Yeh(KohakuBlueLeaf)", email = "apolloyeh0123@gmail.com"},
 ]
 dependencies = [
-    "hakustore",
+    "kohaku-engine",
+    "kohakuvault",
     "peewee",
     "fastapi",
     "httpx",
     "psutil",
-    "toml",
     "uvicorn[standard]",
     "snowflake-id",
     "docker",
     "websockets",
+    "pydantic>=2.0",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]
 gpu = [
-    "pynvml"
+    "nvidia-ml-py"
 ]
 
 [project.urls]
@@ -35,16 +38,10 @@ Homepage = "https://github.com/KohakuBlueleaf/HakuRiver"
 Repository = "https://github.com/KohakuBlueleaf/HakuRiver"
 
 [project.scripts]
-"hakuriver.host" = "hakuriver.cli.host:main"
-"hakuriver.runner" = "hakuriver.cli.runner:main"
-"hakuriver.client" = "hakuriver.cli.client:main"
-"hakuriver.task" = "hakuriver.cli.task:main"
-"hakuriver.vps" = "hakuriver.cli.vps:main"
-"hakuriver.ssh" = "hakuriver.cli.ssh:main"
-"hakuriver.init" = "hakuriver.cli.init:main"
-"hakuriver.docker" = "hakuriver.cli.docker:main"
-"hakuriver.docker-shell" = "hakuriver.cli.docker_shell:main"
-"hakurun" = "hakurun.run:runner"
+# Main entry points
+"kohakuriver" = "kohakuriver.cli.main:run"
+"kohakuriver.host" = "kohakuriver.cli.host:main"
+"kohakuriver.runner" = "kohakuriver.cli.runner:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -53,4 +50,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-hakuriver = ["*.toml"]
+kohakuriver = ["*.toml"]

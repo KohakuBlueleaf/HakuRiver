@@ -4,6 +4,9 @@ CLAUDE.md
 test/
 .vscode
 .claude
+.codex
+.gemini
+*_old/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
