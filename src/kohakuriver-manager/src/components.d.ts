@@ -49,6 +49,7 @@ declare module 'vue' {
     IdeContent: typeof import('./components/ide/IdeContent.vue')['default']
     IdeLayout: typeof import('./components/ide/IdeLayout.vue')['default']
     IdeModal: typeof import('./components/ide/IdeModal.vue')['default']
+    IdeOverlay: typeof import('./components/ide/IdeOverlay.vue')['default']
     IdeStatusBar: typeof import('./components/ide/common/IdeStatusBar.vue')['default']
     MonacoEditor: typeof import('./components/ide/editor/MonacoEditor.vue')['default']
     ResourceBar: typeof import('./components/common/ResourceBar.vue')['default']
