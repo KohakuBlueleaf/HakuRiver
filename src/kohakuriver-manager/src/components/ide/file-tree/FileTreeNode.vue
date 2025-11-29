@@ -57,9 +57,7 @@ const children = computed(() => {
 })
 
 // Icon
-const iconClass = computed(() =>
-  getFileIcon(props.entry.name, props.entry.type, isExpanded.value)
-)
+const iconClass = computed(() => getFileIcon(props.entry.name, props.entry.type, isExpanded.value))
 const iconColor = computed(() => getFileIconColor(props.entry.name, props.entry.type))
 
 // Indentation style
@@ -118,37 +116,50 @@ function formatSize(bytes) {
       :style="indentStyle"
       @click="handleClick"
       @dblclick="handleDblClick"
-      @contextmenu="handleContextMenu"
-    >
+      @contextmenu="handleContextMenu">
       <!-- Expand/collapse arrow for directories -->
-      <span v-if="isDirectory" class="node-arrow" @click="handleToggle">
-        <el-icon v-if="isLoading" class="is-loading">
+      <span
+        v-if="isDirectory"
+        class="node-arrow"
+        @click="handleToggle">
+        <el-icon
+          v-if="isLoading"
+          class="is-loading">
           <span class="i-carbon-circle-dash" />
         </el-icon>
         <span
           v-else
           class="i-carbon-chevron-right"
-          :class="{ 'rotate-90': isExpanded }"
-        />
+          :class="{ 'rotate-90': isExpanded }" />
       </span>
-      <span v-else class="node-arrow-placeholder" />
+      <span
+        v-else
+        class="node-arrow-placeholder" />
 
       <!-- File/folder icon -->
-      <span class="node-icon" :class="[iconClass, iconColor]" />
+      <span
+        class="node-icon"
+        :class="[iconClass, iconColor]" />
 
       <!-- File name -->
-      <span class="node-name" :title="entry.path">
+      <span
+        class="node-name"
+        :title="entry.path">
         {{ entry.name }}
       </span>
 
       <!-- File size (for files only) -->
-      <span v-if="!isDirectory && entry.size > 0" class="node-size">
+      <span
+        v-if="!isDirectory && entry.size > 0"
+        class="node-size">
         {{ formatSize(entry.size) }}
       </span>
     </div>
 
     <!-- Children (recursive) -->
-    <div v-if="isDirectory && isExpanded && children.length > 0" class="node-children">
+    <div
+      v-if="isDirectory && isExpanded && children.length > 0"
+      class="node-children">
       <FileTreeNode
         v-for="child in children"
         :key="child.path"
@@ -159,8 +170,7 @@ function formatSize(bytes) {
         @click="emit('click', $event)"
         @dblclick="emit('dblclick', $event)"
         @toggle-expand="emit('toggle-expand', $event)"
-        @contextmenu="(e, entry) => emit('contextmenu', e, entry)"
-      />
+        @contextmenu="(e, entry) => emit('contextmenu', e, entry)" />
     </div>
   </div>
 </template>

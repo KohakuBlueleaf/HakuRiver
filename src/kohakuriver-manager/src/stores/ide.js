@@ -59,9 +59,7 @@ export const useIdeStore = defineStore('ide', () => {
   // Computed Properties
   // ==========================================================================
 
-  const activeFile = computed(() =>
-    openFiles.value.find((f) => f.path === activeFilePath.value)
-  )
+  const activeFile = computed(() => openFiles.value.find((f) => f.path === activeFilePath.value))
 
   const hasUnsavedChanges = computed(() => openFiles.value.some((f) => f.isDirty))
 
@@ -227,20 +225,15 @@ export const useIdeStore = defineStore('ide', () => {
 
   function nextTab() {
     if (openFiles.value.length <= 1) return
-    const currentIndex = openFiles.value.findIndex(
-      (f) => f.path === activeFilePath.value
-    )
+    const currentIndex = openFiles.value.findIndex((f) => f.path === activeFilePath.value)
     const nextIndex = (currentIndex + 1) % openFiles.value.length
     activeFilePath.value = openFiles.value[nextIndex].path
   }
 
   function prevTab() {
     if (openFiles.value.length <= 1) return
-    const currentIndex = openFiles.value.findIndex(
-      (f) => f.path === activeFilePath.value
-    )
-    const prevIndex =
-      (currentIndex - 1 + openFiles.value.length) % openFiles.value.length
+    const currentIndex = openFiles.value.findIndex((f) => f.path === activeFilePath.value)
+    const prevIndex = (currentIndex - 1 + openFiles.value.length) % openFiles.value.length
     activeFilePath.value = openFiles.value[prevIndex].path
   }
 
@@ -321,8 +314,7 @@ export const useIdeStore = defineStore('ide', () => {
         if (prefs.fileTreeWidth) fileTreeWidth.value = prefs.fileTreeWidth
         if (prefs.terminalSize) terminalSize.value = prefs.terminalSize
         if (prefs.terminalPosition) terminalPosition.value = prefs.terminalPosition
-        if (typeof prefs.autoSaveEnabled === 'boolean')
-          autoSaveEnabled.value = prefs.autoSaveEnabled
+        if (typeof prefs.autoSaveEnabled === 'boolean') autoSaveEnabled.value = prefs.autoSaveEnabled
       }
     } catch (e) {
       console.warn('Failed to load IDE layout preferences:', e)

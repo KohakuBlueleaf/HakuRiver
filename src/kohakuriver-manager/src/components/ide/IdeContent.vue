@@ -60,15 +60,11 @@ const layoutRef = ref(null)
 function handleClose() {
   // Check for unsaved changes
   if (ideStore.hasUnsavedChanges) {
-    ElMessageBox.confirm(
-      'You have unsaved changes. Close anyway?',
-      'Unsaved Changes',
-      {
-        confirmButtonText: 'Close',
-        cancelButtonText: 'Cancel',
-        type: 'warning',
-      }
-    )
+    ElMessageBox.confirm('You have unsaved changes. Close anyway?', 'Unsaved Changes', {
+      confirmButtonText: 'Close',
+      cancelButtonText: 'Cancel',
+      type: 'warning',
+    })
       .then(() => {
         doClose()
       })
@@ -106,13 +102,11 @@ defineExpose({
         <!-- Toggle file tree -->
         <el-tooltip
           :content="ideStore.showFileTree ? 'Hide Files' : 'Show Files'"
-          placement="bottom"
-        >
+          placement="bottom">
           <el-button
             link
             :type="ideStore.showFileTree ? 'primary' : 'default'"
-            @click="ideStore.toggleFileTree()"
-          >
+            @click="ideStore.toggleFileTree()">
             <span class="i-carbon-folder-details" />
           </el-button>
         </el-tooltip>
@@ -120,42 +114,36 @@ defineExpose({
         <!-- Toggle terminal -->
         <el-tooltip
           :content="ideStore.showTerminal ? 'Hide Terminal' : 'Show Terminal'"
-          placement="bottom"
-        >
+          placement="bottom">
           <el-button
             link
             :type="ideStore.showTerminal ? 'primary' : 'default'"
-            @click="ideStore.toggleTerminal()"
-          >
+            @click="ideStore.toggleTerminal()">
             <span class="i-carbon-terminal" />
           </el-button>
         </el-tooltip>
 
         <!-- Terminal position toggle -->
         <el-tooltip
-          :content="
-            ideStore.terminalPosition === 'right'
-              ? 'Terminal to Bottom'
-              : 'Terminal to Right'
-          "
-          placement="bottom"
-        >
-          <el-button link @click="ideStore.toggleTerminalPosition()">
-            <span
-              :class="
-                ideStore.terminalPosition === 'right'
-                  ? 'i-carbon-split-screen'
-                  : 'i-carbon-row'
-              "
-            />
+          :content="ideStore.terminalPosition === 'right' ? 'Terminal to Bottom' : 'Terminal to Right'"
+          placement="bottom">
+          <el-button
+            link
+            @click="ideStore.toggleTerminalPosition()">
+            <span :class="ideStore.terminalPosition === 'right' ? 'i-carbon-split-screen' : 'i-carbon-row'" />
           </el-button>
         </el-tooltip>
 
         <el-divider direction="vertical" />
 
         <!-- Close button -->
-        <el-tooltip content="Close IDE" placement="bottom">
-          <el-button type="danger" size="small" @click="handleClose">
+        <el-tooltip
+          content="Close IDE"
+          placement="bottom">
+          <el-button
+            type="danger"
+            size="small"
+            @click="handleClose">
             <span class="i-carbon-close" />
           </el-button>
         </el-tooltip>
@@ -170,8 +158,7 @@ defineExpose({
         :type="type"
         :container-name="containerName"
         :file-tree-mode="fileTreeMode"
-        @close="handleClose"
-      />
+        @close="handleClose" />
     </div>
 
     <!-- Status bar -->

@@ -123,11 +123,17 @@ const viewMode = ref('cards') // 'cards' or 'table'
       </div>
       <div class="flex items-center gap-2">
         <el-button-group>
-          <el-button :type="viewMode === 'cards' ? 'primary' : 'default'" @click="viewMode = 'cards'">
-            <span class="i-carbon-grid mr-2"></span> Cards
+          <el-button
+            :type="viewMode === 'cards' ? 'primary' : 'default'"
+            @click="viewMode = 'cards'">
+            <span class="i-carbon-grid mr-2"></span>
+            Cards
           </el-button>
-          <el-button :type="viewMode === 'table' ? 'primary' : 'default'" @click="viewMode = 'table'">
-            <span class="i-carbon-list mr-2"></span> Table
+          <el-button
+            :type="viewMode === 'table' ? 'primary' : 'default'"
+            @click="viewMode = 'table'">
+            <span class="i-carbon-list mr-2"></span>
+            Table
           </el-button>
         </el-button-group>
       </div>
@@ -152,7 +158,9 @@ const viewMode = ref('cards') // 'cards' or 'table'
           <span class="i-carbon-activity text-2xl text-blue-500"></span>
           <div>
             <p class="text-muted text-xs">Avg GPU Usage</p>
-            <p class="text-xl font-semibold" :class="getUtilizationColor(avgGpuUtilization)">
+            <p
+              class="text-xl font-semibold"
+              :class="getUtilizationColor(avgGpuUtilization)">
               {{ formatPercent(avgGpuUtilization) }}
             </p>
           </div>
@@ -165,7 +173,9 @@ const viewMode = ref('cards') // 'cards' or 'table'
           <span class="i-carbon-data-volume text-2xl text-green-500"></span>
           <div>
             <p class="text-muted text-xs">Avg Memory</p>
-            <p class="text-xl font-semibold" :class="getUtilizationColor(avgMemUtilization)">
+            <p
+              class="text-xl font-semibold"
+              :class="getUtilizationColor(avgMemUtilization)">
               {{ formatPercent(avgMemUtilization) }}
             </p>
           </div>
@@ -178,7 +188,9 @@ const viewMode = ref('cards') // 'cards' or 'table'
           <span class="i-carbon-temperature text-2xl text-orange-500"></span>
           <div>
             <p class="text-muted text-xs">Avg Temp</p>
-            <p class="text-xl font-semibold" :class="getTempColor(avgTemperature)">
+            <p
+              class="text-xl font-semibold"
+              :class="getTempColor(avgTemperature)">
               {{ avgTemperature > 0 ? `${avgTemperature.toFixed(0)}°C` : '-' }}
             </p>
           </div>
@@ -209,7 +221,9 @@ const viewMode = ref('cards') // 'cards' or 'table'
     </div>
 
     <!-- Loading -->
-    <div v-if="clusterStore.loading && allGpus.length === 0" class="text-center py-12">
+    <div
+      v-if="clusterStore.loading && allGpus.length === 0"
+      class="text-center py-12">
       <el-icon class="is-loading text-4xl text-blue-500"><i class="i-carbon-renew"></i></el-icon>
       <p class="text-muted mt-2">Loading GPU data...</p>
     </div>
@@ -219,12 +233,14 @@ const viewMode = ref('cards') // 'cards' or 'table'
       v-else-if="allGpus.length === 0"
       icon="i-carbon-chip"
       title="No GPUs detected"
-      description="No nodes with GPUs are currently online."
-    />
+      description="No nodes with GPUs are currently online." />
 
     <!-- Cards View -->
     <template v-else-if="viewMode === 'cards'">
-      <div v-for="(gpus, hostname) in gpusByNode" :key="hostname" class="space-y-4">
+      <div
+        v-for="(gpus, hostname) in gpusByNode"
+        :key="hostname"
+        class="space-y-4">
         <!-- Node Header -->
         <h3 class="text-lg font-semibold flex items-center gap-2">
           <span class="i-carbon-bare-metal-server text-gray-400"></span>
@@ -233,7 +249,10 @@ const viewMode = ref('cards') // 'cards' or 'table'
         </h3>
 
         <div class="grid-cards">
-          <div v-for="gpu in gpus" :key="`${hostname}-${gpu.gpu_id}`" class="card">
+          <div
+            v-for="gpu in gpus"
+            :key="`${hostname}-${gpu.gpu_id}`"
+            class="card">
             <!-- Header -->
             <div class="flex items-center justify-between mb-4">
               <div class="flex items-center gap-3">
@@ -258,8 +277,7 @@ const viewMode = ref('cards') // 'cards' or 'table'
                   :value="gpu.gpu_utilization >= 0 ? gpu.gpu_utilization : 0"
                   :max="100"
                   color="auto"
-                  :show-percent="false"
-                />
+                  :show-percent="false" />
                 <p class="text-xs text-muted mt-1">Clock: {{ formatClock(gpu.graphics_clock_mhz) }}</p>
               </div>
 
@@ -275,8 +293,7 @@ const viewMode = ref('cards') // 'cards' or 'table'
                   :value="gpu.memory_used_mib || 0"
                   :max="gpu.memory_total_mib || 1"
                   color="auto"
-                  :show-percent="false"
-                />
+                  :show-percent="false" />
                 <p class="text-xs text-muted mt-1">
                   {{ formatMiB(gpu.memory_used_mib || 0) }} / {{ formatMiB(gpu.memory_total_mib || 0) }}
                   <span class="ml-2">Clock: {{ formatClock(gpu.mem_clock_mhz) }}</span>
@@ -287,7 +304,9 @@ const viewMode = ref('cards') // 'cards' or 'table'
               <div class="grid grid-cols-2 gap-4 pt-2 border-t border-gray-200 dark:border-gray-700">
                 <div>
                   <p class="text-xs text-muted mb-1">Temperature</p>
-                  <p class="font-semibold" :class="getTempColor(gpu.temperature)">
+                  <p
+                    class="font-semibold"
+                    :class="getTempColor(gpu.temperature)">
                     {{ gpu.temperature >= 0 ? `${gpu.temperature}°C` : '-' }}
                   </p>
                 </div>
@@ -322,7 +341,9 @@ const viewMode = ref('cards') // 'cards' or 'table'
     </template>
 
     <!-- Table View -->
-    <div v-else class="table-container">
+    <div
+      v-else
+      class="table-container">
       <table class="table">
         <thead class="table-header">
           <tr>
@@ -338,7 +359,10 @@ const viewMode = ref('cards') // 'cards' or 'table'
           </tr>
         </thead>
         <tbody>
-          <tr v-for="gpu in allGpus" :key="`${gpu.hostname}-${gpu.gpu_id}`" class="table-row">
+          <tr
+            v-for="gpu in allGpus"
+            :key="`${gpu.hostname}-${gpu.gpu_id}`"
+            class="table-row">
             <td class="table-cell text-muted">{{ gpu.hostname }}</td>
             <td class="table-cell font-medium">{{ gpu.gpu_id }}</td>
             <td class="table-cell">{{ gpu.name || '-' }}</td>
@@ -350,10 +374,11 @@ const viewMode = ref('cards') // 'cards' or 'table'
                     :max="100"
                     size="sm"
                     color="auto"
-                    :show-percent="false"
-                  />
+                    :show-percent="false" />
                 </div>
-                <span class="text-sm" :class="getUtilizationColor(gpu.gpu_utilization)">
+                <span
+                  class="text-sm"
+                  :class="getUtilizationColor(gpu.gpu_utilization)">
                   {{ gpu.gpu_utilization >= 0 ? formatPercent(gpu.gpu_utilization) : '-' }}
                 </span>
               </div>
@@ -366,8 +391,7 @@ const viewMode = ref('cards') // 'cards' or 'table'
                     :max="gpu.memory_total_mib || 1"
                     size="sm"
                     color="auto"
-                    :show-percent="false"
-                  />
+                    :show-percent="false" />
                 </div>
                 <span class="text-sm">
                   {{ formatMiB(gpu.memory_used_mib || 0) }}

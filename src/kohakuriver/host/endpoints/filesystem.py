@@ -11,7 +11,15 @@ from urllib.parse import urlparse, urlencode
 
 import httpx
 import websockets
-from fastapi import APIRouter, HTTPException, Query, Path, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Query,
+    Path,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -275,7 +283,9 @@ async def stat_file(
 async def watch_filesystem(
     websocket: WebSocket,
     task_id: int,
-    paths: str = Query("/shared,/local_temp", description="Comma-separated paths to watch"),
+    paths: str = Query(
+        "/shared,/local_temp", description="Comma-separated paths to watch"
+    ),
 ):
     """
     WebSocket proxy for real-time filesystem change notifications.
@@ -288,10 +298,7 @@ async def watch_filesystem(
     try:
         runner_url = await _get_runner_url(task_id)
     except HTTPException as e:
-        await websocket.send_json({
-            "type": "error",
-            "message": e.detail
-        })
+        await websocket.send_json({"type": "error", "message": e.detail})
         await websocket.close()
         return
 
@@ -313,8 +320,7 @@ async def watch_filesystem(
                     while not stop_event.is_set():
                         try:
                             message = await asyncio.wait_for(
-                                websocket.receive_json(),
-                                timeout=1.0
+                                websocket.receive_json(), timeout=1.0
                             )
                             await runner_ws.send(json.dumps(message))
                         except asyncio.TimeoutError:
@@ -330,8 +336,7 @@ async def watch_filesystem(
                     while not stop_event.is_set():
                         try:
                             message = await asyncio.wait_for(
-                                runner_ws.recv(),
-                                timeout=1.0
+                                runner_ws.recv(), timeout=1.0
                             )
                             data = json.loads(message)
                             await websocket.send_json(data)
@@ -349,8 +354,7 @@ async def watch_filesystem(
             runner_task = asyncio.create_task(runner_to_client())
 
             await asyncio.wait(
-                [client_task, runner_task],
-                return_when=asyncio.FIRST_COMPLETED
+                [client_task, runner_task], return_when=asyncio.FIRST_COMPLETED
             )
 
             # Cancel remaining tasks
@@ -365,15 +369,11 @@ async def watch_filesystem(
 
     except websockets.exceptions.WebSocketException as e:
         logger.error(f"[FS Watch Proxy] Failed to connect to runner: {e}")
-        await websocket.send_json({
-            "type": "error",
-            "message": f"Failed to connect to runner: {e}"
-        })
+        await websocket.send_json(
+            {"type": "error", "message": f"Failed to connect to runner: {e}"}
+        )
     except Exception as e:
         logger.error(f"[FS Watch Proxy] Unexpected error: {e}")
-        await websocket.send_json({
-            "type": "error",
-            "message": f"Proxy error: {e}"
-        })
+        await websocket.send_json({"type": "error", "message": f"Proxy error: {e}"})
 
     logger.info(f"[FS Watch Proxy] Connection closed for task {task_id}")

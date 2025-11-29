@@ -55,16 +55,19 @@ const barColor = computed(() => {
 
 <template>
   <div class="w-full">
-    <div v-if="label || showPercent" class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+    <div
+      v-if="label || showPercent"
+      class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
       <span>{{ label }}</span>
       <span v-if="showPercent">{{ percent.toFixed(1) }}%</span>
     </div>
-    <div :class="barHeight" class="bg-app-inset rounded-full overflow-hidden">
+    <div
+      :class="barHeight"
+      class="bg-app-inset rounded-full overflow-hidden">
       <div
         :class="[barColor, barHeight]"
         class="rounded-full transition-all duration-300"
-        :style="{ width: `${percent}%` }"
-      ></div>
+        :style="{ width: `${percent}%` }"></div>
     </div>
   </div>
 </template>

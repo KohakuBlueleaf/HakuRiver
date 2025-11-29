@@ -56,8 +56,7 @@ function refresh() {
     <div
       v-if="uiStore.isMobile && uiStore.mobileMenuOpen"
       class="fixed inset-0 bg-black/50 z-40 md:hidden"
-      @click="uiStore.closeMobileMenu"
-    ></div>
+      @click="uiStore.closeMobileMenu"></div>
   </Transition>
 
   <!-- Sidebar -->
@@ -71,16 +70,25 @@ function refresh() {
         : uiStore.sidebarCollapsed
           ? 'w-16'
           : 'w-64',
-    ]"
-  >
+    ]">
     <!-- Logo -->
     <div class="h-16 flex items-center justify-between px-4 border-b border-gray-800">
       <div class="flex items-center gap-3">
-        <img src="/favicon.svg" alt="KohakuRiver" class="w-8 h-8 flex-shrink-0" />
-        <span v-if="!uiStore.sidebarCollapsed || uiStore.isMobile" class="font-semibold text-lg">KohakuRiver</span>
+        <img
+          src="/favicon.svg"
+          alt="KohakuRiver"
+          class="w-8 h-8 flex-shrink-0" />
+        <span
+          v-if="!uiStore.sidebarCollapsed || uiStore.isMobile"
+          class="font-semibold text-lg">
+          KohakuRiver
+        </span>
       </div>
       <!-- Close button for mobile -->
-      <button v-if="uiStore.isMobile" @click="uiStore.closeMobileMenu" class="p-1 rounded hover:bg-gray-800">
+      <button
+        v-if="uiStore.isMobile"
+        @click="uiStore.closeMobileMenu"
+        class="p-1 rounded hover:bg-gray-800">
         <span class="i-carbon-close text-xl"></span>
       </button>
     </div>
@@ -88,14 +96,23 @@ function refresh() {
     <!-- Navigation -->
     <nav class="flex-1 py-4 overflow-y-auto">
       <ul class="space-y-1 px-2">
-        <li v-for="item in menuItems" :key="item.path">
+        <li
+          v-for="item in menuItems"
+          :key="item.path">
           <button
             @click="navigateTo(item.path)"
             class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors"
-            :class="isActive(item.path) ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
-          >
-            <span :class="item.icon" class="text-xl flex-shrink-0"></span>
-            <span v-if="!uiStore.sidebarCollapsed || uiStore.isMobile" class="truncate">{{ item.label }}</span>
+            :class="
+              isActive(item.path) ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+            ">
+            <span
+              :class="item.icon"
+              class="text-xl flex-shrink-0"></span>
+            <span
+              v-if="!uiStore.sidebarCollapsed || uiStore.isMobile"
+              class="truncate">
+              {{ item.label }}
+            </span>
           </button>
         </li>
       </ul>
@@ -109,17 +126,17 @@ function refresh() {
         <button
           @click="cycleTheme"
           class="flex items-center justify-center w-9 h-9 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
-          title="Toggle theme"
-        >
-          <span :class="currentThemeIcon" class="text-lg"></span>
+          title="Toggle theme">
+          <span
+            :class="currentThemeIcon"
+            class="text-lg"></span>
         </button>
 
         <!-- Refresh -->
         <button
           @click="refresh"
           class="flex items-center justify-center w-9 h-9 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
-          title="Refresh page"
-        >
+          title="Refresh page">
           <span class="i-carbon-renew text-lg"></span>
         </button>
       </div>
@@ -128,12 +145,10 @@ function refresh() {
       <button
         v-if="!uiStore.isMobile"
         @click="uiStore.toggleSidebar"
-        class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
-      >
+        class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors">
         <span
           :class="uiStore.sidebarCollapsed ? 'i-carbon-chevron-right' : 'i-carbon-chevron-left'"
-          class="text-lg"
-        ></span>
+          class="text-lg"></span>
         <span v-if="!uiStore.sidebarCollapsed">Collapse</span>
       </button>
     </div>

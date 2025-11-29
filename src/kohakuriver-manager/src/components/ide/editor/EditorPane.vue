@@ -44,16 +44,12 @@ const readOnly = computed(() => ideStore.activeFile?.encoding === 'base64')
 function handleClose(file) {
   // Check for unsaved changes
   if (file.isDirty) {
-    ElMessageBox.confirm(
-      `Do you want to save changes to "${file.name}"?`,
-      'Unsaved Changes',
-      {
-        confirmButtonText: 'Save',
-        cancelButtonText: "Don't Save",
-        distinguishCancelAndClose: true,
-        type: 'warning',
-      }
-    )
+    ElMessageBox.confirm(`Do you want to save changes to "${file.name}"?`, 'Unsaved Changes', {
+      confirmButtonText: 'Save',
+      cancelButtonText: "Don't Save",
+      distinguishCancelAndClose: true,
+      type: 'warning',
+    })
       .then(() => {
         // Save and close
         autoSave.saveNow(file.path).then(() => {
@@ -80,15 +76,11 @@ function handleCloseOthers() {
   // Check for unsaved files
   const dirtyFiles = otherFiles.filter((f) => f.isDirty)
   if (dirtyFiles.length > 0) {
-    ElMessageBox.confirm(
-      `${dirtyFiles.length} file(s) have unsaved changes. Close anyway?`,
-      'Unsaved Changes',
-      {
-        confirmButtonText: 'Close All',
-        cancelButtonText: 'Cancel',
-        type: 'warning',
-      }
-    )
+    ElMessageBox.confirm(`${dirtyFiles.length} file(s) have unsaved changes. Close anyway?`, 'Unsaved Changes', {
+      confirmButtonText: 'Close All',
+      cancelButtonText: 'Cancel',
+      type: 'warning',
+    })
       .then(() => {
         ideStore.closeOtherFiles(currentPath)
       })
@@ -102,15 +94,11 @@ function handleCloseOthers() {
 function handleCloseAll() {
   const dirtyFiles = ideStore.openFiles.filter((f) => f.isDirty)
   if (dirtyFiles.length > 0) {
-    ElMessageBox.confirm(
-      `${dirtyFiles.length} file(s) have unsaved changes. Close anyway?`,
-      'Unsaved Changes',
-      {
-        confirmButtonText: 'Close All',
-        cancelButtonText: 'Cancel',
-        type: 'warning',
-      }
-    )
+    ElMessageBox.confirm(`${dirtyFiles.length} file(s) have unsaved changes. Close anyway?`, 'Unsaved Changes', {
+      confirmButtonText: 'Close All',
+      cancelButtonText: 'Cancel',
+      type: 'warning',
+    })
       .then(() => {
         ideStore.closeAllFiles()
       })
@@ -148,8 +136,7 @@ defineExpose({
       v-if="ideStore.openFiles.length > 0"
       @close="handleClose"
       @close-others="handleCloseOthers"
-      @close-all="handleCloseAll"
-    />
+      @close-all="handleCloseAll" />
 
     <!-- Editor -->
     <div class="editor-content">
@@ -162,31 +149,36 @@ defineExpose({
         :path="ideStore.activeFilePath"
         theme="vs-dark"
         @save="handleSave"
-        @cursor-change="handleCursorChange"
-      />
+        @cursor-change="handleCursorChange" />
 
       <!-- Empty state -->
-      <div v-else class="editor-empty">
+      <div
+        v-else
+        class="editor-empty">
         <div class="empty-icon">
           <span class="i-carbon-document-blank text-6xl text-gray-500" />
         </div>
         <div class="empty-text">
           <p>No file open</p>
-          <p class="text-sm text-gray-500">
-            Select a file from the file tree to edit
-          </p>
+          <p class="text-sm text-gray-500">Select a file from the file tree to edit</p>
         </div>
         <div class="empty-shortcuts">
           <div class="shortcut">
-            <kbd>Ctrl</kbd> + <kbd>S</kbd>
+            <kbd>Ctrl</kbd>
+            +
+            <kbd>S</kbd>
             <span>Save</span>
           </div>
           <div class="shortcut">
-            <kbd>Ctrl</kbd> + <kbd>B</kbd>
+            <kbd>Ctrl</kbd>
+            +
+            <kbd>B</kbd>
             <span>Toggle Files</span>
           </div>
           <div class="shortcut">
-            <kbd>Ctrl</kbd> + <kbd>`</kbd>
+            <kbd>Ctrl</kbd>
+            +
+            <kbd>`</kbd>
             <span>Toggle Terminal</span>
           </div>
         </div>

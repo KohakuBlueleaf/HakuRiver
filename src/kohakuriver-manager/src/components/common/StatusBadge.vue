@@ -32,7 +32,9 @@ const displayStatus = computed(() => {
 </script>
 
 <template>
-  <span :class="[badgeClass, sizeClass]" class="rounded-full font-medium inline-flex items-center gap-1">
+  <span
+    :class="[badgeClass, sizeClass]"
+    class="rounded-full font-medium inline-flex items-center gap-1">
     <span class="w-1.5 h-1.5 rounded-full bg-current opacity-75"></span>
     {{ displayStatus }}
   </span>

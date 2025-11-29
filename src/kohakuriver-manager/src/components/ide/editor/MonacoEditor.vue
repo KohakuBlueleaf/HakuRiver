@@ -250,7 +250,9 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="editorContainer" class="monaco-editor-container" />
+  <div
+    ref="editorContainer"
+    class="monaco-editor-container" />
 </template>
 
 <style scoped>

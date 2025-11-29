@@ -20,7 +20,10 @@ const currentThemeIcon = computed(() => {
     <!-- Left Side - Menu button -->
     <div class="flex items-center gap-3">
       <!-- Mobile Menu Button -->
-      <button v-if="uiStore.isMobile" class="header-btn md:hidden" @click="uiStore.toggleMobileMenu">
+      <button
+        v-if="uiStore.isMobile"
+        class="header-btn md:hidden"
+        @click="uiStore.toggleMobileMenu">
         <span class="i-carbon-menu text-xl"></span>
       </button>
     </div>
@@ -28,9 +31,13 @@ const currentThemeIcon = computed(() => {
     <!-- Right Side Actions -->
     <div class="flex items-center gap-2 md:gap-4">
       <!-- Theme Selector -->
-      <el-dropdown trigger="click" @command="uiStore.setTheme">
+      <el-dropdown
+        trigger="click"
+        @command="uiStore.setTheme">
         <button class="header-btn">
-          <span :class="currentThemeIcon" class="text-xl"></span>
+          <span
+            :class="currentThemeIcon"
+            class="text-xl"></span>
         </button>
         <template #dropdown>
           <el-dropdown-menu>
@@ -38,9 +45,10 @@ const currentThemeIcon = computed(() => {
               v-for="option in themeOptions"
               :key="option.value"
               :command="option.value"
-              :class="{ 'is-active': uiStore.theme === option.value }"
-            >
-              <span :class="option.icon" class="mr-2"></span>
+              :class="{ 'is-active': uiStore.theme === option.value }">
+              <span
+                :class="option.icon"
+                class="mr-2"></span>
               {{ option.label }}
             </el-dropdown-item>
           </el-dropdown-menu>
@@ -48,7 +56,10 @@ const currentThemeIcon = computed(() => {
       </el-dropdown>
 
       <!-- Refresh Button -->
-      <button class="header-btn hidden sm:flex" @click="$router.go(0)" title="Refresh">
+      <button
+        class="header-btn hidden sm:flex"
+        @click="$router.go(0)"
+        title="Refresh">
         <span class="i-carbon-renew text-xl"></span>
       </button>
     </div>

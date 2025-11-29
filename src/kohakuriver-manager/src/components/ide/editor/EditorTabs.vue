@@ -65,26 +65,39 @@ function handleContextMenu(e, file) {
         :title="file.path"
         @click="handleTabClick(file)"
         @mousedown="handleMiddleClick($event, file)"
-        @contextmenu="handleContextMenu($event, file)"
-      >
+        @contextmenu="handleContextMenu($event, file)">
         <!-- File icon -->
-        <span class="tab-icon" :class="[getIcon(file), getIconColor(file)]" />
+        <span
+          class="tab-icon"
+          :class="[getIcon(file), getIconColor(file)]" />
 
         <!-- File name -->
         <span class="tab-name">{{ file.name }}</span>
 
         <!-- Dirty indicator or close button -->
-        <span class="tab-close" @click="handleClose($event, file)">
-          <span v-if="file.isDirty" class="dirty-dot" />
-          <span v-else class="i-carbon-close" />
+        <span
+          class="tab-close"
+          @click="handleClose($event, file)">
+          <span
+            v-if="file.isDirty"
+            class="dirty-dot" />
+          <span
+            v-else
+            class="i-carbon-close" />
         </span>
       </div>
     </div>
 
     <!-- Actions -->
-    <div v-if="ideStore.openFiles.length > 0" class="tabs-actions">
-      <el-dropdown trigger="click" size="small">
-        <el-button link size="small">
+    <div
+      v-if="ideStore.openFiles.length > 0"
+      class="tabs-actions">
+      <el-dropdown
+        trigger="click"
+        size="small">
+        <el-button
+          link
+          size="small">
           <span class="i-carbon-overflow-menu-horizontal" />
         </el-button>
         <template #dropdown>
@@ -178,7 +191,9 @@ function handleContextMenu(e, file) {
   border-radius: 4px;
   flex-shrink: 0;
   opacity: 0;
-  transition: opacity 0.1s ease, background-color 0.1s ease;
+  transition:
+    opacity 0.1s ease,
+    background-color 0.1s ease;
 }
 
 .tab:hover .tab-close,

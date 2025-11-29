@@ -7,14 +7,71 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 
 // Binary file extensions
 const BINARY_EXTENSIONS = new Set([
-  'png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico', 'webp', 'svg', 'tiff', 'tif',
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
-  'zip', 'tar', 'gz', 'bz2', 'xz', '7z', 'rar', 'jar', 'war',
-  'exe', 'dll', 'so', 'dylib', 'bin', 'dat', 'db', 'sqlite', 'sqlite3',
-  'mp3', 'mp4', 'avi', 'mov', 'mkv', 'flv', 'wav', 'flac', 'ogg', 'webm',
-  'woff', 'woff2', 'ttf', 'otf', 'eot',
-  'pyc', 'pyo', 'class', 'o', 'obj', 'a', 'lib',
-  'iso', 'dmg', 'img', 'vmdk', 'vdi',
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'bmp',
+  'ico',
+  'webp',
+  'svg',
+  'tiff',
+  'tif',
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'odt',
+  'ods',
+  'odp',
+  'zip',
+  'tar',
+  'gz',
+  'bz2',
+  'xz',
+  '7z',
+  'rar',
+  'jar',
+  'war',
+  'exe',
+  'dll',
+  'so',
+  'dylib',
+  'bin',
+  'dat',
+  'db',
+  'sqlite',
+  'sqlite3',
+  'mp3',
+  'mp4',
+  'avi',
+  'mov',
+  'mkv',
+  'flv',
+  'wav',
+  'flac',
+  'ogg',
+  'webm',
+  'woff',
+  'woff2',
+  'ttf',
+  'otf',
+  'eot',
+  'pyc',
+  'pyo',
+  'class',
+  'o',
+  'obj',
+  'a',
+  'lib',
+  'iso',
+  'dmg',
+  'img',
+  'vmdk',
+  'vdi',
 ])
 
 /**
@@ -345,9 +402,7 @@ export function useFileSystem() {
    */
   async function saveAllFiles() {
     const dirtyFiles = ideStore.openFiles.filter((f) => f.isDirty)
-    const results = await Promise.all(
-      dirtyFiles.map((f) => writeFile(f.path, f.content, { encoding: f.encoding }))
-    )
+    const results = await Promise.all(dirtyFiles.map((f) => writeFile(f.path, f.content, { encoding: f.encoding })))
     return results
   }
 

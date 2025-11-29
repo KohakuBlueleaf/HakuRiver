@@ -207,7 +207,9 @@ const gpuStats = computed(() => {
     <div class="grid-stats">
       <div class="stat-card">
         <span class="i-carbon-chip text-3xl text-blue-500 mb-2 block"></span>
-        <div class="stat-value" :class="clusterStore.avgCpuPercent > 80 ? 'text-red-500' : ''">
+        <div
+          class="stat-value"
+          :class="clusterStore.avgCpuPercent > 80 ? 'text-red-500' : ''">
           {{ formatPercent(clusterStore.avgCpuPercent) }}
         </div>
         <div class="stat-label">Avg CPU Usage</div>
@@ -215,7 +217,9 @@ const gpuStats = computed(() => {
 
       <div class="stat-card">
         <span class="i-carbon-data-base text-3xl text-green-500 mb-2 block"></span>
-        <div class="stat-value" :class="clusterStore.avgMemoryPercent > 80 ? 'text-red-500' : ''">
+        <div
+          class="stat-value"
+          :class="clusterStore.avgMemoryPercent > 80 ? 'text-red-500' : ''">
           {{ formatPercent(clusterStore.avgMemoryPercent) }}
         </div>
         <div class="stat-label">Avg Memory Usage</div>
@@ -238,25 +242,36 @@ const gpuStats = computed(() => {
     <div class="grid-2">
       <!-- CPU Chart -->
       <div class="card">
-        <div ref="cpuChartRef" class="h-64"></div>
+        <div
+          ref="cpuChartRef"
+          class="h-64"></div>
       </div>
 
       <!-- Memory Chart -->
       <div class="card">
-        <div ref="memoryChartRef" class="h-64"></div>
+        <div
+          ref="memoryChartRef"
+          class="h-64"></div>
       </div>
     </div>
 
     <!-- Node Comparison -->
     <div class="card">
-      <div ref="nodeCompareChartRef" class="h-72"></div>
+      <div
+        ref="nodeCompareChartRef"
+        class="h-72"></div>
     </div>
 
     <!-- GPU Stats -->
-    <div v-if="gpuStats.length > 0" class="card">
+    <div
+      v-if="gpuStats.length > 0"
+      class="card">
       <h3 class="card-title mb-4">GPU Overview</h3>
       <div class="grid-cards">
-        <div v-for="(gpu, idx) in gpuStats" :key="idx" class="p-4 bg-app-surface rounded-lg">
+        <div
+          v-for="(gpu, idx) in gpuStats"
+          :key="idx"
+          class="p-4 bg-app-surface rounded-lg">
           <div class="flex items-center gap-3 mb-3">
             <span class="i-carbon-cube text-xl text-yellow-500"></span>
             <div>
@@ -264,16 +279,32 @@ const gpuStats = computed(() => {
               <div class="text-xs text-muted">{{ gpu.node }}</div>
             </div>
           </div>
-          <div v-if="gpu.memory_total" class="space-y-2">
-            <ResourceBar :value="gpu.memory_used || 0" :max="gpu.memory_total" label="Memory" color="yellow" />
+          <div
+            v-if="gpu.memory_total"
+            class="space-y-2">
+            <ResourceBar
+              :value="gpu.memory_used || 0"
+              :max="gpu.memory_total"
+              label="Memory"
+              color="yellow" />
             <div class="text-xs text-muted">
               {{ formatBytes(gpu.memory_used || 0) }} / {{ formatBytes(gpu.memory_total) }}
             </div>
           </div>
-          <div v-if="gpu.utilization !== undefined" class="mt-2">
-            <ResourceBar :value="gpu.utilization" :max="100" label="Utilization" color="blue" />
+          <div
+            v-if="gpu.utilization !== undefined"
+            class="mt-2">
+            <ResourceBar
+              :value="gpu.utilization"
+              :max="100"
+              label="Utilization"
+              color="blue" />
           </div>
-          <div v-if="gpu.temperature" class="text-xs text-muted mt-2">Temperature: {{ gpu.temperature }}°C</div>
+          <div
+            v-if="gpu.temperature"
+            class="text-xs text-muted mt-2">
+            Temperature: {{ gpu.temperature }}°C
+          </div>
         </div>
       </div>
     </div>
@@ -293,7 +324,10 @@ const gpuStats = computed(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="node in clusterStore.nodes" :key="node.hostname" class="table-row">
+            <tr
+              v-for="node in clusterStore.nodes"
+              :key="node.hostname"
+              class="table-row">
               <td class="table-cell font-medium">{{ node.hostname }}</td>
               <td class="table-cell">{{ formatBytes(node.memory_total_bytes || 0) }}</td>
               <td class="table-cell">{{ formatBytes(node.memory_used_bytes || 0) }}</td>
@@ -308,8 +342,7 @@ const gpuStats = computed(() => {
                       :max="node.memory_total_bytes || 1"
                       color="auto"
                       size="sm"
-                      :show-percent="false"
-                    />
+                      :show-percent="false" />
                   </div>
                   <span>{{ formatPercent(node.memory_percent || 0) }}</span>
                 </div>

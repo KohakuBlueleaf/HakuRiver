@@ -209,38 +209,30 @@ defineExpose({
             connected: terminal.connected.value,
             connecting: terminal.connecting.value,
             disconnected: !terminal.connected.value && !terminal.connecting.value,
-          }"
-        />
+          }" />
         <span class="status-text">
-          {{
-            terminal.connecting.value
-              ? 'Connecting...'
-              : terminal.connected.value
-                ? 'Connected'
-                : 'Disconnected'
-          }}
+          {{ terminal.connecting.value ? 'Connecting...' : terminal.connected.value ? 'Connected' : 'Disconnected' }}
         </span>
       </div>
       <div class="terminal-actions">
-        <el-tooltip content="Clear" placement="top">
-          <el-button link size="small" @click="clear">
+        <el-tooltip
+          content="Clear"
+          placement="top">
+          <el-button
+            link
+            size="small"
+            @click="clear">
             <span class="i-carbon-clean" />
           </el-button>
         </el-tooltip>
         <el-tooltip
           :content="terminal.connected.value ? 'Disconnect' : 'Connect'"
-          placement="top"
-        >
+          placement="top">
           <el-button
             link
             size="small"
-            @click="terminal.connected.value ? disconnect() : connect()"
-          >
-            <span
-              :class="
-                terminal.connected.value ? 'i-carbon-plug-filled' : 'i-carbon-plug'
-              "
-            />
+            @click="terminal.connected.value ? disconnect() : connect()">
+            <span :class="terminal.connected.value ? 'i-carbon-plug-filled' : 'i-carbon-plug'" />
           </el-button>
         </el-tooltip>
       </div>
@@ -248,7 +240,9 @@ defineExpose({
 
     <!-- Terminal wrapper - uses position relative/absolute to contain terminal -->
     <div class="terminal-wrapper">
-      <div ref="terminalContainer" class="terminal-container" />
+      <div
+        ref="terminalContainer"
+        class="terminal-container" />
     </div>
   </div>
 </template>

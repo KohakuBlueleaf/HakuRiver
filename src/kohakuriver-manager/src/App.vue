@@ -19,12 +19,13 @@ onMounted(() => {
     <!-- Main Content Area -->
     <div
       class="main-container h-screen transition-all duration-300"
-      :class="[uiStore.isMobile ? 'ml-0' : uiStore.sidebarCollapsed ? 'ml-16' : 'ml-64']"
-    >
+      :class="[uiStore.isMobile ? 'ml-0' : uiStore.sidebarCollapsed ? 'ml-16' : 'ml-64']">
       <!-- Page Content -->
       <main class="main-content h-full overflow-auto p-4 md:p-6">
         <router-view v-slot="{ Component, route }">
-          <component :is="Component" :key="route.path" />
+          <component
+            :is="Component"
+            :key="route.path" />
         </router-view>
       </main>
     </div>
@@ -33,4 +34,3 @@ onMounted(() => {
     <GlobalLoading />
   </div>
 </template>
-

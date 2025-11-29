@@ -73,15 +73,11 @@ const dialogVisible = computed({
 function handleClose() {
   // Check for unsaved changes
   if (ideStore.hasUnsavedChanges) {
-    ElMessageBox.confirm(
-      'You have unsaved changes. Close anyway?',
-      'Unsaved Changes',
-      {
-        confirmButtonText: 'Close',
-        cancelButtonText: 'Cancel',
-        type: 'warning',
-      }
-    )
+    ElMessageBox.confirm('You have unsaved changes. Close anyway?', 'Unsaved Changes', {
+      confirmButtonText: 'Close',
+      cancelButtonText: 'Cancel',
+      type: 'warning',
+    })
       .then(() => {
         closeDialog()
       })
@@ -128,28 +124,29 @@ function handleClosed() {
     :fullscreen="true"
     class="ide-dialog"
     @opened="handleOpened"
-    @closed="handleClosed"
-  >
+    @closed="handleClosed">
     <!-- Custom header -->
     <template #header>
       <div class="ide-header">
         <div class="ide-title">
           <span class="i-carbon-code mr-2" />
           <span>{{ title }}</span>
-          <span v-if="taskId" class="ide-task-id"> - Task #{{ taskId }}</span>
+          <span
+            v-if="taskId"
+            class="ide-task-id">
+            - Task #{{ taskId }}
+          </span>
         </div>
 
         <div class="ide-header-actions">
           <!-- Toggle file tree -->
           <el-tooltip
             :content="ideStore.showFileTree ? 'Hide Files' : 'Show Files'"
-            placement="bottom"
-          >
+            placement="bottom">
             <el-button
               link
               :type="ideStore.showFileTree ? 'primary' : 'default'"
-              @click="ideStore.toggleFileTree()"
-            >
+              @click="ideStore.toggleFileTree()">
               <span class="i-carbon-folder-details" />
             </el-button>
           </el-tooltip>
@@ -157,42 +154,35 @@ function handleClosed() {
           <!-- Toggle terminal -->
           <el-tooltip
             :content="ideStore.showTerminal ? 'Hide Terminal' : 'Show Terminal'"
-            placement="bottom"
-          >
+            placement="bottom">
             <el-button
               link
               :type="ideStore.showTerminal ? 'primary' : 'default'"
-              @click="ideStore.toggleTerminal()"
-            >
+              @click="ideStore.toggleTerminal()">
               <span class="i-carbon-terminal" />
             </el-button>
           </el-tooltip>
 
           <!-- Terminal position toggle -->
           <el-tooltip
-            :content="
-              ideStore.terminalPosition === 'right'
-                ? 'Terminal to Bottom'
-                : 'Terminal to Right'
-            "
-            placement="bottom"
-          >
-            <el-button link @click="ideStore.toggleTerminalPosition()">
-              <span
-                :class="
-                  ideStore.terminalPosition === 'right'
-                    ? 'i-carbon-split-screen'
-                    : 'i-carbon-row'
-                "
-              />
+            :content="ideStore.terminalPosition === 'right' ? 'Terminal to Bottom' : 'Terminal to Right'"
+            placement="bottom">
+            <el-button
+              link
+              @click="ideStore.toggleTerminalPosition()">
+              <span :class="ideStore.terminalPosition === 'right' ? 'i-carbon-split-screen' : 'i-carbon-row'" />
             </el-button>
           </el-tooltip>
 
           <el-divider direction="vertical" />
 
           <!-- Close button -->
-          <el-tooltip content="Close (Esc)" placement="bottom">
-            <el-button link @click="handleClose">
+          <el-tooltip
+            content="Close (Esc)"
+            placement="bottom">
+            <el-button
+              link
+              @click="handleClose">
               <span class="i-carbon-close text-lg" />
             </el-button>
           </el-tooltip>
@@ -208,8 +198,7 @@ function handleClosed() {
         :task-id="taskId"
         :type="type"
         :container-name="containerName"
-        @close="handleClose"
-      />
+        @close="handleClose" />
     </div>
 
     <!-- Status bar -->

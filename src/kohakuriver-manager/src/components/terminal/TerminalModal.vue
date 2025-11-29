@@ -94,25 +94,29 @@ onUnmounted(() => {
     destroy-on-close
     @opened="handleOpened"
     @closed="handleClosed"
-    class="terminal-dialog"
-  >
+    class="terminal-dialog">
     <div class="terminal-container">
       <!-- Status bar -->
       <div class="flex items-center justify-between px-3 py-2 bg-gray-800 border-b border-gray-700">
         <div class="flex items-center gap-2">
           <span
             class="w-2 h-2 rounded-full"
-            :class="connected ? 'bg-green-500' : connecting ? 'bg-yellow-500' : 'bg-red-500'"
-          ></span>
+            :class="connected ? 'bg-green-500' : connecting ? 'bg-yellow-500' : 'bg-red-500'"></span>
           <span class="text-xs text-gray-400">
             {{ connected ? 'Connected' : connecting ? 'Connecting...' : 'Disconnected' }}
           </span>
         </div>
-        <div v-if="error" class="text-xs text-red-400">{{ error }}</div>
+        <div
+          v-if="error"
+          class="text-xs text-red-400">
+          {{ error }}
+        </div>
       </div>
 
       <!-- Terminal -->
-      <div ref="terminalRef" class="terminal-content"></div>
+      <div
+        ref="terminalRef"
+        class="terminal-content"></div>
     </div>
   </el-dialog>
 </template>

@@ -18,7 +18,14 @@ from typing import Literal
 
 import docker
 from docker.errors import NotFound as DockerNotFound, APIError as DockerAPIError
-from fastapi import APIRouter, HTTPException, Query, Path, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Query,
+    Path,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from pydantic import BaseModel, Field
 
 from kohakuriver.storage.vault import TaskStateStore
@@ -802,7 +809,9 @@ async def stat_file(
 async def watch_filesystem(
     websocket: WebSocket,
     task_id: int,
-    paths: str = Query("/shared,/local_temp", description="Comma-separated paths to watch"),
+    paths: str = Query(
+        "/shared,/local_temp", description="Comma-separated paths to watch"
+    ),
 ):
     """
     WebSocket endpoint for real-time filesystem change notifications.
@@ -820,10 +829,9 @@ async def watch_filesystem(
     # Resolve container
     container_name = _resolve_container_name(task_id)
     if not container_name:
-        await websocket.send_json({
-            "type": "error",
-            "message": f"Task {task_id} not found on this runner."
-        })
+        await websocket.send_json(
+            {"type": "error", "message": f"Task {task_id} not found on this runner."}
+        )
         await websocket.close()
         return
 
@@ -832,17 +840,18 @@ async def watch_filesystem(
         client = docker.from_env(timeout=30)
         container = client.containers.get(container_name)
         if container.status != "running":
-            await websocket.send_json({
-                "type": "error",
-                "message": f"Container is not running (status: {container.status})."
-            })
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "message": f"Container is not running (status: {container.status}).",
+                }
+            )
             await websocket.close()
             return
     except Exception as e:
-        await websocket.send_json({
-            "type": "error",
-            "message": f"Failed to connect to container: {e}"
-        })
+        await websocket.send_json(
+            {"type": "error", "message": f"Failed to connect to container: {e}"}
+        )
         await websocket.close()
         return
 
@@ -864,14 +873,15 @@ async def watch_filesystem(
             pass
 
     if not valid_paths:
-        await websocket.send_json({
-            "type": "error",
-            "message": "No valid paths to watch."
-        })
+        await websocket.send_json(
+            {"type": "error", "message": "No valid paths to watch."}
+        )
         await websocket.close()
         return
 
-    logger.info(f"[FS Watch] Starting file watcher for task {task_id}, paths: {valid_paths}")
+    logger.info(
+        f"[FS Watch] Starting file watcher for task {task_id}, paths: {valid_paths}"
+    )
 
     # Check if inotifywait is available
     exit_code, _, _ = await _exec_in_container(
@@ -903,19 +913,19 @@ async def _watch_with_inotify(
     # --format: output format
     paths_str = " ".join(paths)
     cmd = [
-        "inotifywait", "-m", "-r",
-        "-e", "create,modify,delete,move",
-        "--format", "%e|%w%f|%:e",
+        "inotifywait",
+        "-m",
+        "-r",
+        "-e",
+        "create,modify,delete,move",
+        "--format",
+        "%e|%w%f|%:e",
     ] + paths
 
     logger.info(f"[FS Watch] Using inotifywait for task {task_id}")
 
     # Notify client we're watching
-    await websocket.send_json({
-        "type": "watching",
-        "paths": paths,
-        "method": "inotify"
-    })
+    await websocket.send_json({"type": "watching", "paths": paths, "method": "inotify"})
 
     # Create exec instance for inotifywait
     exec_instance = container.client.api.exec_create(
@@ -937,10 +947,9 @@ async def _watch_with_inotify(
     )
 
     if not hasattr(socket_stream, "_sock") or not socket_stream._sock:
-        await websocket.send_json({
-            "type": "error",
-            "message": "Failed to get socket for inotifywait."
-        })
+        await websocket.send_json(
+            {"type": "error", "message": "Failed to get socket for inotifywait."}
+        )
         return
 
     raw_socket = socket_stream._sock
@@ -986,12 +995,14 @@ async def _watch_with_inotify(
                         elif "MODIFY" in events:
                             event_type = "MODIFY"
 
-                        await websocket.send_json({
-                            "type": "change",
-                            "event": event_type,
-                            "path": file_path,
-                            "is_dir": is_dir,
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "change",
+                                "event": event_type,
+                                "path": file_path,
+                                "is_dir": is_dir,
+                            }
+                        )
 
             except TimeoutError:
                 # Check for WebSocket messages during timeout
@@ -1011,8 +1022,7 @@ async def _watch_with_inotify(
             while not stop_event.is_set():
                 try:
                     message = await asyncio.wait_for(
-                        websocket.receive_json(),
-                        timeout=1.0
+                        websocket.receive_json(), timeout=1.0
                     )
                     # Handle ping
                     if message.get("type") == "ping":
@@ -1029,10 +1039,7 @@ async def _watch_with_inotify(
         read_task = asyncio.create_task(read_inotify_output())
         ws_task = asyncio.create_task(handle_websocket_input())
 
-        await asyncio.wait(
-            [read_task, ws_task],
-            return_when=asyncio.FIRST_COMPLETED
-        )
+        await asyncio.wait([read_task, ws_task], return_when=asyncio.FIRST_COMPLETED)
     finally:
         stop_event.set()
         try:
@@ -1053,15 +1060,14 @@ async def _watch_with_polling(
     """
     Watch filesystem using polling (fallback when inotifywait is not available).
     """
-    logger.info(f"[FS Watch] Using polling for task {task_id} (inotifywait not available)")
+    logger.info(
+        f"[FS Watch] Using polling for task {task_id} (inotifywait not available)"
+    )
 
     # Notify client we're watching
-    await websocket.send_json({
-        "type": "watching",
-        "paths": paths,
-        "method": "polling",
-        "interval": interval
-    })
+    await websocket.send_json(
+        {"type": "watching", "paths": paths, "method": "polling", "interval": interval}
+    )
 
     # State: path -> {name -> mtime}
     file_states: dict[str, dict[str, float]] = {}
@@ -1078,7 +1084,9 @@ async def _watch_with_polling(
             if exit_code != 0:
                 return {}
             # No mtime available, use 0
-            return {line.strip(): 0 for line in stdout.strip().split("\n") if line.strip()}
+            return {
+                line.strip(): 0 for line in stdout.strip().split("\n") if line.strip()
+            }
 
         result = {}
         for line in stdout.strip().split("\n"):
@@ -1113,32 +1121,38 @@ async def _watch_with_polling(
                     # Created files
                     for f in new_files - old_files:
                         is_dir = f.endswith("/") or await _is_directory(container, f)
-                        await websocket.send_json({
-                            "type": "change",
-                            "event": "CREATE",
-                            "path": f,
-                            "is_dir": is_dir,
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "change",
+                                "event": "CREATE",
+                                "path": f,
+                                "is_dir": is_dir,
+                            }
+                        )
 
                     # Deleted files
                     for f in old_files - new_files:
-                        await websocket.send_json({
-                            "type": "change",
-                            "event": "DELETE",
-                            "path": f,
-                            "is_dir": False,  # Can't know for deleted
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "change",
+                                "event": "DELETE",
+                                "path": f,
+                                "is_dir": False,  # Can't know for deleted
+                            }
+                        )
 
                     # Modified files
                     for f in old_files & new_files:
                         if old_state[f] != new_state[f]:
                             is_dir = await _is_directory(container, f)
-                            await websocket.send_json({
-                                "type": "change",
-                                "event": "MODIFY",
-                                "path": f,
-                                "is_dir": is_dir,
-                            })
+                            await websocket.send_json(
+                                {
+                                    "type": "change",
+                                    "event": "MODIFY",
+                                    "path": f,
+                                    "is_dir": is_dir,
+                                }
+                            )
 
                     file_states[path] = new_state
 
@@ -1151,8 +1165,7 @@ async def _watch_with_polling(
             while not stop_event.is_set():
                 try:
                     message = await asyncio.wait_for(
-                        websocket.receive_json(),
-                        timeout=1.0
+                        websocket.receive_json(), timeout=1.0
                     )
                     if message.get("type") == "ping":
                         await websocket.send_json({"type": "pong"})
@@ -1168,10 +1181,7 @@ async def _watch_with_polling(
         poll_task = asyncio.create_task(poll_changes())
         ws_task = asyncio.create_task(handle_websocket_input())
 
-        await asyncio.wait(
-            [poll_task, ws_task],
-            return_when=asyncio.FIRST_COMPLETED
-        )
+        await asyncio.wait([poll_task, ws_task], return_when=asyncio.FIRST_COMPLETED)
     finally:
         stop_event.set()
 

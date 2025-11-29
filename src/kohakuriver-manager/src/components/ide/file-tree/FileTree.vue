@@ -60,12 +60,10 @@ const vpsSections = [
   { path: '/', name: 'Root', icon: 'i-carbon-folder-parent', defaultExpanded: false },
 ]
 
-const containerSections = [
-  { path: '/', name: 'Root', icon: 'i-carbon-folder-parent', defaultExpanded: true },
-]
+const containerSections = [{ path: '/', name: 'Root', icon: 'i-carbon-folder-parent', defaultExpanded: true }]
 
 // Use computed sections based on mode
-const sections = computed(() => props.mode === 'container' ? containerSections : vpsSections)
+const sections = computed(() => (props.mode === 'container' ? containerSections : vpsSections))
 
 // Section state - initialized dynamically based on mode
 const sectionEntries = ref({
@@ -185,7 +183,11 @@ async function toggleSection(sectionPath) {
   sectionExpanded.value[sectionPath] = !sectionExpanded.value[sectionPath]
 
   // Load section if expanding and not yet loaded
-  if (sectionExpanded.value[sectionPath] && sectionEntries.value[sectionPath].length === 0 && !sectionErrors.value[sectionPath]) {
+  if (
+    sectionExpanded.value[sectionPath] &&
+    sectionEntries.value[sectionPath].length === 0 &&
+    !sectionErrors.value[sectionPath]
+  ) {
     await loadSection(sectionPath)
   }
 }
@@ -328,9 +330,10 @@ async function createNewItem() {
     return
   }
 
-  const fullPath = newItemParentPath.value === '/'
-    ? `/${newItemName.value.trim()}`
-    : `${newItemParentPath.value}/${newItemName.value.trim()}`
+  const fullPath =
+    newItemParentPath.value === '/'
+      ? `/${newItemName.value.trim()}`
+      : `${newItemParentPath.value}/${newItemName.value.trim()}`
 
   try {
     if (newItemType.value === 'folder') {
@@ -343,7 +346,7 @@ async function createNewItem() {
 
     // Refresh parent directory
     directoryCache.value.delete(newItemParentPath.value)
-    const section = sections.find(s => fullPath.startsWith(s.path) || s.path === '/')
+    const section = sections.find((s) => fullPath.startsWith(s.path) || s.path === '/')
     if (section) {
       await loadSection(section.path)
     }
@@ -374,9 +377,7 @@ async function renameItem() {
   }
 
   const parentPath = renameOldPath.value.substring(0, renameOldPath.value.lastIndexOf('/')) || '/'
-  const newPath = parentPath === '/'
-    ? `/${renameNewName.value.trim()}`
-    : `${parentPath}/${renameNewName.value.trim()}`
+  const newPath = parentPath === '/' ? `/${renameNewName.value.trim()}` : `${parentPath}/${renameNewName.value.trim()}`
 
   try {
     await fs.renameItem(renameOldPath.value, newPath)
@@ -384,7 +385,7 @@ async function renameItem() {
 
     // Refresh parent directory
     directoryCache.value.delete(parentPath)
-    const section = sections.find(s => newPath.startsWith(s.path) || s.path === '/')
+    const section = sections.find((s) => newPath.startsWith(s.path) || s.path === '/')
     if (section) {
       await loadSection(section.path)
     }
@@ -402,15 +403,11 @@ async function deleteItem(path, isDirectory) {
   hideContextMenu()
 
   try {
-    await ElMessageBox.confirm(
-      `Are you sure you want to delete "${path.split('/').pop()}"?`,
-      'Delete Confirmation',
-      {
-        confirmButtonText: 'Delete',
-        cancelButtonText: 'Cancel',
-        type: 'warning',
-      }
-    )
+    await ElMessageBox.confirm(`Are you sure you want to delete "${path.split('/').pop()}"?`, 'Delete Confirmation', {
+      confirmButtonText: 'Delete',
+      cancelButtonText: 'Cancel',
+      type: 'warning',
+    })
 
     await fs.deleteItem(path, isDirectory)
     ElMessage.success('Deleted successfully')
@@ -418,7 +415,7 @@ async function deleteItem(path, isDirectory) {
     // Refresh parent directory
     const parentPath = path.substring(0, path.lastIndexOf('/')) || '/'
     directoryCache.value.delete(parentPath)
-    const section = sections.find(s => path.startsWith(s.path) || s.path === '/')
+    const section = sections.find((s) => path.startsWith(s.path) || s.path === '/')
     if (section) {
       await loadSection(section.path)
     }
@@ -442,6 +439,14 @@ async function copyPath(path) {
   }
 }
 
+/**
+ * Refresh section and hide context menu.
+ */
+async function refreshSectionFromMenu(sectionPath) {
+  hideContextMenu()
+  await refreshSection(sectionPath)
+}
+
 // ============================================
 // File Watcher Integration
 // ============================================
@@ -456,9 +461,7 @@ function handleFileChange(change) {
   const parentPath = path.substring(0, path.lastIndexOf('/')) || '/'
 
   // Find which section this path belongs to
-  const section = sections.value.find(
-    (s) => path === s.path || path.startsWith(s.path + '/') || s.path === '/'
-  )
+  const section = sections.value.find((s) => path === s.path || path.startsWith(s.path + '/') || s.path === '/')
 
   if (!section) return
 
@@ -474,9 +477,7 @@ function handleFileChange(change) {
 
   // Reload the parent directory if it's currently visible
   // Check if parent path is in expanded state or is a section root
-  const isParentVisible =
-    parentPath === section.path ||
-    ideStore.isExpanded(parentPath)
+  const isParentVisible = parentPath === section.path || ideStore.isExpanded(parentPath)
 
   if (isParentVisible) {
     // Debounce reloads to avoid hammering the server
@@ -529,9 +530,7 @@ function startFileWatcher() {
   if (!ideStore.taskId) return
 
   // Get paths to watch based on mode
-  const watchPaths = props.mode === 'container'
-    ? ['/']
-    : ['/shared', '/local_temp']
+  const watchPaths = props.mode === 'container' ? ['/'] : ['/shared', '/local_temp']
 
   console.log('[FileTree] Starting file watcher for paths:', watchPaths)
 
@@ -603,49 +602,52 @@ defineExpose({
       <span class="file-tree-title">Files</span>
       <!-- File watcher status indicator -->
       <el-tooltip
-        :content="fileWatcher.connected.value
-          ? `Auto-sync: ${fileWatcher.watchMethod.value || 'active'}`
-          : fileWatcher.connecting.value
-            ? 'Connecting...'
-            : 'Auto-sync offline'"
-        placement="bottom"
-      >
+        :content="
+          fileWatcher.connected.value
+            ? `Auto-sync: ${fileWatcher.watchMethod.value || 'active'}`
+            : fileWatcher.connecting.value
+              ? 'Connecting...'
+              : 'Auto-sync offline'
+        "
+        placement="bottom">
         <span
           class="watcher-indicator"
           :class="{
             connected: fileWatcher.connected.value,
             connecting: fileWatcher.connecting.value,
-          }"
-        />
+          }" />
       </el-tooltip>
       <div class="file-tree-actions">
-        <el-tooltip content="New File" placement="bottom">
+        <el-tooltip
+          content="New File"
+          placement="bottom">
           <el-button
             link
             size="small"
             :disabled="!ideStore.connected"
-            @click="openNewItemDialog('file', ideStore.selectedPath || '/')"
-          >
+            @click="openNewItemDialog('file', ideStore.selectedPath || '/')">
             <span class="i-carbon-document-add" />
           </el-button>
         </el-tooltip>
-        <el-tooltip content="New Folder" placement="bottom">
+        <el-tooltip
+          content="New Folder"
+          placement="bottom">
           <el-button
             link
             size="small"
             :disabled="!ideStore.connected"
-            @click="openNewItemDialog('folder', ideStore.selectedPath || '/')"
-          >
+            @click="openNewItemDialog('folder', ideStore.selectedPath || '/')">
             <span class="i-carbon-folder-add" />
           </el-button>
         </el-tooltip>
-        <el-tooltip content="Refresh All" placement="bottom">
+        <el-tooltip
+          content="Refresh All"
+          placement="bottom">
           <el-button
             link
             size="small"
             :loading="loading"
-            @click="refreshAll"
-          >
+            @click="refreshAll">
             <span class="i-carbon-refresh" />
           </el-button>
         </el-tooltip>
@@ -653,7 +655,9 @@ defineExpose({
     </div>
 
     <!-- Waiting for connection -->
-    <div v-if="!ideStore.connected" class="file-tree-loading">
+    <div
+      v-if="!ideStore.connected"
+      class="file-tree-loading">
       <el-icon class="is-loading">
         <span class="i-carbon-circle-dash" />
       </el-icon>
@@ -661,47 +665,57 @@ defineExpose({
     </div>
 
     <!-- Sections content -->
-    <div v-else class="file-tree-content">
+    <div
+      v-else
+      class="file-tree-content">
       <div
         v-for="section in sections"
         :key="section.path"
-        class="file-tree-section"
-      >
+        class="file-tree-section">
         <!-- Section header -->
         <div
           class="section-header"
           :class="{ expanded: sectionExpanded[section.path] }"
           @click="toggleSection(section.path)"
-          @contextmenu="handleSectionContextMenu($event, section.path)"
-        >
-          <span class="section-chevron" :class="{ expanded: sectionExpanded[section.path] }">
+          @contextmenu="handleSectionContextMenu($event, section.path)">
+          <span
+            class="section-chevron"
+            :class="{ expanded: sectionExpanded[section.path] }">
             <span class="i-carbon-chevron-right" />
           </span>
-          <span :class="section.icon" class="section-icon" />
+          <span
+            :class="section.icon"
+            class="section-icon" />
           <span class="section-name">{{ section.name }}</span>
           <span class="section-path">{{ section.path }}</span>
 
           <!-- Section actions -->
-          <div class="section-actions" @click.stop>
-            <el-tooltip content="Refresh" placement="top">
+          <div
+            class="section-actions"
+            @click.stop>
+            <el-tooltip
+              content="Refresh"
+              placement="top">
               <button
                 class="section-action-btn"
                 :disabled="sectionLoading[section.path]"
-                @click="refreshSection(section.path)"
-              >
+                @click="refreshSection(section.path)">
                 <span
                   class="i-carbon-refresh"
-                  :class="{ 'is-loading': sectionLoading[section.path] }"
-                />
+                  :class="{ 'is-loading': sectionLoading[section.path] }" />
               </button>
             </el-tooltip>
           </div>
         </div>
 
         <!-- Section content -->
-        <div v-show="sectionExpanded[section.path]" class="section-content">
+        <div
+          v-show="sectionExpanded[section.path]"
+          class="section-content">
           <!-- Loading state -->
-          <div v-if="sectionLoading[section.path] && sectionEntries[section.path].length === 0" class="section-loading">
+          <div
+            v-if="sectionLoading[section.path] && sectionEntries[section.path].length === 0"
+            class="section-loading">
             <el-icon class="is-loading">
               <span class="i-carbon-circle-dash" />
             </el-icon>
@@ -709,19 +723,30 @@ defineExpose({
           </div>
 
           <!-- Error state -->
-          <div v-else-if="sectionErrors[section.path]" class="section-error">
+          <div
+            v-else-if="sectionErrors[section.path]"
+            class="section-error">
             <span class="i-carbon-warning" />
             <span>{{ sectionErrors[section.path] }}</span>
-            <el-button link size="small" @click="refreshSection(section.path)">Retry</el-button>
+            <el-button
+              link
+              size="small"
+              @click="refreshSection(section.path)">
+              Retry
+            </el-button>
           </div>
 
           <!-- Empty state -->
-          <div v-else-if="sectionEntries[section.path].length === 0" class="section-empty">
+          <div
+            v-else-if="sectionEntries[section.path].length === 0"
+            class="section-empty">
             <span>Empty directory</span>
           </div>
 
           <!-- Tree nodes -->
-          <div v-else class="section-tree">
+          <div
+            v-else
+            class="section-tree">
             <FileTreeNode
               v-for="entry in sectionEntries[section.path]"
               :key="entry.path"
@@ -732,8 +757,7 @@ defineExpose({
               @click="handleNodeClick"
               @dblclick="handleNodeDblClick"
               @toggle-expand="handleToggleExpand"
-              @contextmenu="handleNodeContextMenu"
-            />
+              @contextmenu="handleNodeContextMenu" />
           </div>
         </div>
       </div>
@@ -745,20 +769,22 @@ defineExpose({
         v-if="contextMenuVisible"
         class="context-menu-overlay"
         @click="hideContextMenu"
-        @contextmenu.prevent="hideContextMenu"
-      >
+        @contextmenu.prevent="hideContextMenu">
         <div
           class="context-menu"
           :style="{ left: contextMenuPosition.x + 'px', top: contextMenuPosition.y + 'px' }"
-          @click.stop
-        >
+          @click.stop>
           <!-- For sections and directories -->
           <template v-if="contextMenuTarget?.type === 'section' || contextMenuTarget?.type === 'directory'">
-            <div class="context-menu-item" @click="openNewItemDialog('file', contextMenuTarget.path)">
+            <div
+              class="context-menu-item"
+              @click="openNewItemDialog('file', contextMenuTarget.path)">
               <span class="i-carbon-document-add" />
               <span>New File</span>
             </div>
-            <div class="context-menu-item" @click="openNewItemDialog('folder', contextMenuTarget.path)">
+            <div
+              class="context-menu-item"
+              @click="openNewItemDialog('folder', contextMenuTarget.path)">
               <span class="i-carbon-folder-add" />
               <span>New Folder</span>
             </div>
@@ -766,17 +792,25 @@ defineExpose({
 
           <!-- For files and directories (not sections) -->
           <template v-if="contextMenuTarget?.type === 'file' || contextMenuTarget?.type === 'directory'">
-            <div class="context-menu-divider" v-if="contextMenuTarget?.type === 'directory'" />
-            <div class="context-menu-item" @click="openRenameDialog(contextMenuTarget.path, contextMenuTarget.entry?.name)">
+            <div
+              class="context-menu-divider"
+              v-if="contextMenuTarget?.type === 'directory'" />
+            <div
+              class="context-menu-item"
+              @click="openRenameDialog(contextMenuTarget.path, contextMenuTarget.entry?.name)">
               <span class="i-carbon-edit" />
               <span>Rename</span>
             </div>
-            <div class="context-menu-item danger" @click="deleteItem(contextMenuTarget.path, contextMenuTarget.type === 'directory')">
+            <div
+              class="context-menu-item danger"
+              @click="deleteItem(contextMenuTarget.path, contextMenuTarget.type === 'directory')">
               <span class="i-carbon-trash-can" />
               <span>Delete</span>
             </div>
             <div class="context-menu-divider" />
-            <div class="context-menu-item" @click="copyPath(contextMenuTarget.path)">
+            <div
+              class="context-menu-item"
+              @click="copyPath(contextMenuTarget.path)">
               <span class="i-carbon-copy" />
               <span>Copy Path</span>
             </div>
@@ -785,7 +819,9 @@ defineExpose({
           <!-- Refresh for sections -->
           <template v-if="contextMenuTarget?.type === 'section'">
             <div class="context-menu-divider" />
-            <div class="context-menu-item" @click="refreshSection(contextMenuTarget.path); hideContextMenu()">
+            <div
+              class="context-menu-item"
+              @click="refreshSectionFromMenu(contextMenuTarget.path)">
               <span class="i-carbon-refresh" />
               <span>Refresh</span>
             </div>
@@ -799,24 +835,28 @@ defineExpose({
       v-model="newItemDialogVisible"
       :title="newItemType === 'folder' ? 'New Folder' : 'New File'"
       width="400px"
-      :close-on-click-modal="false"
-    >
+      :close-on-click-modal="false">
       <el-form @submit.prevent="createNewItem">
         <el-form-item :label="newItemType === 'folder' ? 'Folder Name' : 'File Name'">
           <el-input
             v-model="newItemName"
             :placeholder="newItemType === 'folder' ? 'folder-name' : 'filename.txt'"
             autofocus
-            @keyup.enter="createNewItem"
-          />
+            @keyup.enter="createNewItem" />
         </el-form-item>
         <el-form-item label="Location">
-          <el-input v-model="newItemParentPath" disabled />
+          <el-input
+            v-model="newItemParentPath"
+            disabled />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="newItemDialogVisible = false">Cancel</el-button>
-        <el-button type="primary" @click="createNewItem">Create</el-button>
+        <el-button
+          type="primary"
+          @click="createNewItem">
+          Create
+        </el-button>
       </template>
     </el-dialog>
 
@@ -825,21 +865,23 @@ defineExpose({
       v-model="renameDialogVisible"
       title="Rename"
       width="400px"
-      :close-on-click-modal="false"
-    >
+      :close-on-click-modal="false">
       <el-form @submit.prevent="renameItem">
         <el-form-item label="New Name">
           <el-input
             v-model="renameNewName"
             placeholder="new-name"
             autofocus
-            @keyup.enter="renameItem"
-          />
+            @keyup.enter="renameItem" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="renameDialogVisible = false">Cancel</el-button>
-        <el-button type="primary" @click="renameItem">Rename</el-button>
+        <el-button
+          type="primary"
+          @click="renameItem">
+          Rename
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -896,8 +938,13 @@ defineExpose({
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .file-tree-content {
@@ -1002,7 +1049,9 @@ defineExpose({
   border-radius: 4px;
   cursor: pointer;
   color: var(--el-text-color-secondary);
-  transition: background-color 0.15s, color 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 }
 
 .section-action-btn:hover {

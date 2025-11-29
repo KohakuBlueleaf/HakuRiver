@@ -63,7 +63,7 @@ def parse_snapshot_tag(tag: str) -> tuple[int, int] | None:
         return None
 
     try:
-        rest = tag[len(prefix):]
+        rest = tag[len(prefix) :]
         if ":" not in rest:
             return None
         task_id_str, timestamp_str = rest.split(":", 1)

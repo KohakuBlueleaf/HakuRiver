@@ -219,15 +219,22 @@ function getNodeName(node) {
           {{ tasksStore.runningTasks.length }} running, {{ tasksStore.pendingTasks.length }} pending
         </p>
       </div>
-      <el-button type="primary" @click="submitDialogVisible = true">
-        <span class="i-carbon-add mr-2"></span> Submit Task
+      <el-button
+        type="primary"
+        @click="submitDialogVisible = true">
+        <span class="i-carbon-add mr-2"></span>
+        Submit Task
       </el-button>
     </div>
 
     <!-- Filters -->
     <div class="card">
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <el-input v-model="searchQuery" placeholder="Search tasks..." clearable class="w-full sm:w-64">
+        <el-input
+          v-model="searchQuery"
+          placeholder="Search tasks..."
+          clearable
+          class="w-full sm:w-64">
           <template #prefix>
             <span class="i-carbon-search"></span>
           </template>
@@ -238,25 +245,41 @@ function getNodeName(node) {
           placeholder="All statuses"
           clearable
           class="w-full sm:w-40"
-          @change="fetchTasks"
-        >
-          <el-option label="All" value="" />
-          <el-option label="Running" value="running" />
-          <el-option label="Pending" value="pending" />
-          <el-option label="Completed" value="completed" />
-          <el-option label="Failed" value="failed" />
-          <el-option label="Killed" value="killed" />
+          @change="fetchTasks">
+          <el-option
+            label="All"
+            value="" />
+          <el-option
+            label="Running"
+            value="running" />
+          <el-option
+            label="Pending"
+            value="pending" />
+          <el-option
+            label="Completed"
+            value="completed" />
+          <el-option
+            label="Failed"
+            value="failed" />
+          <el-option
+            label="Killed"
+            value="killed" />
         </el-select>
 
-        <el-button @click="fetchTasks" class="w-full sm:w-auto">
-          <span class="i-carbon-renew mr-2"></span> Refresh
+        <el-button
+          @click="fetchTasks"
+          class="w-full sm:w-auto">
+          <span class="i-carbon-renew mr-2"></span>
+          Refresh
         </el-button>
       </div>
     </div>
 
     <!-- Tasks Table -->
     <div class="card p-0">
-      <div v-if="tasksStore.loading && tasksStore.tasks.length === 0" class="text-center py-12">
+      <div
+        v-if="tasksStore.loading && tasksStore.tasks.length === 0"
+        class="text-center py-12">
         <el-icon class="is-loading text-4xl text-blue-500"><i class="i-carbon-renew"></i></el-icon>
       </div>
 
@@ -264,14 +287,19 @@ function getNodeName(node) {
         v-else-if="filteredTasks.length === 0"
         icon="i-carbon-task"
         title="No tasks found"
-        description="Submit a new task to get started."
-      >
+        description="Submit a new task to get started.">
         <template #action>
-          <el-button type="primary" @click="submitDialogVisible = true">Submit Task</el-button>
+          <el-button
+            type="primary"
+            @click="submitDialogVisible = true">
+            Submit Task
+          </el-button>
         </template>
       </EmptyState>
 
-      <div v-else class="overflow-x-auto">
+      <div
+        v-else
+        class="overflow-x-auto">
         <table class="table">
           <thead class="table-header">
             <tr>
@@ -289,20 +317,31 @@ function getNodeName(node) {
               v-for="task in filteredTasks"
               :key="task.task_id"
               class="table-row cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20"
-              @click="openDetail(task)"
-            >
+              @click="openDetail(task)">
               <td class="table-cell font-mono text-sm">
                 <span :title="String(task.task_id)">{{ formatTaskId(task.task_id) }}</span>
               </td>
               <td class="table-cell">
-                <div class="max-w-32 sm:max-w-xs truncate" :title="task.command">{{ task.command }}</div>
+                <div
+                  class="max-w-32 sm:max-w-xs truncate"
+                  :title="task.command">
+                  {{ task.command }}
+                </div>
               </td>
               <td class="table-cell">
                 <StatusBadge :status="task.status" />
               </td>
               <td class="table-cell">
-                <span v-if="task.assigned_node" class="text-sm">{{ getNodeName(task.assigned_node) }}</span>
-                <span v-else class="text-muted">-</span>
+                <span
+                  v-if="task.assigned_node"
+                  class="text-sm">
+                  {{ getNodeName(task.assigned_node) }}
+                </span>
+                <span
+                  v-else
+                  class="text-muted">
+                  -
+                </span>
               </td>
               <td class="table-cell text-sm hidden sm:table-cell">
                 <div>{{ task.required_cores }} cores</div>
@@ -310,36 +349,58 @@ function getNodeName(node) {
               <td class="table-cell text-muted text-sm hidden md:table-cell">
                 {{ formatRelativeTime(task.submitted_at) }}
               </td>
-              <td class="table-cell" @click.stop>
+              <td
+                class="table-cell"
+                @click.stop>
                 <div class="flex items-center gap-1 flex-wrap">
                   <!-- Control buttons for active tasks -->
                   <template v-if="isActive(task.status)">
-                    <el-tooltip v-if="task.status === 'running'" content="Pause">
-                      <el-button size="small" @click="handlePause(task.task_id)">
+                    <el-tooltip
+                      v-if="task.status === 'running'"
+                      content="Pause">
+                      <el-button
+                        size="small"
+                        @click="handlePause(task.task_id)">
                         <span class="i-carbon-pause"></span>
                       </el-button>
                     </el-tooltip>
-                    <el-tooltip v-if="task.status === 'paused'" content="Resume">
-                      <el-button size="small" type="success" @click="handleResume(task.task_id)">
+                    <el-tooltip
+                      v-if="task.status === 'paused'"
+                      content="Resume">
+                      <el-button
+                        size="small"
+                        type="success"
+                        @click="handleResume(task.task_id)">
                         <span class="i-carbon-play"></span>
                       </el-button>
                     </el-tooltip>
                     <el-tooltip content="Restart">
-                      <el-button size="small" type="warning" @click="handleRestart(task.task_id)">
+                      <el-button
+                        size="small"
+                        type="warning"
+                        @click="handleRestart(task.task_id)">
                         <span class="i-carbon-restart"></span>
                       </el-button>
                     </el-tooltip>
                     <el-tooltip content="Kill">
-                      <el-button size="small" type="danger" @click="handleKill(task.task_id)">
+                      <el-button
+                        size="small"
+                        type="danger"
+                        @click="handleKill(task.task_id)">
                         <span class="i-carbon-stop"></span>
                       </el-button>
                     </el-tooltip>
                   </template>
 
                   <!-- Delete button for inactive tasks -->
-                  <el-popconfirm v-else title="Delete this task?" @confirm="handleDelete(task.task_id)">
+                  <el-popconfirm
+                    v-else
+                    title="Delete this task?"
+                    @confirm="handleDelete(task.task_id)">
                     <template #reference>
-                      <el-button size="small" type="danger">
+                      <el-button
+                        size="small"
+                        type="danger">
                         <span class="i-carbon-trash-can"></span>
                       </el-button>
                     </template>
@@ -352,35 +413,56 @@ function getNodeName(node) {
       </div>
 
       <!-- Pagination -->
-      <div v-if="filteredTasks.length > 0" class="p-4 border-t border-gray-200 dark:border-gray-700">
+      <div
+        v-if="filteredTasks.length > 0"
+        class="p-4 border-t border-gray-200 dark:border-gray-700">
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
           :total="tasksStore.tasks.length"
           layout="prev, pager, next"
-          @current-change="fetchTasks"
-        />
+          @current-change="fetchTasks" />
       </div>
     </div>
 
     <!-- Submit Dialog -->
-    <el-dialog v-model="submitDialogVisible" title="Submit Task" width="600px" destroy-on-close>
-      <el-form :model="submitForm" label-position="top">
-        <el-form-item label="Command" required>
-          <el-input v-model="submitForm.command" placeholder="e.g., python script.py" />
+    <el-dialog
+      v-model="submitDialogVisible"
+      title="Submit Task"
+      width="600px"
+      destroy-on-close>
+      <el-form
+        :model="submitForm"
+        label-position="top">
+        <el-form-item
+          label="Command"
+          required>
+          <el-input
+            v-model="submitForm.command"
+            placeholder="e.g., python script.py" />
         </el-form-item>
 
         <el-form-item label="Arguments">
-          <el-input v-model="submitForm.arguments" placeholder="Space-separated arguments" />
+          <el-input
+            v-model="submitForm.arguments"
+            placeholder="Space-separated arguments" />
         </el-form-item>
 
         <el-form-item label="Environment Variables">
-          <el-input v-model="submitForm.env_vars" type="textarea" :rows="3" placeholder="KEY=value (one per line)" />
+          <el-input
+            v-model="submitForm.env_vars"
+            type="textarea"
+            :rows="3"
+            placeholder="KEY=value (one per line)" />
         </el-form-item>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <el-form-item label="CPU Cores (0 = no limit)">
-            <el-input-number v-model="submitForm.required_cores" :min="0" :max="128" class="w-full" />
+            <el-input-number
+              v-model="submitForm.required_cores"
+              :min="0"
+              :max="128"
+              class="w-full" />
           </el-form-item>
 
           <el-form-item label="Memory (bytes)">
@@ -388,35 +470,42 @@ function getNodeName(node) {
               v-model="submitForm.required_memory_bytes"
               :min="0"
               placeholder="Optional"
-              class="w-full"
-            />
+              class="w-full" />
           </el-form-item>
         </div>
 
         <el-form-item label="Container Environment">
-          <el-select v-model="submitForm.container_name" placeholder="Select container" clearable class="w-full">
+          <el-select
+            v-model="submitForm.container_name"
+            placeholder="Select container"
+            clearable
+            class="w-full">
             <el-option
               v-for="tarball in dockerStore.tarballs"
               :key="tarball.name"
               :label="tarball.name"
-              :value="tarball.name"
-            />
+              :value="tarball.name" />
           </el-select>
         </el-form-item>
 
         <el-form-item label="Target Node">
-          <el-select v-model="submitForm.targets" placeholder="Auto-select" clearable class="w-full">
+          <el-select
+            v-model="submitForm.targets"
+            placeholder="Auto-select"
+            clearable
+            class="w-full">
             <el-option
               v-for="node in clusterStore.onlineNodes"
               :key="node.hostname"
               :label="node.hostname"
-              :value="node.hostname"
-            />
+              :value="node.hostname" />
           </el-select>
         </el-form-item>
 
         <el-form-item label="GPU IDs (comma-separated)">
-          <el-input v-model="submitForm.required_gpus" placeholder="e.g., 0,1" />
+          <el-input
+            v-model="submitForm.required_gpus"
+            placeholder="e.g., 0,1" />
         </el-form-item>
 
         <el-form-item>
@@ -426,7 +515,12 @@ function getNodeName(node) {
 
       <template #footer>
         <el-button @click="submitDialogVisible = false">Cancel</el-button>
-        <el-button type="primary" :loading="tasksStore.submitting" @click="handleSubmit"> Submit </el-button>
+        <el-button
+          type="primary"
+          :loading="tasksStore.submitting"
+          @click="handleSubmit">
+          Submit
+        </el-button>
       </template>
     </el-dialog>
 
@@ -436,12 +530,13 @@ function getNodeName(node) {
       :title="`Task #${selectedTask?.task_id}`"
       width="90%"
       class="max-w-4xl"
-      top="5vh"
-    >
+      top="5vh">
       <template v-if="selectedTask">
         <el-tabs v-model="detailTab">
           <!-- Info Tab -->
-          <el-tab-pane label="Info" name="info">
+          <el-tab-pane
+            label="Info"
+            name="info">
             <div class="space-y-6">
               <!-- Status Section -->
               <div class="flex items-center justify-between">
@@ -451,29 +546,43 @@ function getNodeName(node) {
                     <el-button
                       v-if="selectedTask.status === 'running'"
                       size="small"
-                      @click="handlePause(selectedTask.task_id)"
-                    >
-                      <span class="i-carbon-pause mr-1"></span> Pause
+                      @click="handlePause(selectedTask.task_id)">
+                      <span class="i-carbon-pause mr-1"></span>
+                      Pause
                     </el-button>
                     <el-button
                       v-if="selectedTask.status === 'paused'"
                       size="small"
                       type="success"
-                      @click="handleResume(selectedTask.task_id)"
-                    >
-                      <span class="i-carbon-play mr-1"></span> Resume
+                      @click="handleResume(selectedTask.task_id)">
+                      <span class="i-carbon-play mr-1"></span>
+                      Resume
                     </el-button>
-                    <el-button size="small" type="warning" @click="handleRestart(selectedTask.task_id)">
-                      <span class="i-carbon-restart mr-1"></span> Restart
+                    <el-button
+                      size="small"
+                      type="warning"
+                      @click="handleRestart(selectedTask.task_id)">
+                      <span class="i-carbon-restart mr-1"></span>
+                      Restart
                     </el-button>
-                    <el-button size="small" type="danger" @click="handleKill(selectedTask.task_id)">
-                      <span class="i-carbon-stop mr-1"></span> Kill
+                    <el-button
+                      size="small"
+                      type="danger"
+                      @click="handleKill(selectedTask.task_id)">
+                      <span class="i-carbon-stop mr-1"></span>
+                      Kill
                     </el-button>
                   </template>
-                  <el-popconfirm v-else title="Delete this task?" @confirm="handleDelete(selectedTask.task_id)">
+                  <el-popconfirm
+                    v-else
+                    title="Delete this task?"
+                    @confirm="handleDelete(selectedTask.task_id)">
                     <template #reference>
-                      <el-button size="small" type="danger">
-                        <span class="i-carbon-trash-can mr-1"></span> Delete
+                      <el-button
+                        size="small"
+                        type="danger">
+                        <span class="i-carbon-trash-can mr-1"></span>
+                        Delete
                       </el-button>
                     </template>
                   </el-popconfirm>
@@ -505,7 +614,7 @@ function getNodeName(node) {
                 <div class="text-sm text-muted mb-2">Command</div>
                 <div class="font-mono text-sm bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto">
                   {{ selectedTask.command }}
-                  <span v-if="selectedTask.arguments?.length"> {{ selectedTask.arguments.join(' ') }}</span>
+                  <span v-if="selectedTask.arguments?.length">{{ selectedTask.arguments.join(' ') }}</span>
                 </div>
               </div>
 
@@ -529,12 +638,10 @@ function getNodeName(node) {
                 </div>
                 <div
                   v-if="selectedTask.exit_code !== null && selectedTask.exit_code !== undefined"
-                  class="p-4 bg-app-surface rounded-lg text-center"
-                >
+                  class="p-4 bg-app-surface rounded-lg text-center">
                   <div
                     class="text-2xl font-bold"
-                    :class="selectedTask.exit_code === 0 ? 'text-green-500' : 'text-red-500'"
-                  >
+                    :class="selectedTask.exit_code === 0 ? 'text-green-500' : 'text-red-500'">
                     {{ selectedTask.exit_code }}
                   </div>
                   <div class="text-sm text-muted">Exit Code</div>
@@ -555,9 +662,9 @@ function getNodeName(node) {
                   </div>
                   <div>
                     <span class="text-muted">Completed:</span>
-                    <span class="ml-2">{{
-                      selectedTask.completed_at ? formatDate(selectedTask.completed_at) : '-'
-                    }}</span>
+                    <span class="ml-2">
+                      {{ selectedTask.completed_at ? formatDate(selectedTask.completed_at) : '-' }}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -565,13 +672,15 @@ function getNodeName(node) {
               <!-- Environment Variables -->
               <div
                 v-if="selectedTask.env_vars && Object.keys(selectedTask.env_vars).length > 0"
-                class="p-4 bg-app-surface rounded-lg"
-              >
+                class="p-4 bg-app-surface rounded-lg">
                 <div class="text-sm text-muted mb-2">Environment Variables</div>
                 <div class="font-mono text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto">
-                  <div v-for="(value, key) in selectedTask.env_vars" :key="key">
-                    <span class="text-blue-400">{{ key }}</span
-                    >=<span class="text-green-400">{{ value }}</span>
+                  <div
+                    v-for="(value, key) in selectedTask.env_vars"
+                    :key="key">
+                    <span class="text-blue-400">{{ key }}</span>
+                    =
+                    <span class="text-green-400">{{ value }}</span>
                   </div>
                 </div>
               </div>
@@ -579,8 +688,7 @@ function getNodeName(node) {
               <!-- Error Message -->
               <div
                 v-if="selectedTask.error_message"
-                class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
-              >
+                class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                 <div class="text-sm text-red-600 dark:text-red-400 mb-2">Error</div>
                 <div class="font-mono text-sm text-red-700 dark:text-red-300">{{ selectedTask.error_message }}</div>
               </div>
@@ -588,44 +696,50 @@ function getNodeName(node) {
           </el-tab-pane>
 
           <!-- Stdout Tab -->
-          <el-tab-pane label="stdout" name="stdout">
+          <el-tab-pane
+            label="stdout"
+            name="stdout">
             <div class="relative">
               <div
                 v-if="logLoading"
-                class="absolute inset-0 flex items-center justify-center bg-gray-900/50 z-10 rounded-lg"
-              >
+                class="absolute inset-0 flex items-center justify-center bg-gray-900/50 z-10 rounded-lg">
                 <el-icon class="is-loading text-3xl text-white"><i class="i-carbon-renew"></i></el-icon>
               </div>
               <div
-                class="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm max-h-[60vh] overflow-auto whitespace-pre-wrap"
-              >
+                class="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm max-h-[60vh] overflow-auto whitespace-pre-wrap">
                 {{ logContent }}
               </div>
               <div class="mt-2 flex justify-end">
-                <el-button size="small" @click="loadLogs('stdout')">
-                  <span class="i-carbon-renew mr-1"></span> Refresh
+                <el-button
+                  size="small"
+                  @click="loadLogs('stdout')">
+                  <span class="i-carbon-renew mr-1"></span>
+                  Refresh
                 </el-button>
               </div>
             </div>
           </el-tab-pane>
 
           <!-- Stderr Tab -->
-          <el-tab-pane label="stderr" name="stderr">
+          <el-tab-pane
+            label="stderr"
+            name="stderr">
             <div class="relative">
               <div
                 v-if="logLoading"
-                class="absolute inset-0 flex items-center justify-center bg-gray-900/50 z-10 rounded-lg"
-              >
+                class="absolute inset-0 flex items-center justify-center bg-gray-900/50 z-10 rounded-lg">
                 <el-icon class="is-loading text-3xl text-white"><i class="i-carbon-renew"></i></el-icon>
               </div>
               <div
-                class="bg-gray-900 text-red-300 p-4 rounded-lg font-mono text-sm max-h-[60vh] overflow-auto whitespace-pre-wrap"
-              >
+                class="bg-gray-900 text-red-300 p-4 rounded-lg font-mono text-sm max-h-[60vh] overflow-auto whitespace-pre-wrap">
                 {{ logContent }}
               </div>
               <div class="mt-2 flex justify-end">
-                <el-button size="small" @click="loadLogs('stderr')">
-                  <span class="i-carbon-renew mr-1"></span> Refresh
+                <el-button
+                  size="small"
+                  @click="loadLogs('stderr')">
+                  <span class="i-carbon-renew mr-1"></span>
+                  Refresh
                 </el-button>
               </div>
             </div>

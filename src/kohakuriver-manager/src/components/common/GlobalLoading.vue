@@ -6,13 +6,18 @@ const loadingStore = useLoadingStore()
 
 <template>
   <Transition name="fade">
-    <div v-if="loadingStore.isLoading" class="global-loading">
+    <div
+      v-if="loadingStore.isLoading"
+      class="global-loading">
       <div class="loading-content">
         <div class="loading-spinner">
           <span class="i-carbon-renew animate-spin text-2xl text-blue-500"></span>
         </div>
         <div class="loading-messages">
-          <div v-for="(msg, idx) in loadingStore.allMessages" :key="idx" class="loading-message">
+          <div
+            v-for="(msg, idx) in loadingStore.allMessages"
+            :key="idx"
+            class="loading-message">
             {{ msg }}
           </div>
         </div>

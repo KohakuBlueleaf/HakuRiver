@@ -160,17 +160,24 @@ const expandedTags = ref(new Set())
     <!-- Tabs -->
     <el-tabs v-model="activeTab">
       <!-- Containers Tab -->
-      <el-tab-pane label="Containers" name="containers">
+      <el-tab-pane
+        label="Containers"
+        name="containers">
         <div class="space-y-4">
           <!-- Actions -->
           <div class="flex justify-end">
-            <el-button type="primary" @click="createContainerDialogVisible = true">
-              <span class="i-carbon-add mr-1"></span> Create Container
+            <el-button
+              type="primary"
+              @click="createContainerDialogVisible = true">
+              <span class="i-carbon-add mr-1"></span>
+              Create Container
             </el-button>
           </div>
 
           <!-- Container List -->
-          <div v-if="dockerStore.loading && dockerStore.containers.length === 0" class="text-center py-12">
+          <div
+            v-if="dockerStore.loading && dockerStore.containers.length === 0"
+            class="text-center py-12">
             <el-icon class="is-loading text-4xl text-blue-500"><i class="i-carbon-renew"></i></el-icon>
           </div>
 
@@ -178,26 +185,43 @@ const expandedTags = ref(new Set())
             v-else-if="dockerStore.containers.length === 0"
             icon="i-carbon-container-software"
             title="No containers"
-            description="Create an environment container to get started."
-          >
+            description="Create an environment container to get started.">
             <template #action>
-              <el-button type="primary" @click="createContainerDialogVisible = true"> Create Container </el-button>
+              <el-button
+                type="primary"
+                @click="createContainerDialogVisible = true">
+                Create Container
+              </el-button>
             </template>
           </EmptyState>
 
-          <div v-else class="grid-cards">
-            <div v-for="container in dockerStore.containers" :key="container.name" class="card">
+          <div
+            v-else
+            class="grid-cards">
+            <div
+              v-for="container in dockerStore.containers"
+              :key="container.name"
+              class="card">
               <!-- Header -->
               <div class="flex items-start gap-3 mb-4">
                 <span class="i-carbon-container-software text-2xl text-purple-500 flex-shrink-0 mt-0.5"></span>
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <h3 class="font-semibold" :title="parseContainerName(container.name).fullName">
+                    <h3
+                      class="font-semibold"
+                      :title="parseContainerName(container.name).fullName">
                       {{ parseContainerName(container.name).displayName }}
                     </h3>
-                    <el-tag v-if="parseContainerName(container.name).hasPrefix" size="small" type="info"> env </el-tag>
+                    <el-tag
+                      v-if="parseContainerName(container.name).hasPrefix"
+                      size="small"
+                      type="info">
+                      env
+                    </el-tag>
                   </div>
-                  <StatusBadge :status="getContainerStatus(container)" class="mt-1" />
+                  <StatusBadge
+                    :status="getContainerStatus(container)"
+                    class="mt-1" />
                   <!-- Image with expandable tag -->
                   <div class="text-xs text-muted flex items-center gap-1 min-w-0 mt-2">
                     <span class="truncate">{{ parseImageTag(container.image).name }}</span>
@@ -207,15 +231,13 @@ const expandedTags = ref(new Set())
                         v-if="parseImageTag(container.image).tag.length > 20 && !expandedTags.has(container.name)"
                         class="truncate max-w-20 cursor-pointer hover:text-blue-500"
                         :title="parseImageTag(container.image).tag"
-                        @click="expandedTags.add(container.name)"
-                      >
+                        @click="expandedTags.add(container.name)">
                         {{ parseImageTag(container.image).tag.slice(0, 20) }}...
                       </span>
                       <span
                         v-else-if="parseImageTag(container.image).tag.length > 20"
                         class="cursor-pointer hover:text-blue-500 break-all"
-                        @click="expandedTags.delete(container.name)"
-                      >
+                        @click="expandedTags.delete(container.name)">
                         {{ parseImageTag(container.image).tag }}
                       </span>
                       <span v-else>{{ parseImageTag(container.image).tag }}</span>
@@ -226,11 +248,15 @@ const expandedTags = ref(new Set())
 
               <!-- Info -->
               <div class="space-y-2 text-sm">
-                <div v-if="container.created" class="flex justify-between">
+                <div
+                  v-if="container.created"
+                  class="flex justify-between">
                   <span class="text-muted">Created</span>
                   <span>{{ formatRelativeTime(container.created) }}</span>
                 </div>
-                <div v-if="container.state" class="flex justify-between">
+                <div
+                  v-if="container.state"
+                  class="flex justify-between">
                   <span class="text-muted">State</span>
                   <span>{{ container.state }}</span>
                 </div>
@@ -239,27 +265,46 @@ const expandedTags = ref(new Set())
               <!-- Actions -->
               <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-2">
                 <!-- IDE (only for running containers) -->
-                <el-tooltip v-if="container.status === 'running'" content="Open IDE">
-                  <el-button size="small" type="primary" @click="openIde(container.name)">
-                    <span class="i-carbon-code mr-1"></span> IDE
+                <el-tooltip
+                  v-if="container.status === 'running'"
+                  content="Open IDE">
+                  <el-button
+                    size="small"
+                    type="primary"
+                    @click="openIde(container.name)">
+                    <span class="i-carbon-code mr-1"></span>
+                    IDE
                   </el-button>
                 </el-tooltip>
 
                 <!-- Start/Stop -->
-                <el-tooltip v-if="container.status !== 'running'" content="Start">
-                  <el-button size="small" type="success" @click="handleStartContainer(container.name)">
+                <el-tooltip
+                  v-if="container.status !== 'running'"
+                  content="Start">
+                  <el-button
+                    size="small"
+                    type="success"
+                    @click="handleStartContainer(container.name)">
                     <span class="i-carbon-play"></span>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip v-else content="Stop">
-                  <el-button size="small" type="warning" @click="handleStopContainer(container.name)">
+                <el-tooltip
+                  v-else
+                  content="Stop">
+                  <el-button
+                    size="small"
+                    type="warning"
+                    @click="handleStopContainer(container.name)">
                     <span class="i-carbon-stop"></span>
                   </el-button>
                 </el-tooltip>
 
                 <!-- Create Tarball -->
                 <el-tooltip content="Create Tarball">
-                  <el-button size="small" type="info" @click="openCreateTarball(container.name)">
+                  <el-button
+                    size="small"
+                    type="info"
+                    @click="openCreateTarball(container.name)">
                     <span class="i-carbon-archive"></span>
                   </el-button>
                 </el-tooltip>
@@ -267,10 +312,11 @@ const expandedTags = ref(new Set())
                 <!-- Delete -->
                 <el-popconfirm
                   title="Are you sure to delete this container?"
-                  @confirm="handleDeleteContainer(container.name)"
-                >
+                  @confirm="handleDeleteContainer(container.name)">
                   <template #reference>
-                    <el-button size="small" type="danger">
+                    <el-button
+                      size="small"
+                      type="danger">
                       <span class="i-carbon-trash-can"></span>
                     </el-button>
                   </template>
@@ -282,17 +328,20 @@ const expandedTags = ref(new Set())
       </el-tab-pane>
 
       <!-- Tarballs Tab -->
-      <el-tab-pane label="Tarballs" name="tarballs">
+      <el-tab-pane
+        label="Tarballs"
+        name="tarballs">
         <div class="space-y-4">
           <!-- Tarball List -->
           <EmptyState
             v-if="dockerStore.tarballs.length === 0"
             icon="i-carbon-archive"
             title="No tarballs"
-            description="Create a tarball from a container to distribute environments."
-          />
+            description="Create a tarball from a container to distribute environments." />
 
-          <div v-else class="table-container">
+          <div
+            v-else
+            class="table-container">
             <table class="table">
               <thead class="table-header">
                 <tr>
@@ -304,25 +353,42 @@ const expandedTags = ref(new Set())
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="tarball in dockerStore.tarballs" :key="tarball.name" class="table-row">
+                <tr
+                  v-for="tarball in dockerStore.tarballs"
+                  :key="tarball.name"
+                  class="table-row">
                   <td class="table-cell font-medium">{{ tarball.name }}</td>
                   <td class="table-cell">
-                    <span v-if="tarball.versions?.length" class="text-muted">
+                    <span
+                      v-if="tarball.versions?.length"
+                      class="text-muted">
                       {{ tarball.versions.length }} version(s)
                     </span>
-                    <span v-else class="text-muted">-</span>
+                    <span
+                      v-else
+                      class="text-muted">
+                      -
+                    </span>
                   </td>
                   <td class="table-cell">
                     <span v-if="tarball.size">{{ formatBytes(tarball.size) }}</span>
-                    <span v-else class="text-muted">-</span>
+                    <span
+                      v-else
+                      class="text-muted">
+                      -
+                    </span>
                   </td>
                   <td class="table-cell text-muted">
                     {{ tarball.created ? formatRelativeTime(tarball.created) : '-' }}
                   </td>
                   <td class="table-cell">
-                    <el-popconfirm title="Delete this tarball?" @confirm="handleDeleteTarball(tarball.name)">
+                    <el-popconfirm
+                      title="Delete this tarball?"
+                      @confirm="handleDeleteTarball(tarball.name)">
                       <template #reference>
-                        <el-button size="small" type="danger">
+                        <el-button
+                          size="small"
+                          type="danger">
                           <span class="i-carbon-trash-can"></span>
                         </el-button>
                       </template>
@@ -337,26 +403,46 @@ const expandedTags = ref(new Set())
     </el-tabs>
 
     <!-- Create Container Dialog -->
-    <el-dialog v-model="createContainerDialogVisible" title="Create Container" width="500px">
-      <el-form :model="createContainerForm" label-position="top">
-        <el-form-item label="Environment Name" required>
-          <el-input v-model="createContainerForm.container_name" placeholder="e.g., pytorch-env" />
+    <el-dialog
+      v-model="createContainerDialogVisible"
+      title="Create Container"
+      width="500px">
+      <el-form
+        :model="createContainerForm"
+        label-position="top">
+        <el-form-item
+          label="Environment Name"
+          required>
+          <el-input
+            v-model="createContainerForm.container_name"
+            placeholder="e.g., pytorch-env" />
         </el-form-item>
 
-        <el-form-item label="Base Image" required>
-          <el-input v-model="createContainerForm.image_name" placeholder="e.g., ubuntu:22.04" />
+        <el-form-item
+          label="Base Image"
+          required>
+          <el-input
+            v-model="createContainerForm.image_name"
+            placeholder="e.g., ubuntu:22.04" />
         </el-form-item>
       </el-form>
 
       <template #footer>
         <el-button @click="createContainerDialogVisible = false">Cancel</el-button>
-        <el-button type="primary" @click="handleCreateContainer">Create</el-button>
+        <el-button
+          type="primary"
+          @click="handleCreateContainer">
+          Create
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- IDE Modal -->
     <teleport to="body">
-      <div v-if="ideModalVisible" class="ide-modal-overlay" @click.self="closeIde">
+      <div
+        v-if="ideModalVisible"
+        class="ide-modal-overlay"
+        @click.self="closeIde">
         <div class="ide-modal">
           <IdeContent
             v-if="selectedContainer"
@@ -365,17 +451,20 @@ const expandedTags = ref(new Set())
             type="container"
             file-tree-mode="container"
             :title="`Container: ${parseContainerName(selectedContainer).displayName}`"
-            @close="closeIde"
-          />
+            @close="closeIde" />
         </div>
       </div>
     </teleport>
 
     <!-- Create Tarball Dialog -->
-    <el-dialog v-model="createTarballDialogVisible" title="Create Tarball" width="400px">
+    <el-dialog
+      v-model="createTarballDialogVisible"
+      title="Create Tarball"
+      width="400px">
       <p>
-        Create a tarball from container <strong>{{ selectedTarballContainer }}</strong
-        >?
+        Create a tarball from container
+        <strong>{{ selectedTarballContainer }}</strong>
+        ?
       </p>
       <p class="text-muted text-sm mt-2">
         This will save the container state as a distributable tarball that can be used by runner nodes.
@@ -383,7 +472,11 @@ const expandedTags = ref(new Set())
 
       <template #footer>
         <el-button @click="createTarballDialogVisible = false">Cancel</el-button>
-        <el-button type="primary" @click="handleCreateTarball">Create Tarball</el-button>
+        <el-button
+          type="primary"
+          @click="handleCreateTarball">
+          Create Tarball
+        </el-button>
       </template>
     </el-dialog>
   </div>

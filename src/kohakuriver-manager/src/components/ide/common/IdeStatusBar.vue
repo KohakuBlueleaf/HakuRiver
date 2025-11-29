@@ -50,22 +50,30 @@ const isDirty = computed(() => ideStore.activeFile?.isDirty || false)
     <!-- Right side -->
     <div class="status-right">
       <!-- Cursor position -->
-      <div v-if="ideStore.activeFile" class="status-item">
+      <div
+        v-if="ideStore.activeFile"
+        class="status-item">
         <span>Ln {{ cursorLine }}, Col {{ cursorColumn }}</span>
       </div>
 
       <!-- Language -->
-      <div v-if="ideStore.activeFile" class="status-item clickable">
+      <div
+        v-if="ideStore.activeFile"
+        class="status-item clickable">
         <span>{{ language }}</span>
       </div>
 
       <!-- Encoding -->
-      <div v-if="ideStore.activeFile" class="status-item">
+      <div
+        v-if="ideStore.activeFile"
+        class="status-item">
         <span>{{ encoding }}</span>
       </div>
 
       <!-- Auto-save status -->
-      <div class="status-item" :class="{ saving: isSaving, dirty: isDirty }">
+      <div
+        class="status-item"
+        :class="{ saving: isSaving, dirty: isDirty }">
         <el-tooltip
           :content="
             isSaving
@@ -76,12 +84,17 @@ const isDirty = computed(() => ideStore.activeFile?.isDirty || false)
                   ? 'Auto-save enabled'
                   : 'Auto-save disabled'
           "
-          placement="top"
-        >
+          placement="top">
           <span class="auto-save-status">
-            <span v-if="isSaving" class="i-carbon-circle-dash is-loading" />
-            <span v-else-if="isDirty" class="i-carbon-circle-filled dirty-icon" />
-            <span v-else class="i-carbon-checkmark-filled saved-icon" />
+            <span
+              v-if="isSaving"
+              class="i-carbon-circle-dash is-loading" />
+            <span
+              v-else-if="isDirty"
+              class="i-carbon-circle-filled dirty-icon" />
+            <span
+              v-else
+              class="i-carbon-checkmark-filled saved-icon" />
             <span>{{ isSaving ? 'Saving...' : 'Auto-save' }}</span>
           </span>
         </el-tooltip>

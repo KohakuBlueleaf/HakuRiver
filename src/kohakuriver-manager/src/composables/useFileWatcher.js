@@ -278,9 +278,7 @@ export function useFileWatcher() {
    * Check if a path is within one of the watched paths.
    */
   function isPathWatched(path) {
-    return watchedPaths.value.some(
-      (wp) => path === wp || path.startsWith(wp + '/')
-    )
+    return watchedPaths.value.some((wp) => path === wp || path.startsWith(wp + '/'))
   }
 
   // Cleanup on unmount

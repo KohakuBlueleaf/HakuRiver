@@ -103,9 +103,7 @@ function startResize(e) {
   isResizing.value = true
   emit('resize-start')
 
-  const startPos = isHorizontal.value
-    ? e.clientX || e.touches?.[0]?.clientX
-    : e.clientY || e.touches?.[0]?.clientY
+  const startPos = isHorizontal.value ? e.clientX || e.touches?.[0]?.clientX : e.clientY || e.touches?.[0]?.clientY
   const startSize = size.value
 
   function onMove(moveEvent) {
@@ -157,9 +155,13 @@ defineExpose({ size })
 </script>
 
 <template>
-  <div class="split-pane" :class="[direction, { resizing: isResizing, reverse: reverse }]">
+  <div
+    class="split-pane"
+    :class="[direction, { resizing: isResizing, reverse: reverse }]">
     <!-- First pane -->
-    <div class="pane first" :style="reverse ? {} : { [sizeProperty]: size + 'px' }">
+    <div
+      class="pane first"
+      :style="reverse ? {} : { [sizeProperty]: size + 'px' }">
       <slot name="first" />
     </div>
 
@@ -169,13 +171,14 @@ defineExpose({ size })
       :class="direction"
       @mousedown="startResize"
       @touchstart="startResize"
-      @dblclick="resetSize"
-    >
+      @dblclick="resetSize">
       <div class="resizer-handle" />
     </div>
 
     <!-- Second pane -->
-    <div class="pane second" :style="reverse ? { [sizeProperty]: size + 'px' } : {}">
+    <div
+      class="pane second"
+      :style="reverse ? { [sizeProperty]: size + 'px' } : {}">
       <slot name="second" />
     </div>
   </div>

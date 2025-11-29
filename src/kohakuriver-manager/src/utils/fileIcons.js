@@ -201,7 +201,7 @@ const filenameIconMap = {
   'README.md': 'i-carbon-book',
   license: 'i-carbon-license',
   'license.md': 'i-carbon-license',
-  'LICENSE': 'i-carbon-license',
+  LICENSE: 'i-carbon-license',
   changelog: 'i-carbon-list-numbered',
   'CHANGELOG.md': 'i-carbon-list-numbered',
 }

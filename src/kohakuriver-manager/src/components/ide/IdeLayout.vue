@@ -124,15 +124,11 @@ function handleKeydown(e) {
   // Escape: Close IDE (with confirmation)
   if (e.key === 'Escape') {
     if (ideStore.hasUnsavedChanges) {
-      ElMessageBox.confirm(
-        'You have unsaved changes. Close anyway?',
-        'Unsaved Changes',
-        {
-          confirmButtonText: 'Close',
-          cancelButtonText: 'Cancel',
-          type: 'warning',
-        }
-      )
+      ElMessageBox.confirm('You have unsaved changes. Close anyway?', 'Unsaved Changes', {
+        confirmButtonText: 'Close',
+        cancelButtonText: 'Cancel',
+        type: 'warning',
+      })
         .then(() => {
           emit('close')
         })
@@ -206,8 +202,7 @@ defineExpose({
         :min-size="150"
         :max-size="400"
         storage-key="ide-file-tree"
-        @update:size="ideStore.setFileTreeWidth"
-      >
+        @update:size="ideStore.setFileTreeWidth">
         <template #first>
           <FileTree
             ref="fileTreeRef"
@@ -215,8 +210,7 @@ defineExpose({
             :mode="fileTreeMode"
             @file-select="handleFileSelect"
             @file-open="handleFileOpen"
-            @refresh="handleTreeRefresh"
-          />
+            @refresh="handleTreeRefresh" />
         </template>
         <template #second>
           <!-- Editor | Terminal -->
@@ -228,8 +222,7 @@ defineExpose({
             :max-size="600"
             storage-key="ide-terminal-right"
             :reverse="true"
-            @update:size="ideStore.setTerminalSize"
-          >
+            @update:size="ideStore.setTerminalSize">
             <template #first>
               <EditorPane ref="editorRef" />
             </template>
@@ -240,11 +233,12 @@ defineExpose({
                 :type="type"
                 :container-name="containerName"
                 @connected="handleTerminalConnected"
-                @disconnected="handleTerminalDisconnected"
-              />
+                @disconnected="handleTerminalDisconnected" />
             </template>
           </SplitPane>
-          <EditorPane v-else ref="editorRef" />
+          <EditorPane
+            v-else
+            ref="editorRef" />
         </template>
       </SplitPane>
 
@@ -258,8 +252,7 @@ defineExpose({
           :max-size="600"
           storage-key="ide-terminal-right"
           :reverse="true"
-          @update:size="ideStore.setTerminalSize"
-        >
+          @update:size="ideStore.setTerminalSize">
           <template #first>
             <EditorPane ref="editorRef" />
           </template>
@@ -270,11 +263,12 @@ defineExpose({
               :type="type"
               :container-name="containerName"
               @connected="handleTerminalConnected"
-              @disconnected="handleTerminalDisconnected"
-            />
+              @disconnected="handleTerminalDisconnected" />
           </template>
         </SplitPane>
-        <EditorPane v-else ref="editorRef" />
+        <EditorPane
+          v-else
+          ref="editorRef" />
       </template>
     </template>
 
@@ -288,8 +282,7 @@ defineExpose({
         :min-size="150"
         :max-size="400"
         storage-key="ide-file-tree"
-        @update:size="ideStore.setFileTreeWidth"
-      >
+        @update:size="ideStore.setFileTreeWidth">
         <template #first>
           <FileTree
             ref="fileTreeRef"
@@ -297,8 +290,7 @@ defineExpose({
             :mode="fileTreeMode"
             @file-select="handleFileSelect"
             @file-open="handleFileOpen"
-            @refresh="handleTreeRefresh"
-          />
+            @refresh="handleTreeRefresh" />
         </template>
         <template #second>
           <!-- Editor / Terminal (vertical) -->
@@ -310,8 +302,7 @@ defineExpose({
             :max-size="400"
             storage-key="ide-terminal-bottom"
             :reverse="true"
-            @update:size="ideStore.setTerminalSize"
-          >
+            @update:size="ideStore.setTerminalSize">
             <template #first>
               <EditorPane ref="editorRef" />
             </template>
@@ -322,11 +313,12 @@ defineExpose({
                 :type="type"
                 :container-name="containerName"
                 @connected="handleTerminalConnected"
-                @disconnected="handleTerminalDisconnected"
-              />
+                @disconnected="handleTerminalDisconnected" />
             </template>
           </SplitPane>
-          <EditorPane v-else ref="editorRef" />
+          <EditorPane
+            v-else
+            ref="editorRef" />
         </template>
       </SplitPane>
 
@@ -340,8 +332,7 @@ defineExpose({
           :max-size="400"
           storage-key="ide-terminal-bottom"
           :reverse="true"
-          @update:size="ideStore.setTerminalSize"
-        >
+          @update:size="ideStore.setTerminalSize">
           <template #first>
             <EditorPane ref="editorRef" />
           </template>
@@ -352,11 +343,12 @@ defineExpose({
               :type="type"
               :container-name="containerName"
               @connected="handleTerminalConnected"
-              @disconnected="handleTerminalDisconnected"
-            />
+              @disconnected="handleTerminalDisconnected" />
           </template>
         </SplitPane>
-        <EditorPane v-else ref="editorRef" />
+        <EditorPane
+          v-else
+          ref="editorRef" />
       </template>
     </template>
   </div>
