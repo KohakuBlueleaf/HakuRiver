@@ -77,8 +77,13 @@ class RunnerConfig:
         return "numactl"
 
     def get_state_db_path(self) -> str:
-        """Get the path for runner state database (KohakuVault)."""
-        config_dir = os.path.expanduser("~/.kohakuriver")
+        """
+        Get the path for runner state database (KohakuVault).
+
+        The database is stored in a hidden .kohakuriver subdirectory within
+        LOCAL_TEMP_DIR to keep user workspace clean.
+        """
+        config_dir = os.path.join(self.LOCAL_TEMP_DIR, ".kohakuriver")
         os.makedirs(config_dir, exist_ok=True)
         return os.path.join(config_dir, "runner-state.db")
 

@@ -50,7 +50,7 @@ export function useFileWatcher() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     const pathsParam = encodeURIComponent(paths.join(','))
-    return `${protocol}//${host}/api/fs/${taskId}/watch?paths=${pathsParam}`
+    return `${protocol}//${host}/ws/fs/${taskId}/watch?paths=${pathsParam}`
   }
 
   /**

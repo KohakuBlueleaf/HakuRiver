@@ -28,6 +28,7 @@ export const useIdeStore = defineStore('ide', () => {
   const fileTree = ref({}) // { path: { name, type, children?, loaded?, loading? } }
   const loadingPaths = ref(new Set())
   const selectedPath = ref(null)
+  const selectedFileInfo = ref(null) // { path, name, type, size }
 
   // ==========================================================================
   // Open Files State
@@ -129,6 +130,10 @@ export const useIdeStore = defineStore('ide', () => {
 
   function setSelectedPath(path) {
     selectedPath.value = path
+  }
+
+  function setSelectedFileInfo(info) {
+    selectedFileInfo.value = info
   }
 
   // ==========================================================================
@@ -338,6 +343,7 @@ export const useIdeStore = defineStore('ide', () => {
     fileTree.value = {}
     loadingPaths.value = new Set()
     selectedPath.value = null
+    selectedFileInfo.value = null
     openFiles.value = []
     activeFilePath.value = null
     savingFiles.value = new Set()
@@ -360,6 +366,7 @@ export const useIdeStore = defineStore('ide', () => {
     fileTree,
     loadingPaths,
     selectedPath,
+    selectedFileInfo,
 
     // Open Files State
     openFiles,
@@ -394,6 +401,7 @@ export const useIdeStore = defineStore('ide', () => {
     isLoading,
     isExpanded,
     setSelectedPath,
+    setSelectedFileInfo,
 
     // Open Files Actions
     openFile,

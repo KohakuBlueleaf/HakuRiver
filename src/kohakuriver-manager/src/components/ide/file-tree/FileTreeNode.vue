@@ -39,7 +39,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['click', 'dblclick', 'toggle-expand', 'contextmenu'])
+const emit = defineEmits(['click', 'dblclick', 'toggle-expand', 'contextmenu', 'new-file', 'new-folder'])
 
 const ideStore = useIdeStore()
 
@@ -94,12 +94,16 @@ function handleContextMenu(e) {
   emit('contextmenu', e, props.entry)
 }
 
-// Format file size
-function formatSize(bytes) {
-  if (bytes < 0) return ''
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+// Handle new file button click
+function handleNewFile(e) {
+  e.stopPropagation()
+  emit('new-file', props.entry.path)
+}
+
+// Handle new folder button click
+function handleNewFolder(e) {
+  e.stopPropagation()
+  emit('new-folder', props.entry.path)
 }
 </script>
 
@@ -148,12 +152,24 @@ function formatSize(bytes) {
         {{ entry.name }}
       </span>
 
-      <!-- File size (for files only) -->
-      <span
-        v-if="!isDirectory && entry.size > 0"
-        class="node-size">
-        {{ formatSize(entry.size) }}
-      </span>
+      <!-- Action buttons for directories (show on hover) -->
+      <div
+        v-if="isDirectory"
+        class="node-actions"
+        @click.stop>
+        <button
+          class="node-action-btn"
+          title="New File"
+          @click="handleNewFile">
+          <span class="i-carbon-document-add" />
+        </button>
+        <button
+          class="node-action-btn"
+          title="New Folder"
+          @click="handleNewFolder">
+          <span class="i-carbon-folder-add" />
+        </button>
+      </div>
     </div>
 
     <!-- Children (recursive) -->
@@ -170,7 +186,9 @@ function formatSize(bytes) {
         @click="emit('click', $event)"
         @dblclick="emit('dblclick', $event)"
         @toggle-expand="emit('toggle-expand', $event)"
-        @contextmenu="(e, entry) => emit('contextmenu', e, entry)" />
+        @contextmenu="(e, entry) => emit('contextmenu', e, entry)"
+        @new-file="emit('new-file', $event)"
+        @new-folder="emit('new-folder', $event)" />
     </div>
   </div>
 </template>
@@ -242,11 +260,39 @@ function formatSize(bytes) {
   color: var(--el-text-color-primary);
 }
 
-.node-size {
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
+.node-actions {
+  display: flex;
+  gap: 2px;
   margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s;
   flex-shrink: 0;
+}
+
+.node-row:hover .node-actions {
+  opacity: 1;
+}
+
+.node-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  transition:
+    background-color 0.1s,
+    color 0.1s;
+}
+
+.node-action-btn:hover {
+  background: var(--el-fill-color-darker);
+  color: var(--el-text-color-primary);
 }
 
 .node-children {

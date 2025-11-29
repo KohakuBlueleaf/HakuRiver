@@ -224,6 +224,12 @@ async function refreshAll() {
  */
 function handleNodeClick(entry) {
   ideStore.setSelectedPath(entry.path)
+  ideStore.setSelectedFileInfo({
+    path: entry.path,
+    name: entry.name,
+    type: entry.type,
+    size: entry.size || 0,
+  })
   emit('file-select', entry)
 }
 
@@ -619,28 +625,6 @@ defineExpose({
       </el-tooltip>
       <div class="file-tree-actions">
         <el-tooltip
-          content="New File"
-          placement="bottom">
-          <el-button
-            link
-            size="small"
-            :disabled="!ideStore.connected"
-            @click="openNewItemDialog('file', ideStore.selectedPath || '/')">
-            <span class="i-carbon-document-add" />
-          </el-button>
-        </el-tooltip>
-        <el-tooltip
-          content="New Folder"
-          placement="bottom">
-          <el-button
-            link
-            size="small"
-            :disabled="!ideStore.connected"
-            @click="openNewItemDialog('folder', ideStore.selectedPath || '/')">
-            <span class="i-carbon-folder-add" />
-          </el-button>
-        </el-tooltip>
-        <el-tooltip
           content="Refresh All"
           placement="bottom">
           <el-button
@@ -648,7 +632,7 @@ defineExpose({
             size="small"
             :loading="loading"
             @click="refreshAll">
-            <span class="i-carbon-refresh" />
+            <span class="i-carbon-rotate" />
           </el-button>
         </el-tooltip>
       </div>
@@ -687,24 +671,23 @@ defineExpose({
             :class="section.icon"
             class="section-icon" />
           <span class="section-name">{{ section.name }}</span>
-          <span class="section-path">{{ section.path }}</span>
 
           <!-- Section actions -->
           <div
             class="section-actions"
             @click.stop>
-            <el-tooltip
-              content="Refresh"
-              placement="top">
-              <button
-                class="section-action-btn"
-                :disabled="sectionLoading[section.path]"
-                @click="refreshSection(section.path)">
-                <span
-                  class="i-carbon-refresh"
-                  :class="{ 'is-loading': sectionLoading[section.path] }" />
-              </button>
-            </el-tooltip>
+            <button
+              class="section-action-btn"
+              title="New File"
+              @click="openNewItemDialog('file', section.path)">
+              <span class="i-carbon-document-add" />
+            </button>
+            <button
+              class="section-action-btn"
+              title="New Folder"
+              @click="openNewItemDialog('folder', section.path)">
+              <span class="i-carbon-folder-add" />
+            </button>
           </div>
         </div>
 
@@ -757,7 +740,9 @@ defineExpose({
               @click="handleNodeClick"
               @dblclick="handleNodeDblClick"
               @toggle-expand="handleToggleExpand"
-              @contextmenu="handleNodeContextMenu" />
+              @contextmenu="handleNodeContextMenu"
+              @new-file="(path) => openNewItemDialog('file', path)"
+              @new-folder="(path) => openNewItemDialog('folder', path)" />
           </div>
         </div>
       </div>
@@ -1014,22 +999,10 @@ defineExpose({
   color: var(--el-text-color-primary);
 }
 
-.section-path {
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
-  font-family: monospace;
-  margin-left: auto;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.section-header:hover .section-path {
-  opacity: 1;
-}
-
 .section-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
+  margin-left: auto;
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -1046,35 +1019,18 @@ defineExpose({
   height: 20px;
   border: none;
   background: transparent;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   color: var(--el-text-color-secondary);
+  font-size: 12px;
   transition:
-    background-color 0.15s,
-    color 0.15s;
+    background-color 0.1s,
+    color 0.1s;
 }
 
 .section-action-btn:hover {
   background: var(--el-fill-color-darker);
   color: var(--el-text-color-primary);
-}
-
-.section-action-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.section-action-btn .is-loading {
-  animation: rotate 1s linear infinite;
-}
-
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .section-content {

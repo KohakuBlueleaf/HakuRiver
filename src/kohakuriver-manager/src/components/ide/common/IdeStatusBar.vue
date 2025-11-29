@@ -34,6 +34,19 @@ const isSaving = computed(() => {
 })
 
 const isDirty = computed(() => ideStore.activeFile?.isDirty || false)
+
+// Selected file info from file tree
+const selectedFileInfo = computed(() => ideStore.selectedFileInfo)
+
+/**
+ * Format file size for display.
+ */
+function formatSize(bytes) {
+  if (!bytes || bytes <= 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 </script>
 
 <template>
@@ -42,8 +55,22 @@ const isDirty = computed(() => ideStore.activeFile?.isDirty || false)
     <div class="status-left">
       <!-- Connection status -->
       <div class="status-item">
-        <span class="status-dot connected" />
-        <span>Connected</span>
+        <span
+          class="status-dot"
+          :class="ideStore.connected ? 'connected' : 'disconnected'" />
+        <span>{{ ideStore.connected ? 'Connected' : 'Disconnected' }}</span>
+      </div>
+
+      <!-- Selected file path and size -->
+      <div
+        v-if="selectedFileInfo"
+        class="status-item file-info">
+        <span class="file-path">{{ selectedFileInfo.path }}</span>
+        <span
+          v-if="selectedFileInfo.type === 'file' && selectedFileInfo.size > 0"
+          class="file-size">
+          {{ formatSize(selectedFileInfo.size) }}
+        </span>
       </div>
     </div>
 
@@ -150,6 +177,24 @@ const isDirty = computed(() => ideStore.activeFile?.isDirty || false)
 
 .status-dot.disconnected {
   background: #f44336;
+}
+
+.file-info {
+  max-width: 400px;
+  overflow: hidden;
+}
+
+.file-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
+.file-size {
+  margin-left: 8px;
+  opacity: 0.7;
+  flex-shrink: 0;
 }
 
 .auto-save-status {
