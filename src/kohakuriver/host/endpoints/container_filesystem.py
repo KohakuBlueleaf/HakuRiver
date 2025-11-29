@@ -188,6 +188,9 @@ print(json.dumps(result))
             parts = line.split()
             if len(parts) >= 9:
                 name = " ".join(parts[8:])
+                # Skip . and .. entries
+                if name in (".", ".."):
+                    continue
                 is_dir = line.startswith("d")
                 size = int(parts[4]) if not is_dir else -1
                 entries.append(
