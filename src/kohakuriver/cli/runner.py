@@ -7,15 +7,16 @@ Usage:
 If no --config is specified, automatically loads ~/.kohakuriver/runner_config.py if it exists.
 """
 
-import logging
 import os
 import sys
 from typing import Annotated
 
 import typer
 
+from kohakuriver.utils.logger import get_logger
+
 app = typer.Typer(help="KohakuRiver Runner agent")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_RUNNER_CONFIG = os.path.expanduser("~/.kohakuriver/runner_config.py")
 

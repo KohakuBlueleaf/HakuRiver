@@ -1,4 +1,9 @@
-"""Node database model."""
+"""
+Node database model for HakuRiver.
+
+This module defines the Node model which represents compute nodes
+in the cluster, storing metadata, health status, and resource information.
+"""
 
 import datetime
 import json
@@ -9,38 +14,69 @@ from kohakuriver.db.base import BaseModel
 from kohakuriver.models.enums import NodeStatus
 
 
+# =============================================================================
+# Node Model
+# =============================================================================
+
+
 class Node(BaseModel):
     """
     Represents a compute node in the cluster.
 
     Stores node metadata, health status, and resource information.
+    Nodes register with the host and send periodic heartbeats.
+
+    Attributes:
+        hostname: Unique node identifier (primary key).
+        url: Runner API URL for communication.
+        total_cores: Number of CPU cores available.
+        status: Current node status ('online' or 'offline').
     """
 
-    # Primary identification
+    # -------------------------------------------------------------------------
+    # Primary Identification
+    # -------------------------------------------------------------------------
+
     hostname = peewee.CharField(unique=True, primary_key=True)
     url = peewee.CharField()  # Runner URL, e.g., http://192.168.1.101:8001
 
-    # Hardware resources
+    # -------------------------------------------------------------------------
+    # Hardware Resources
+    # -------------------------------------------------------------------------
+
     total_cores = peewee.IntegerField()
     memory_total_bytes = peewee.BigIntegerField(null=True)
 
-    # Status and health
+    # -------------------------------------------------------------------------
+    # Status and Health
+    # -------------------------------------------------------------------------
+
     status = peewee.CharField(default=NodeStatus.ONLINE.value)
     last_heartbeat = peewee.DateTimeField(default=datetime.datetime.now)
 
-    # Runtime metrics (updated via heartbeat)
+    # -------------------------------------------------------------------------
+    # Runtime Metrics (updated via heartbeat)
+    # -------------------------------------------------------------------------
+
     cpu_percent = peewee.FloatField(null=True)
     memory_percent = peewee.FloatField(null=True)
     memory_used_bytes = peewee.BigIntegerField(null=True)
     current_avg_temp = peewee.FloatField(null=True)
     current_max_temp = peewee.FloatField(null=True)
 
+    # -------------------------------------------------------------------------
     # Topology (stored as JSON)
+    # -------------------------------------------------------------------------
+
     numa_topology = peewee.TextField(null=True)
     gpu_info = peewee.TextField(null=True)
 
     class Meta:
         table_name = "nodes"
+
+    # =========================================================================
+    # JSON Field Accessors
+    # =========================================================================
 
     def get_numa_topology(self) -> dict[int, list[int]] | None:
         """
@@ -48,7 +84,7 @@ class Node(BaseModel):
 
         Returns:
             Dict mapping NUMA node ID to list of CPU core IDs,
-            or None if not set/invalid.
+            or None if not set or invalid.
         """
         if not self.numa_topology:
             return None
@@ -70,7 +106,7 @@ class Node(BaseModel):
         Parse stored GPU info JSON into a list of dictionaries.
 
         Returns:
-            List of GPU info dicts, or empty list if not set/invalid.
+            List of GPU info dicts, or empty list if not set or invalid.
         """
         if not self.gpu_info:
             return []
@@ -86,9 +122,17 @@ class Node(BaseModel):
         else:
             self.gpu_info = json.dumps(gpus)
 
+    # =========================================================================
+    # Status Helpers
+    # =========================================================================
+
     def is_online(self) -> bool:
         """Check if node is online."""
         return self.status == NodeStatus.ONLINE.value
+
+    def is_offline(self) -> bool:
+        """Check if node is offline."""
+        return self.status == NodeStatus.OFFLINE.value
 
     def mark_online(self) -> None:
         """Mark node as online."""
@@ -101,6 +145,10 @@ class Node(BaseModel):
     def update_heartbeat(self) -> None:
         """Update last heartbeat time to now."""
         self.last_heartbeat = datetime.datetime.now()
+
+    # =========================================================================
+    # Serialization
+    # =========================================================================
 
     def to_dict(self) -> dict:
         """Convert node to dictionary for API responses."""

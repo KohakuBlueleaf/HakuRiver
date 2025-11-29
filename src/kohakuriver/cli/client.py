@@ -5,13 +5,12 @@ Provides functions to interact with the HakuRiver host API.
 Returns structured data instead of printing.
 """
 
-import logging
-
 import httpx
 
 from kohakuriver.cli import config as cli_config
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class APIError(Exception):

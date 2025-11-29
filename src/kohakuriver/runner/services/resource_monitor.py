@@ -4,13 +4,12 @@ Resource monitoring service.
 Monitors system resources (CPU, memory, temperature, GPU).
 """
 
-import logging
-
 import psutil
 
 from kohakuriver.utils.gpu import get_gpu_info
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def get_system_stats() -> dict:

@@ -1,10 +1,22 @@
-"""Pydantic models for API requests and responses."""
+"""
+Pydantic models for API requests and responses.
+
+This module defines all data transfer objects (DTOs) used in the HakuRiver
+API for communication between CLI, Host, and Runner components.
+
+Model Categories:
+    - Task Requests: Task submission and control
+    - Task Responses: Task status and results
+    - Node Requests: Node registration and heartbeat
+    - Node Responses: Node status and information
+    - Docker Requests/Responses: Container management
+    - Health Responses: System health checks
+    - Error Responses: Standardized error formats
+"""
 
 import datetime
 
 from pydantic import BaseModel, Field
-
-from kohakuriver.models.enums import NodeStatus, TaskStatus, TaskType
 
 
 # =============================================================================
@@ -13,87 +25,128 @@ from kohakuriver.models.enums import NodeStatus, TaskStatus, TaskType
 
 
 class TaskSubmitRequest(BaseModel):
-    """Request body for task submission (CLI to host)."""
+    """
+    Request body for task submission from CLI to host.
+
+    This is the simplified request format used by the CLI client.
+    The host converts this to internal TaskSubmission format.
+    """
 
     command: str = Field(..., description="Command to execute")
-    arguments: list[str] = Field(default_factory=list, description="Command arguments")
+    arguments: list[str] = Field(
+        default_factory=list,
+        description="Command arguments",
+    )
     env_vars: dict[str, str] = Field(
-        default_factory=dict, description="Environment variables"
+        default_factory=dict,
+        description="Environment variables",
     )
     required_cores: int = Field(
-        default=1, ge=1, description="Number of CPU cores required"
+        default=1,
+        ge=1,
+        description="Number of CPU cores required",
     )
-    required_gpus: int = Field(default=0, ge=0, description="Number of GPUs required")
+    required_gpus: int = Field(
+        default=0,
+        ge=0,
+        description="Number of GPUs required",
+    )
     required_memory_bytes: int | None = Field(
-        default=None, description="Memory requirement in bytes"
+        default=None,
+        description="Memory requirement in bytes",
     )
     target_node: str | None = Field(
-        default=None, description="Target node hostname (None=auto)"
+        default=None,
+        description="Target node hostname (None=auto-assign)",
     )
     target_numa_node_id: int | None = Field(
-        default=None, description="Target NUMA node ID"
+        default=None,
+        description="Target NUMA node ID",
     )
     container_name: str | None = Field(
-        default=None, description="Container environment name"
+        default=None,
+        description="Container environment name",
     )
-    docker_privileged: bool = Field(default=False, description="Run with --privileged")
+    docker_privileged: bool = Field(
+        default=False,
+        description="Run container with --privileged flag",
+    )
     docker_mount_dirs: list[str] = Field(
-        default_factory=list, description="Additional mount dirs"
+        default_factory=list,
+        description="Additional directories to mount",
     )
 
 
 class TaskSubmission(BaseModel):
-    """Task submission request (host API).
+    """
+    Internal task submission model (host API).
 
-    Matches old TaskRequest model for compatibility.
-    Supports both 'command' and 'vps' task types.
-    For VPS: command field stores the SSH public key.
+    Supports both 'command' and 'vps' task types with full configuration.
+    For VPS tasks, the command field stores the SSH public key.
     """
 
     task_type: str = Field(
-        default="command", description="Task type: 'command' or 'vps'"
+        default="command",
+        description="Task type: 'command' or 'vps'",
     )
     command: str = Field(
-        default="", description="Command to execute (or SSH public key for VPS)"
+        default="",
+        description="Command to execute (or SSH public key for VPS)",
     )
-    arguments: list[str] = Field(default_factory=list, description="Command arguments")
+    arguments: list[str] = Field(
+        default_factory=list,
+        description="Command arguments",
+    )
     env_vars: dict[str, str] = Field(
-        default_factory=dict, description="Environment variables"
+        default_factory=dict,
+        description="Environment variables",
     )
     required_cores: int = Field(
-        default=1, ge=0, description="Number of CPU cores required"
+        default=1,
+        ge=0,
+        description="Number of CPU cores required",
     )
     required_gpus: list[list[int]] | None = Field(
         default=None,
-        description="List of GPU IDs for each target (one list per target)",
+        description="GPU IDs per target (list of lists)",
     )
     required_memory_bytes: int | None = Field(
-        default=None, ge=0, description="Memory limit in bytes"
+        default=None,
+        ge=0,
+        description="Memory limit in bytes",
     )
     targets: list[str] | None = Field(
         default=None,
-        description='List of targets, e.g., ["host1", "host2:0", "host1:1"]',
+        description="Target list, e.g., ['host1', 'host2:0', 'host1:1']",
     )
     container_name: str | None = Field(
-        default=None, description="Override default container name"
+        default=None,
+        description="Override default container name",
     )
     privileged: bool | None = Field(
-        default=None, description="Override default privileged setting"
+        default=None,
+        description="Override default privileged setting",
     )
     additional_mounts: list[str] | None = Field(
-        default=None, description="Override default additional mounts"
+        default=None,
+        description="Override default additional mounts",
     )
 
 
 class TaskExecuteRequest(BaseModel):
-    """Task execution request (host to runner)."""
+    """
+    Task execution request from host to runner.
+
+    Contains all information needed by a runner to execute a task,
+    including resource allocation and output paths.
+    """
 
     task_id: int
     command: str
     arguments: list[str] | None = None
     env_vars: dict[str, str] | None = None
     required_cores: int = 1
-    required_gpus: list[int] | None = None  # GPU indices as integers
+    required_gpus: list[int] | None = None
     required_memory_bytes: int | None = None
     target_numa_node_id: int | None = None
     container_name: str
@@ -103,49 +156,51 @@ class TaskExecuteRequest(BaseModel):
 
 
 class VPSSubmission(BaseModel):
-    """VPS submission request (host API).
+    """
+    VPS (Virtual Private Server) submission request.
 
-    Supports four SSH key modes:
-    - disabled: No SSH server at all, TTY-only mode (default, faster startup)
-    - none: SSH with passwordless root login
-    - upload: SSH with user-provided public key
-    - generate: SSH with server-generated keypair (returns private key)
+    Supports multiple SSH authentication modes:
+        - disabled: No SSH server (TTY-only, fastest startup)
+        - none: SSH with passwordless root login
+        - upload: SSH with user-provided public key
+        - generate: SSH with server-generated keypair
     """
 
     required_cores: int = 1
-    required_gpus: list[int] | None = None  # GPU indices as integers
+    required_gpus: list[int] | None = None
     required_memory_bytes: int | None = None
     target_hostname: str | None = None
     target_numa_node_id: int | None = None
     container_name: str | None = None
-    ssh_key_mode: str = "disabled"  # "disabled", "none", "upload", or "generate"
-    ssh_public_key: str | None = None  # Required if ssh_key_mode is "upload"
+    ssh_key_mode: str = "disabled"
+    ssh_public_key: str | None = None
 
 
 class VPSCreateRequest(BaseModel):
-    """VPS creation request (host to runner)."""
+    """VPS creation request from host to runner."""
 
     task_id: int
     required_cores: int = 1
-    required_gpus: list[int] | None = None  # GPU indices as integers
+    required_gpus: list[int] | None = None
     required_memory_bytes: int | None = None
     target_numa_node_id: int | None = None
     container_name: str
-    ssh_key_mode: str = "disabled"  # "disabled", "none", "upload", or "generate"
-    ssh_public_key: str | None = None  # Required if ssh_key_mode is "upload"
+    ssh_key_mode: str = "disabled"
+    ssh_public_key: str | None = None
     ssh_port: int
 
 
 class TaskKillRequest(BaseModel):
-    """Request body for task kill."""
+    """Request body for killing a task."""
 
     signal: str = Field(
-        default="SIGTERM", description="Signal to send (SIGTERM, SIGKILL, etc.)"
+        default="SIGTERM",
+        description="Signal to send (SIGTERM, SIGKILL, etc.)",
     )
 
 
 class TaskControlRequest(BaseModel):
-    """Request body for task control operations (kill/pause/resume) from host to runner."""
+    """Request for task control operations (kill/pause/resume) from host to runner."""
 
     task_id: int
     container_name: str
@@ -157,7 +212,7 @@ class TaskControlRequest(BaseModel):
 
 
 class TaskResponse(BaseModel):
-    """Response for a single task."""
+    """Complete task information response."""
 
     task_id: int
     task_type: str
@@ -186,7 +241,7 @@ class TaskResponse(BaseModel):
 
 
 class TaskListResponse(BaseModel):
-    """Response for task list with pagination."""
+    """Paginated task list response."""
 
     items: list[TaskResponse]
     total: int
@@ -196,7 +251,7 @@ class TaskListResponse(BaseModel):
 
 
 class TaskSubmitResponse(BaseModel):
-    """Response after task submission."""
+    """Response after single task submission."""
 
     task_id: int
     status: str
@@ -217,7 +272,7 @@ class BatchSubmitResponse(BaseModel):
 
 
 class NodeRegisterRequest(BaseModel):
-    """Request body for node registration."""
+    """Request body for initial node registration."""
 
     hostname: str
     url: str
@@ -235,16 +290,19 @@ class HeartbeatKilledTaskInfo(BaseModel):
 
 
 class HeartbeatRequest(BaseModel):
-    """Request body for heartbeat update.
+    """
+    Periodic heartbeat request from runner to host.
 
-    Matches old HeartbeatData model for compatibility.
+    Contains runner health metrics and task status updates.
     """
 
     running_tasks: list[int] = Field(
-        default_factory=list, description="List of running task IDs on this runner"
+        default_factory=list,
+        description="Currently running task IDs",
     )
     killed_tasks: list[HeartbeatKilledTaskInfo] = Field(
-        default_factory=list, description="Tasks killed by runner"
+        default_factory=list,
+        description="Tasks killed by runner since last heartbeat",
     )
     cpu_percent: float | None = None
     memory_percent: float | None = None
@@ -256,7 +314,7 @@ class HeartbeatRequest(BaseModel):
 
 
 class RegisterRequest(BaseModel):
-    """Request body for runner registration."""
+    """Runner registration request."""
 
     hostname: str
     url: str
@@ -267,7 +325,7 @@ class RegisterRequest(BaseModel):
 
 
 class TaskStatusUpdate(BaseModel):
-    """Request body for task status update from runner."""
+    """Task status update from runner to host."""
 
     task_id: int
     status: str
@@ -275,7 +333,7 @@ class TaskStatusUpdate(BaseModel):
     message: str | None = None
     started_at: datetime.datetime | None = None
     completed_at: datetime.datetime | None = None
-    ssh_port: int | None = None  # For VPS tasks - actual bound SSH port
+    ssh_port: int | None = None
 
 
 # =============================================================================
@@ -284,7 +342,7 @@ class TaskStatusUpdate(BaseModel):
 
 
 class NodeResponse(BaseModel):
-    """Response for a single node."""
+    """Complete node information response."""
 
     hostname: str
     url: str
@@ -302,7 +360,7 @@ class NodeResponse(BaseModel):
 
 
 class NodeListResponse(BaseModel):
-    """Response for node list."""
+    """Node list response."""
 
     items: list[NodeResponse]
     total: int
@@ -314,17 +372,17 @@ class NodeListResponse(BaseModel):
 
 
 class DockerCreateContainerRequest(BaseModel):
-    """Request body for creating a Docker container."""
+    """Request for creating a Docker container."""
 
     image_name: str = Field(..., description="Base Docker image to use")
     container_name: str = Field(..., description="Name for the new container")
 
 
 class DockerCommitRequest(BaseModel):
-    """Request body for committing a container to image."""
+    """Request for committing a container to an image."""
 
     source_container: str = Field(..., description="Container to commit from")
-    kohakuriver_name: str = Field(..., description="KohakuRiver environment name")
+    kohakuriver_name: str = Field(..., description="HakuRiver environment name")
 
 
 # =============================================================================
@@ -333,7 +391,7 @@ class DockerCommitRequest(BaseModel):
 
 
 class DockerImageResponse(BaseModel):
-    """Response for a Docker image."""
+    """Docker image information."""
 
     name: str
     tag: str
@@ -343,13 +401,13 @@ class DockerImageResponse(BaseModel):
 
 
 class DockerImageListResponse(BaseModel):
-    """Response for Docker image list."""
+    """Docker image list response."""
 
     items: list[DockerImageResponse]
 
 
 class DockerContainerResponse(BaseModel):
-    """Response for a Docker container."""
+    """Docker container information."""
 
     name: str
     image: str
@@ -358,7 +416,7 @@ class DockerContainerResponse(BaseModel):
 
 
 class DockerContainerListResponse(BaseModel):
-    """Response for Docker container list."""
+    """Docker container list response."""
 
     items: list[DockerContainerResponse]
 
@@ -369,7 +427,7 @@ class DockerContainerListResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """Response for health check."""
+    """Basic health check response."""
 
     status: str
     version: str
@@ -377,7 +435,7 @@ class HealthResponse(BaseModel):
 
 
 class ClusterHealthResponse(BaseModel):
-    """Response for cluster health overview."""
+    """Cluster-wide health overview."""
 
     total_nodes: int
     online_nodes: int
@@ -395,7 +453,7 @@ class ClusterHealthResponse(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    """Standard error response."""
+    """Standard error response format."""
 
     error: str
     detail: str | None = None
@@ -403,7 +461,7 @@ class ErrorResponse(BaseModel):
 
 
 class ValidationErrorResponse(BaseModel):
-    """Validation error response."""
+    """Validation error response with field-level details."""
 
     error: str = "Validation Error"
     detail: list[dict]

@@ -8,7 +8,6 @@ Uses subprocess-based Docker execution for task containers (matching old behavio
 import asyncio
 import datetime
 import functools
-import logging
 import os
 import shlex
 import subprocess
@@ -21,9 +20,9 @@ from kohakuriver.models.requests import TaskStatusUpdate
 from kohakuriver.runner.config import config
 from kohakuriver.runner.numa.detector import get_numa_prefix
 from kohakuriver.storage.vault import TaskStateStore
-from kohakuriver.utils.logger import format_traceback
+from kohakuriver.utils.logger import format_traceback, get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lock for Docker image sync operations to prevent concurrent syncs
 docker_sync_lock = asyncio.Lock()

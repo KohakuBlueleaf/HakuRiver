@@ -1,17 +1,23 @@
 """
-Health monitoring endpoints.
+Health Monitoring Endpoints.
 
-Provides cluster health metrics and history.
+Provides cluster health metrics and historical data.
+Returns aggregated health information from all nodes.
 """
-
-import logging
 
 from fastapi import APIRouter, HTTPException, Query
 
 from kohakuriver.host.background.health import health_datas
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
 router = APIRouter()
+
+
+# =============================================================================
+# Health Endpoints
+# =============================================================================
 
 
 @router.get("/health")
@@ -25,8 +31,15 @@ async def get_cluster_health(
 
     Returns the last known health status (heartbeat data) and NUMA info for nodes.
     Provides 60 seconds of historical data at 1-second intervals.
+
+    Args:
+        hostname: Optional hostname to filter results to a single node.
+
+    Returns:
+        If hostname specified: List containing single node's latest data.
+        Otherwise: Dict with 'nodes' and 'aggregate' historical data.
     """
-    logger.debug(f"Health request. Filter hostname: {hostname}")
+    logger.debug(f"Health request (filter hostname: {hostname})")
 
     try:
         if hostname and health_datas:

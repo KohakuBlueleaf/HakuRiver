@@ -1,24 +1,32 @@
 """
-Node management service.
+Node Management Service.
 
-Handles node registration, heartbeats, and resource calculations.
+Handles node resource calculations and scheduling queries.
 """
 
 import json
-import logging
 from collections import defaultdict
 
 import peewee
 
 from kohakuriver.db.node import Node
 from kohakuriver.db.task import Task
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+
+# =============================================================================
+# Resource Calculations
+# =============================================================================
 
 
 def get_node_available_cores(node: Node) -> int:
     """
     Calculate available cores for a node.
+
+    Args:
+        node: Node to check.
 
     Returns:
         Number of available cores (total - running tasks).
@@ -39,6 +47,9 @@ def get_node_available_gpus(node: Node) -> set[int]:
     """
     Calculate available GPU indices for a node.
 
+    Args:
+        node: Node to check.
+
     Returns:
         Set of available GPU indices (integers).
     """
@@ -58,15 +69,20 @@ def get_node_available_gpus(node: Node) -> set[int]:
             gpus = json.loads(task.required_gpus)
             used_gpus.update(gpus)
 
+    available = all_gpu_ids - used_gpus
     logger.debug(
-        f"Node {node.hostname}: all_gpus={all_gpu_ids}, used={used_gpus}, available={all_gpu_ids - used_gpus}"
+        f"Node {node.hostname}: all_gpus={all_gpu_ids}, "
+        f"used={used_gpus}, available={available}"
     )
-    return all_gpu_ids - used_gpus
+    return available
 
 
 def get_node_available_memory(node: Node) -> int:
     """
     Calculate available memory for a node.
+
+    Args:
+        node: Node to check.
 
     Returns:
         Available memory in bytes.
@@ -82,12 +98,16 @@ def get_node_available_memory(node: Node) -> int:
     )
     reserved = running_memory or 0
 
-    # Available = total - currently used - reserved by tasks
+    # Available = total - max(reserved, currently_used)
     currently_used = node.memory_used_bytes or 0
     total = node.memory_total_bytes or 0
 
-    # Return max of (total - reserved) or (total - used), whichever is smaller
     return max(0, total - max(reserved, currently_used))
+
+
+# =============================================================================
+# Node Selection
+# =============================================================================
 
 
 def find_suitable_node(
@@ -113,45 +133,29 @@ def find_suitable_node(
     # Start with online nodes
     query = Node.select().where(Node.status == "online")
 
-    # Filter by specific hostname if requested
     if target_hostname:
         query = query.where(Node.hostname == target_hostname)
 
     nodes: list[Node] = list(query)
 
     if not nodes:
-        logger.warning("No online nodes available.")
+        logger.warning("No online nodes available")
         return None
 
     # Filter by resource requirements
     suitable_nodes = []
 
     for node in nodes:
-        # Check cores
-        available_cores = get_node_available_cores(node)
-        if available_cores < required_cores:
+        if not _node_meets_requirements(
+            node,
+            required_cores,
+            required_gpus,
+            required_memory_bytes,
+            target_numa_node_id,
+        ):
             continue
 
-        # Check GPUs if required
-        if required_gpus:
-            available_gpus = get_node_available_gpus(node)
-            if not all(gpu in available_gpus for gpu in required_gpus):
-                continue
-
-        # Check memory if required
-        if required_memory_bytes:
-            available_memory = get_node_available_memory(node)
-            if available_memory < required_memory_bytes:
-                continue
-
-        # Check NUMA node if specified
-        if target_numa_node_id is not None:
-            numa_topology = node.get_numa_topology()
-            numa_nodes = numa_topology.get("numa_nodes", [])
-            numa_ids = [n.get("id") for n in numa_nodes]
-            if target_numa_node_id not in numa_ids:
-                continue
-
+        available_cores = get_node_available_cores(node)
         suitable_nodes.append((node, available_cores))
 
     if not suitable_nodes:
@@ -167,6 +171,47 @@ def find_suitable_node(
     return suitable_nodes[0][0]
 
 
+def _node_meets_requirements(
+    node: Node,
+    required_cores: int,
+    required_gpus: list[str] | None,
+    required_memory_bytes: int | None,
+    target_numa_node_id: int | None,
+) -> bool:
+    """Check if a node meets the specified requirements."""
+    # Check cores
+    available_cores = get_node_available_cores(node)
+    if available_cores < required_cores:
+        return False
+
+    # Check GPUs if required
+    if required_gpus:
+        available_gpus = get_node_available_gpus(node)
+        if not all(gpu in available_gpus for gpu in required_gpus):
+            return False
+
+    # Check memory if required
+    if required_memory_bytes:
+        available_memory = get_node_available_memory(node)
+        if available_memory < required_memory_bytes:
+            return False
+
+    # Check NUMA node if specified
+    if target_numa_node_id is not None:
+        numa_topology = node.get_numa_topology()
+        numa_nodes = numa_topology.get("numa_nodes", [])
+        numa_ids = [n.get("id") for n in numa_nodes]
+        if target_numa_node_id not in numa_ids:
+            return False
+
+    return True
+
+
+# =============================================================================
+# Status Queries
+# =============================================================================
+
+
 def get_all_nodes_status() -> list[dict]:
     """
     Get status of all nodes with resource usage.
@@ -175,56 +220,64 @@ def get_all_nodes_status() -> list[dict]:
         List of node status dictionaries.
     """
     nodes: list[Node] = list(Node.select())
+    cores_in_use = _calculate_cores_in_use(nodes)
 
-    # Calculate cores in use for online nodes
-    online_nodes = {n.hostname: n for n in nodes if n.status == "online"}
+    return [_build_node_status(node, cores_in_use) for node in nodes]
+
+
+def _calculate_cores_in_use(nodes: list[Node]) -> dict[str, int]:
+    """Calculate cores in use for all online nodes."""
+    online_hostnames = [n.hostname for n in nodes if n.status == "online"]
+
+    if not online_hostnames:
+        return {}
+
     cores_in_use: dict[str, int] = defaultdict(int)
 
-    if online_nodes:
-        running_tasks_usage = (
-            Task.select(
-                Task.assigned_node,
-                peewee.fn.SUM(Task.required_cores).alias("used_cores"),
-            )
-            .where(
-                (Task.status.in_(["running", "assigning"]))
-                & (Task.assigned_node << list(online_nodes.keys()))
-            )
-            .group_by(Task.assigned_node)
+    running_tasks_usage = (
+        Task.select(
+            Task.assigned_node,
+            peewee.fn.SUM(Task.required_cores).alias("used_cores"),
         )
-
-        for usage in running_tasks_usage:
-            if usage.assigned_node:
-                cores_in_use[usage.assigned_node] = usage.used_cores or 0
-
-    result = []
-    for node in nodes:
-        available = 0
-        used = "N/A"
-        if node.status == "online":
-            used = cores_in_use.get(node.hostname, 0)
-            available = node.total_cores - used
-
-        result.append(
-            {
-                "hostname": node.hostname,
-                "url": node.url,
-                "total_cores": node.total_cores,
-                "cores_in_use": used,
-                "available_cores": available,
-                "status": node.status,
-                "last_heartbeat": (
-                    node.last_heartbeat.isoformat() if node.last_heartbeat else None
-                ),
-                "numa_topology": node.get_numa_topology(),
-                "gpu_info": node.get_gpu_info(),
-                "cpu_percent": node.cpu_percent,
-                "memory_percent": node.memory_percent,
-                "memory_used_bytes": node.memory_used_bytes,
-                "memory_total_bytes": node.memory_total_bytes,
-                "current_avg_temp": node.current_avg_temp,
-                "current_max_temp": node.current_max_temp,
-            }
+        .where(
+            (Task.status.in_(["running", "assigning"]))
+            & (Task.assigned_node << online_hostnames)
         )
+        .group_by(Task.assigned_node)
+    )
 
-    return result
+    for usage in running_tasks_usage:
+        if usage.assigned_node:
+            cores_in_use[usage.assigned_node] = usage.used_cores or 0
+
+    return cores_in_use
+
+
+def _build_node_status(node: Node, cores_in_use: dict[str, int]) -> dict:
+    """Build status dictionary for a single node."""
+    available = 0
+    used = "N/A"
+
+    if node.status == "online":
+        used = cores_in_use.get(node.hostname, 0)
+        available = node.total_cores - used
+
+    return {
+        "hostname": node.hostname,
+        "url": node.url,
+        "total_cores": node.total_cores,
+        "cores_in_use": used,
+        "available_cores": available,
+        "status": node.status,
+        "last_heartbeat": (
+            node.last_heartbeat.isoformat() if node.last_heartbeat else None
+        ),
+        "numa_topology": node.get_numa_topology(),
+        "gpu_info": node.get_gpu_info(),
+        "cpu_percent": node.cpu_percent,
+        "memory_percent": node.memory_percent,
+        "memory_used_bytes": node.memory_used_bytes,
+        "memory_total_bytes": node.memory_total_bytes,
+        "current_avg_temp": node.current_avg_temp,
+        "current_max_temp": node.current_max_temp,
+    }

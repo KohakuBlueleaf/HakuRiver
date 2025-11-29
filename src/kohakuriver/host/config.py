@@ -1,7 +1,18 @@
 """
-Host configuration.
+Host server configuration for HakuRiver.
 
-A global Config instance that can be modified at runtime.
+This module defines the configuration dataclass for the host server,
+providing a centralized place for all configurable parameters.
+
+Configuration can be modified at runtime by importing the global config
+instance and updating its attributes before starting the server.
+
+Usage:
+    from kohakuriver.host.config import config
+
+    # Modify configuration before starting
+    config.HOST_PORT = 9000
+    config.LOG_LEVEL = LogLevel.DEBUG
 """
 
 import os
@@ -10,52 +21,115 @@ from dataclasses import dataclass, field
 from kohakuriver.models.enums import LogLevel
 
 
+# =============================================================================
+# Configuration Dataclass
+# =============================================================================
+
+
 @dataclass
 class HostConfig:
-    """Host server configuration."""
+    """
+    Host server configuration.
 
+    All configuration options for the HakuRiver host server, organized by category.
+
+    Attributes:
+        HOST_BIND_IP: IP address to bind the server to.
+        HOST_PORT: HTTP API port.
+        HOST_SSH_PROXY_PORT: SSH proxy port for VPS tunneling.
+        SHARED_DIR: Root directory for shared cluster storage.
+        DB_FILE: Path to the SQLite database file.
+        LOG_LEVEL: Logging verbosity level.
+    """
+
+    # -------------------------------------------------------------------------
     # Network Configuration
+    # -------------------------------------------------------------------------
+
     HOST_BIND_IP: str = "0.0.0.0"
     HOST_PORT: int = 8000
     HOST_SSH_PROXY_PORT: int = 8002
     HOST_REACHABLE_ADDRESS: str = "127.0.0.1"
 
+    # -------------------------------------------------------------------------
     # Path Configuration
+    # -------------------------------------------------------------------------
+
     SHARED_DIR: str = "/mnt/cluster-share"
     DB_FILE: str = "/var/lib/kohakuriver/kohakuriver.db"
-    CONTAINER_DIR: str = ""
+    CONTAINER_DIR: str = ""  # Defaults to SHARED_DIR/kohakuriver-containers
     HOST_LOG_FILE: str = ""
 
+    # -------------------------------------------------------------------------
     # Timing Configuration
+    # -------------------------------------------------------------------------
+
     HEARTBEAT_INTERVAL_SECONDS: int = 5
     HEARTBEAT_TIMEOUT_FACTOR: int = 6
     CLEANUP_CHECK_INTERVAL_SECONDS: int = 10
 
+    # -------------------------------------------------------------------------
     # Docker Configuration
+    # -------------------------------------------------------------------------
+
     DEFAULT_CONTAINER_NAME: str = "kohakuriver-base"
     INITIAL_BASE_IMAGE: str = "python:3.12-alpine"
     TASKS_PRIVILEGED: bool = False
     ADDITIONAL_MOUNTS: list[str] = field(default_factory=list)
     DEFAULT_WORKING_DIR: str = "/shared"
 
-    # Environment Container Resource Limits (for env setup containers on host)
-    # Expressed as percentage of total system resources (0.0-1.0, default 0.25 = 25%)
+    # -------------------------------------------------------------------------
+    # Environment Container Limits
+    # -------------------------------------------------------------------------
+
+    # Percentage of system resources (0.0-1.0) for env setup containers
     ENV_CONTAINER_CPU_LIMIT: float = 0.25
     ENV_CONTAINER_MEM_LIMIT: float = 0.25
 
+    # -------------------------------------------------------------------------
     # Logging Configuration
+    # -------------------------------------------------------------------------
+
     LOG_LEVEL: LogLevel = LogLevel.INFO
 
+    # =========================================================================
+    # Helper Methods
+    # =========================================================================
+
     def get_container_dir(self) -> str:
-        """Get the container tarball directory path."""
+        """
+        Get the container tarball directory path.
+
+        Returns:
+            Path to the directory containing container tarballs.
+            Defaults to SHARED_DIR/kohakuriver-containers if not explicitly set.
+        """
         if self.CONTAINER_DIR:
             return self.CONTAINER_DIR
         return os.path.join(self.SHARED_DIR, "kohakuriver-containers")
 
     def get_host_url(self) -> str:
-        """Get the full host URL."""
+        """
+        Get the full host URL for external access.
+
+        Returns:
+            URL string like "http://192.168.1.1:8000"
+        """
         return f"http://{self.HOST_REACHABLE_ADDRESS}:{self.HOST_PORT}"
 
+    def get_heartbeat_timeout(self) -> int:
+        """
+        Get the heartbeat timeout in seconds.
 
-# Global config instance
+        Returns:
+            Number of seconds after which a node is considered dead.
+        """
+        return self.HEARTBEAT_INTERVAL_SECONDS * self.HEARTBEAT_TIMEOUT_FACTOR
+
+
+# =============================================================================
+# Global Instance
+# =============================================================================
+
+# Global config instance - modify before server startup
 config = HostConfig()

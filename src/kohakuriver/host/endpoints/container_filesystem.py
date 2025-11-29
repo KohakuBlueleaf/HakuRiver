@@ -7,19 +7,20 @@ which proxy to runners, these operate directly on the Host.
 """
 
 import asyncio
-import json
-import logging
-import os
 import base64
+import json
+import os
 
 import docker
-from docker.errors import NotFound as DockerNotFound, APIError as DockerAPIError
-from fastapi import APIRouter, HTTPException, Query, Path
+from docker.errors import APIError as DockerAPIError
+from docker.errors import NotFound as DockerNotFound
+from fastapi import APIRouter, HTTPException, Path, Query
 from pydantic import BaseModel
 
 from kohakuriver.docker.naming import ENV_PREFIX
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

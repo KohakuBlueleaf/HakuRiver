@@ -4,9 +4,7 @@ VPS management endpoints.
 Handles VPS creation, control, and snapshot requests.
 """
 
-import logging
 import os
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -14,19 +12,19 @@ from pydantic import BaseModel
 from kohakuriver.models.requests import VPSCreateRequest
 from kohakuriver.runner.config import config
 from kohakuriver.runner.services.vps_manager import (
+    create_snapshot,
     create_vps,
+    delete_all_snapshots,
+    delete_snapshot,
+    get_latest_snapshot,
+    list_snapshots,
     pause_vps,
     resume_vps,
     stop_vps,
-    # Snapshot functions
-    list_snapshots,
-    create_snapshot,
-    delete_snapshot,
-    delete_all_snapshots,
-    get_latest_snapshot,
 )
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 # These will be set by the app on startup

@@ -1,40 +1,104 @@
+"""
+CLI parsing utilities for HakuRiver.
+
+This module provides helper functions for parsing command-line arguments
+and configuration strings into structured data types.
+"""
+
 import re
-from .logger import logger
+
+from kohakuriver.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+# =============================================================================
+# Memory Parsing
+# =============================================================================
 
 
 def parse_memory_string(mem_str: str) -> int | None:
-    """Parses memory string like '4G', '512M', '2K' into bytes."""
+    """
+    Parse a human-readable memory string into bytes.
+
+    Supports suffixes K (kilobytes), M (megabytes), G (gigabytes).
+    Uses SI units (1K = 1000 bytes, not 1024).
+
+    Args:
+        mem_str: Memory string like '4G', '512M', '2K', or '1000000'.
+
+    Returns:
+        Memory size in bytes, or None if input is empty.
+
+    Raises:
+        ValueError: If the format is invalid.
+
+    Examples:
+        >>> parse_memory_string('4G')
+        4000000000
+        >>> parse_memory_string('512M')
+        512000000
+        >>> parse_memory_string('1000')
+        1000
+    """
     if not mem_str:
         return None
+
     mem_str = mem_str.upper().strip()
     match = re.match(r"^(\d+)([KMG]?)$", mem_str)
+
     if not match:
         raise ValueError(
-            f"Invalid memory format: '{mem_str}'. Use suffix K, M, or G (e.g., 512M, 4G)."
+            f"Invalid memory format: '{mem_str}'. "
+            "Use suffix K, M, or G (e.g., 512M, 4G)."
         )
 
-    val = int(match.group(1))
+    value = int(match.group(1))
     unit = match.group(2)
 
-    if unit == "G":
-        return val * 1000_000_000
-    elif unit == "M":
-        return val * 1000_000
-    elif unit == "K":
-        return val * 1000
-    else:  # No unit means bytes
-        return val
+    multipliers = {
+        "G": 1_000_000_000,
+        "M": 1_000_000,
+        "K": 1_000,
+        "": 1,
+    }
+
+    return value * multipliers[unit]
+
+
+# =============================================================================
+# Key-Value Parsing
+# =============================================================================
 
 
 def parse_key_value(items: list[str]) -> dict[str, str]:
-    """Parses ['KEY1=VAL1', 'KEY2=VAL2'] into {'KEY1': 'VAL1', 'KEY2': 'VAL2'}"""
-    result = {}
+    """
+    Parse a list of KEY=VALUE strings into a dictionary.
+
+    Args:
+        items: List of strings in 'KEY=VALUE' format.
+
+    Returns:
+        Dictionary mapping keys to values.
+
+    Examples:
+        >>> parse_key_value(['FOO=bar', 'BAZ=qux'])
+        {'FOO': 'bar', 'BAZ': 'qux'}
+        >>> parse_key_value(['PATH=/usr/bin:/bin'])
+        {'PATH': '/usr/bin:/bin'}
+    """
     if not items:
-        return result
+        return {}
+
+    result: dict[str, str] = {}
+
     for item in items:
         parts = item.split("=", 1)
         if len(parts) == 2:
-            result[parts[0].strip()] = parts[1].strip()
+            key = parts[0].strip()
+            value = parts[1].strip()
+            result[key] = value
         else:
-            logger.warning(f"Ignoring invalid environment variable format: {item}")
+            logger.warning(f"Ignoring invalid KEY=VALUE format: {item}")
+
     return result

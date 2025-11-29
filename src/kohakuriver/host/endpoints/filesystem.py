@@ -6,16 +6,15 @@ Proxies filesystem REST API requests from the host to the appropriate runner.
 
 import asyncio
 import json
-import logging
-from urllib.parse import urlparse, urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 import websockets
 from fastapi import (
     APIRouter,
     HTTPException,
-    Query,
     Path,
+    Query,
     Request,
     WebSocket,
     WebSocketDisconnect,
@@ -25,8 +24,9 @@ from pydantic import BaseModel
 
 from kohakuriver.db.node import Node
 from kohakuriver.db.task import Task
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

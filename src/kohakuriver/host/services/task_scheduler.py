@@ -1,22 +1,24 @@
 """
-Task scheduling service.
+Task Scheduling Service.
 
 Handles task submission, assignment, and control operations.
+Provides communication with runner nodes for task lifecycle management.
 """
 
-import asyncio
 import datetime
 import json
-import logging
 
 import httpx
 
-from kohakuriver.db.node import Node
 from kohakuriver.db.task import Task
-from kohakuriver.docker.naming import task_container_name
-from kohakuriver.host.services.node_manager import find_suitable_node
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+
+# =============================================================================
+# Task Execution
+# =============================================================================
 
 
 async def send_task_to_runner(
@@ -37,11 +39,6 @@ async def send_task_to_runner(
     Returns:
         Runner response dict or None on failure.
     """
-    logger.debug(
-        f"send_task_to_runner called: task_id={task.task_id}, runner_url={runner_url}"
-    )
-    logger.debug(f"  container_name={container_name}, working_dir={working_dir}")
-
     payload = {
         "task_id": task.task_id,
         "command": task.command,
@@ -56,22 +53,20 @@ async def send_task_to_runner(
         "stdout_path": task.stdout_path,
         "stderr_path": task.stderr_path,
     }
-    logger.debug(f"  payload: {payload}")
 
     logger.info(f"Sending task {task.task_id} to runner at {runner_url}")
+    logger.debug(f"Task payload: {payload}")
 
     try:
         async with httpx.AsyncClient() as client:
-            logger.debug(f"  POSTing to {runner_url}/execute...")
             response = await client.post(
                 f"{runner_url}/execute",
                 json=payload,
                 timeout=30.0,
             )
-            logger.debug(f"  Response status: {response.status_code}")
             response.raise_for_status()
             result = response.json()
-            logger.debug(f"  Response body: {result}")
+            logger.debug(f"Runner response: {result}")
             return result
 
     except httpx.RequestError as e:
@@ -83,6 +78,11 @@ async def send_task_to_runner(
             f"{e.response.status_code} - {e.response.text}"
         )
         return None
+
+
+# =============================================================================
+# VPS Operations
+# =============================================================================
 
 
 async def send_vps_task_to_runner(
@@ -103,11 +103,6 @@ async def send_vps_task_to_runner(
     Returns:
         Runner response dict or None on failure.
     """
-    logger.debug(
-        f"send_vps_task_to_runner called: task_id={task.task_id}, runner_url={runner_url}"
-    )
-    logger.debug(f"  container_name={container_name}")
-
     payload = {
         "task_id": task.task_id,
         "required_cores": task.required_cores,
@@ -118,11 +113,9 @@ async def send_vps_task_to_runner(
         "ssh_public_key": ssh_public_key,
         "ssh_port": task.ssh_port,
     }
-    logger.debug(
-        f"  payload (truncated): task_id={task.task_id}, ssh_port={task.ssh_port}"
-    )
 
     logger.info(f"Sending VPS {task.task_id} to runner at {runner_url}")
+    logger.debug(f"VPS payload: task_id={task.task_id}, ssh_port={task.ssh_port}")
 
     try:
         async with httpx.AsyncClient() as client:
@@ -139,7 +132,7 @@ async def send_vps_task_to_runner(
             if ssh_port:
                 task.ssh_port = ssh_port
                 task.save()
-                logger.debug(f"  Updated task SSH port to {ssh_port}")
+                logger.debug(f"Updated task SSH port to {ssh_port}")
 
             return result
 
@@ -154,7 +147,14 @@ async def send_vps_task_to_runner(
         return None
 
 
-async def send_kill_to_runner(runner_url: str, task_id: int, container_name: str):
+# =============================================================================
+# Task Control
+# =============================================================================
+
+
+async def send_kill_to_runner(
+    runner_url: str, task_id: int, container_name: str
+) -> None:
     """
     Send kill request to a runner.
 
@@ -177,11 +177,7 @@ async def send_kill_to_runner(runner_url: str, task_id: int, container_name: str
 
     except httpx.RequestError as e:
         logger.error(f"Failed to send kill for task {task_id} to {runner_url}: {e}")
-        # Update task message
-        task: Task | None = Task.get_or_none(Task.task_id == task_id)
-        if task and task.status == "killed":
-            task.error_message = f"{task.error_message or ''} | Runner unreachable: {e}"
-            task.save()
+        _update_task_error_message(task_id, f"Runner unreachable: {e}")
 
     except httpx.HTTPStatusError as e:
         logger.error(
@@ -197,6 +193,11 @@ async def send_pause_to_runner(
 ) -> str:
     """
     Send pause request to a runner.
+
+    Args:
+        runner_url: Runner's HTTP URL.
+        task_id: Task ID to pause.
+        container_name: Container name for the task.
 
     Returns:
         Status message.
@@ -234,6 +235,11 @@ async def send_resume_to_runner(
     """
     Send resume request to a runner.
 
+    Args:
+        runner_url: Runner's HTTP URL.
+        task_id: Task ID to resume.
+        container_name: Container name for the task.
+
     Returns:
         Status message.
     """
@@ -262,13 +268,18 @@ async def send_resume_to_runner(
         return "Runner error during resume command."
 
 
-def mark_task_killed(task: Task, message: str = "Kill requested by user."):
+# =============================================================================
+# Task Status Updates
+# =============================================================================
+
+
+def mark_task_killed(task: Task, message: str = "Kill requested by user.") -> None:
     """Mark a task as killed in the database."""
     task.status = "killed"
     task.error_message = message
     task.completed_at = datetime.datetime.now()
     task.save()
-    logger.info(f"Marked task {task.task_id} as 'killed'.")
+    logger.info(f"Marked task {task.task_id} as 'killed'")
 
 
 def update_task_status(
@@ -283,56 +294,108 @@ def update_task_status(
     """
     Update task status from runner callback.
 
+    Args:
+        task_id: Task ID to update.
+        status: New status.
+        exit_code: Exit code if completed.
+        message: Error or status message.
+        started_at: When task started.
+        completed_at: When task completed.
+        ssh_port: SSH port for VPS tasks.
+
     Returns:
         True if updated, False if task not found or invalid state.
     """
-    logger.debug(f"update_task_status called: task_id={task_id}, status={status}")
-    logger.debug(f"  exit_code={exit_code}, message={message}, ssh_port={ssh_port}")
-    logger.debug(f"  started_at={started_at}, completed_at={completed_at}")
+    logger.debug(
+        f"Updating task {task_id}: status={status}, exit_code={exit_code}, "
+        f"ssh_port={ssh_port}"
+    )
 
     task: Task | None = Task.get_or_none(Task.task_id == task_id)
     if not task:
         logger.warning(f"Received update for unknown task ID: {task_id}")
         return False
 
-    logger.debug(f"  Found task, current status={task.status}, type={task.task_type}")
-
-    # Prevent overwriting final states (with special case for VPS recovery)
-    final_states = ["completed", "failed", "killed", "killed_oom", "lost", "stopped"]
-    if task.status in final_states and status not in final_states:
-        # Special case: Allow VPS tasks to recover from "lost" state
-        # This happens when a runner restarts and finds running VPS containers
-        if task.task_type == "vps" and task.status == "lost" and status == "running":
-            logger.info(
-                f"[VPS Recovery] VPS {task_id} recovering from 'lost' to 'running'. "
-                f"Runner likely restarted and found the container still running."
-            )
-            if message:
-                logger.info(f"[VPS Recovery] Recovery message: {message}")
-        else:
-            logger.warning(
-                f"Ignoring status update '{status}' for task {task_id} "
-                f"which is already in final state '{task.status}'."
-            )
-            return False
+    # Check for valid state transitions
+    if not _validate_status_transition(task, status, message):
+        return False
 
     # Check if recovering from lost state
     is_recovering = task.status == "lost" and status == "running"
 
-    logger.debug(f"  Updating status from '{task.status}' to '{status}'")
+    # Apply updates
+    _apply_task_updates(
+        task,
+        status,
+        exit_code,
+        message,
+        started_at,
+        completed_at,
+        ssh_port,
+        is_recovering,
+    )
+
+    task.save()
+    logger.info(f"Task {task_id} status updated to {status}")
+    return True
+
+
+def _validate_status_transition(
+    task: Task, new_status: str, message: str | None
+) -> bool:
+    """Validate that a status transition is allowed."""
+    final_states = {"completed", "failed", "killed", "killed_oom", "lost", "stopped"}
+
+    if task.status not in final_states:
+        return True
+
+    if new_status in final_states:
+        return True
+
+    # Special case: Allow VPS tasks to recover from "lost" state
+    if task.task_type == "vps" and task.status == "lost" and new_status == "running":
+        logger.info(
+            f"[VPS Recovery] VPS {task.task_id} recovering from 'lost' to 'running'. "
+            f"Runner likely restarted and found the container still running"
+        )
+        if message:
+            logger.info(f"[VPS Recovery] Recovery message: {message}")
+        return True
+
+    logger.warning(
+        f"Ignoring status update '{new_status}' for task {task.task_id} "
+        f"which is already in final state '{task.status}'"
+    )
+    return False
+
+
+def _apply_task_updates(
+    task: Task,
+    status: str,
+    exit_code: int | None,
+    message: str | None,
+    started_at: datetime.datetime | None,
+    completed_at: datetime.datetime | None,
+    ssh_port: int | None,
+    is_recovering: bool,
+) -> None:
+    """Apply updates to a task record."""
+    final_states = {"completed", "failed", "killed", "killed_oom", "lost", "stopped"}
+
     task.status = status
     task.exit_code = exit_code
     task.error_message = message
 
     if started_at and not task.started_at:
         task.started_at = started_at
-        logger.info(f"Task {task_id} started at {started_at}")
+        logger.info(f"Task {task.task_id} started at {started_at}")
 
-    # Clear completed_at when recovering from lost state
+    # Handle completed_at based on recovery state
     if is_recovering:
         task.completed_at = None
         logger.info(
-            f"[VPS Recovery] Cleared completed_at for VPS {task_id}, task is now active again."
+            f"[VPS Recovery] Cleared completed_at for VPS {task.task_id}, "
+            "task is now active again"
         )
     elif completed_at:
         task.completed_at = completed_at
@@ -342,15 +405,17 @@ def update_task_status(
     # Update SSH port for VPS tasks
     if ssh_port is not None:
         task.ssh_port = ssh_port
-        logger.info(f"Task {task_id} SSH port updated to {ssh_port}")
+        logger.info(f"Task {task.task_id} SSH port updated to {ssh_port}")
 
     # Clear suspicion count on successful updates
     if task.assignment_suspicion_count > 0:
-        logger.info(f"Clearing suspicion count for task {task_id}")
+        logger.debug(f"Clearing suspicion count for task {task.task_id}")
         task.assignment_suspicion_count = 0
 
-    logger.debug(f"  Saving task to database...")
-    task.save()
-    logger.debug(f"  Task saved successfully")
-    logger.info(f"Task {task_id} status updated to {status}")
-    return True
+
+def _update_task_error_message(task_id: int, additional_message: str) -> None:
+    """Append an error message to a task's error_message field."""
+    task: Task | None = Task.get_or_none(Task.task_id == task_id)
+    if task and task.status == "killed":
+        task.error_message = f"{task.error_message or ''} | {additional_message}"
+        task.save()

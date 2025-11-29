@@ -5,25 +5,24 @@ Main entry point for the runner server.
 """
 
 import asyncio
-import logging
 import os
 import socket
 
 import httpx
 import psutil
-from fastapi import FastAPI, WebSocket, Path
+from fastapi import FastAPI, Path, WebSocket
 
 from kohakuriver.docker.client import DockerManager
-from kohakuriver.runner.config import config
 from kohakuriver.runner.background.heartbeat import send_heartbeat
 from kohakuriver.runner.background.startup_check import startup_check
+from kohakuriver.runner.config import config
 from kohakuriver.runner.endpoints import docker, filesystem, tasks, terminal, vps
 from kohakuriver.runner.numa.detector import detect_numa_topology
 from kohakuriver.runner.services.resource_monitor import get_gpu_stats, get_total_cores
 from kohakuriver.storage.vault import TaskStateStore
-from kohakuriver.utils.logger import configure_logging, format_traceback
+from kohakuriver.utils.logger import configure_logging, format_traceback, get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Background tasks set
 background_tasks: set[asyncio.Task] = set()

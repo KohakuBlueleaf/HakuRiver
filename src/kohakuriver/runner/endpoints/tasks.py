@@ -5,7 +5,6 @@ Handles task execution, control, and status requests.
 """
 
 import asyncio
-import logging
 import os
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
@@ -18,8 +17,9 @@ from kohakuriver.runner.services.task_executor import (
     pause_task,
     resume_task,
 )
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 # These will be set by the app on startup

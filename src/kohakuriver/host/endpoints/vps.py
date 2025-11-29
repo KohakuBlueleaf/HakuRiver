@@ -13,28 +13,25 @@ Supports four SSH key modes:
 import asyncio
 import datetime
 import json
-import logging
+import os
 import subprocess
 import tempfile
 
+import httpx
 import peewee
 from fastapi import APIRouter, HTTPException
 
 from kohakuriver.db.node import Node
 from kohakuriver.db.task import Task
-import httpx
-
 from kohakuriver.docker.naming import vps_container_name
 from kohakuriver.host.config import config
 from kohakuriver.host.services.node_manager import find_suitable_node
-from kohakuriver.host.services.task_scheduler import (
-    mark_task_killed,
-    send_kill_to_runner,
-)
+from kohakuriver.host.services.task_scheduler import send_kill_to_runner
 from kohakuriver.models.requests import VPSSubmission
+from kohakuriver.utils.logger import get_logger
 from kohakuriver.utils.snowflake import generate_snowflake_id
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 # Background tasks set
@@ -54,9 +51,6 @@ def _generate_ssh_keypair_for_vps(task_id: int) -> tuple[str, str]:
     Raises:
         RuntimeError: If key generation fails.
     """
-    import os
-
-    # Create temp directory for key generation
     with tempfile.TemporaryDirectory() as tmpdir:
         key_path = os.path.join(tmpdir, "id_ed25519")
 
@@ -109,8 +103,6 @@ async def send_vps_to_runner(
     Returns:
         Runner response dict or None on failure.
     """
-    import httpx
-
     payload = {
         "task_id": task.task_id,
         "required_cores": task.required_cores,

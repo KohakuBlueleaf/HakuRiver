@@ -1,4 +1,9 @@
-"""Task database model."""
+"""
+Task database model for HakuRiver.
+
+This module defines the Task model which represents submitted tasks
+in the cluster, including both command execution and VPS sessions.
+"""
 
 import datetime
 import json
@@ -9,53 +14,93 @@ from kohakuriver.db.base import BaseModel
 from kohakuriver.models.enums import TaskStatus, TaskType
 
 
+# =============================================================================
+# Task Model
+# =============================================================================
+
+
 class Task(BaseModel):
     """
     Represents a task submitted to the cluster.
 
-    Tasks can be either command execution or VPS sessions.
+    Tasks can be either:
+        - command: One-shot command execution with stdout/stderr capture
+        - vps: Long-running interactive session with SSH access
+
+    Attributes:
+        task_id: Unique snowflake ID (primary key).
+        task_type: Type of task ('command' or 'vps').
+        batch_id: ID linking tasks submitted together.
+        command: Command to execute (or SSH public key for VPS).
+        status: Current task status.
     """
 
-    # Primary identification
-    task_id = peewee.BigIntegerField(primary_key=True)  # Snowflake ID
+    # -------------------------------------------------------------------------
+    # Primary Identification
+    # -------------------------------------------------------------------------
+
+    task_id = peewee.BigIntegerField(primary_key=True)
     task_type = peewee.CharField(default=TaskType.COMMAND.value)
     batch_id = peewee.BigIntegerField(null=True, index=True)
 
-    # Command specification
+    # -------------------------------------------------------------------------
+    # Command Specification
+    # -------------------------------------------------------------------------
+
     command = peewee.TextField()
     arguments = peewee.TextField(default="[]")  # JSON array
     env_vars = peewee.TextField(default="{}")  # JSON object
 
-    # Resource requirements
+    # -------------------------------------------------------------------------
+    # Resource Requirements
+    # -------------------------------------------------------------------------
+
     required_cores = peewee.IntegerField(default=1)
     required_gpus = peewee.TextField(default="[]")  # JSON array of GPU indices
     required_memory_bytes = peewee.BigIntegerField(null=True)
     target_numa_node_id = peewee.IntegerField(null=True)
 
-    # Assignment and status
+    # -------------------------------------------------------------------------
+    # Assignment and Status
+    # -------------------------------------------------------------------------
+
     status = peewee.CharField(default=TaskStatus.PENDING.value)
-    # Note: We use hostname string instead of ForeignKey to avoid import issues
     assigned_node = peewee.CharField(null=True, index=True)
     assignment_suspicion_count = peewee.IntegerField(default=0)
 
-    # Docker configuration
+    # -------------------------------------------------------------------------
+    # Docker Configuration
+    # -------------------------------------------------------------------------
+
     container_name = peewee.CharField(null=True)  # HakuRiver environment name
     docker_image_name = peewee.CharField(null=True)  # Full image tag
     docker_privileged = peewee.BooleanField(default=False)
     docker_mount_dirs = peewee.TextField(null=True)  # JSON array of mounts
 
-    # VPS specific
+    # -------------------------------------------------------------------------
+    # VPS Specific
+    # -------------------------------------------------------------------------
+
     ssh_port = peewee.IntegerField(null=True)
 
-    # Output paths
+    # -------------------------------------------------------------------------
+    # Output Paths
+    # -------------------------------------------------------------------------
+
     stdout_path = peewee.TextField(default="")
     stderr_path = peewee.TextField(default="")
 
+    # -------------------------------------------------------------------------
     # Results
+    # -------------------------------------------------------------------------
+
     exit_code = peewee.IntegerField(null=True)
     error_message = peewee.TextField(null=True)
 
+    # -------------------------------------------------------------------------
     # Timestamps
+    # -------------------------------------------------------------------------
+
     submitted_at = peewee.DateTimeField(default=datetime.datetime.now)
     started_at = peewee.DateTimeField(null=True)
     completed_at = peewee.DateTimeField(null=True)
@@ -131,6 +176,10 @@ class Task(BaseModel):
         """Check if task is running."""
         return self.status == TaskStatus.RUNNING.value
 
+    def is_paused(self) -> bool:
+        """Check if task is paused."""
+        return self.status == TaskStatus.PAUSED.value
+
     def is_finished(self) -> bool:
         """Check if task has finished (completed, failed, killed, etc.)."""
         return self.status in (
@@ -145,6 +194,10 @@ class Task(BaseModel):
     def is_vps(self) -> bool:
         """Check if task is a VPS session."""
         return self.task_type == TaskType.VPS.value
+
+    # =========================================================================
+    # Status Transitions
+    # =========================================================================
 
     def mark_running(self, node_hostname: str) -> None:
         """Mark task as running on a node."""
@@ -174,6 +227,14 @@ class Task(BaseModel):
         """Mark task as lost (node went offline)."""
         self.status = TaskStatus.LOST.value
         self.completed_at = datetime.datetime.now()
+
+    def mark_paused(self) -> None:
+        """Mark task as paused."""
+        self.status = TaskStatus.PAUSED.value
+
+    def mark_resumed(self) -> None:
+        """Mark task as running (resumed from pause)."""
+        self.status = TaskStatus.RUNNING.value
 
     # =========================================================================
     # Serialization

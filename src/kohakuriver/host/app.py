@@ -1,47 +1,61 @@
 """
 HakuRiver Host FastAPI Application.
 
-Main entry point for the host server.
+This module provides the main entry point for the host server, which serves
+as the central orchestration component of the HakuRiver cluster.
+
+Responsibilities:
+    - Task submission and scheduling
+    - Node registration and health monitoring
+    - VPS session management
+    - Docker image distribution coordination
+    - WebSocket terminal proxy
 """
 
 import asyncio
-import logging
 import os
 
-from fastapi import FastAPI, WebSocket, Path
+from fastapi import FastAPI, Path, WebSocket
 
 from kohakuriver.db.base import db, initialize_database
 from kohakuriver.docker.client import DockerManager
-from kohakuriver.host.config import config
-from kohakuriver.host.background.health import collate_health_data, health_datas
+from kohakuriver.docker.naming import ENV_PREFIX
+from kohakuriver.host.background.health import collate_health_data
 from kohakuriver.host.background.runner_monitor import check_dead_runners
+from kohakuriver.host.config import config
 from kohakuriver.host.endpoints import (
+    container_filesystem,
     docker,
     filesystem,
     health,
     nodes,
     tasks,
     vps,
-    container_filesystem,
 )
 from kohakuriver.host.endpoints.docker_terminal import terminal_websocket_endpoint
 from kohakuriver.host.endpoints.task_terminal import task_terminal_proxy_endpoint
+from kohakuriver.models.enums import LogLevel
 from kohakuriver.ssh_proxy.server import start_server
-from kohakuriver.utils.logger import configure_logging, format_traceback
+from kohakuriver.utils.logger import configure_logging, get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-# Background tasks set
+
+# =============================================================================
+# Application Setup
+# =============================================================================
+
+# Background tasks tracking
 background_tasks: set[asyncio.Task] = set()
 
-# FastAPI app
+# FastAPI application instance
 app = FastAPI(
     title="HakuRiver Host",
     description="Cluster management host server",
-    version="0.2.0",
+    version="0.4.0",
 )
 
-# Include routers
+# Include API routers
 app.include_router(tasks.router, tags=["Tasks"])
 app.include_router(nodes.router, tags=["Nodes"])
 app.include_router(vps.router, tags=["VPS"])
@@ -51,74 +65,156 @@ app.include_router(filesystem.router, tags=["Filesystem"])
 app.include_router(container_filesystem.router, tags=["Container Filesystem"])
 
 
-# WebSocket endpoint for Docker container terminal (host-side env containers)
+# =============================================================================
+# WebSocket Endpoints
+# =============================================================================
+
+
 @app.websocket("/docker/host/containers/{container_name}/terminal")
 async def websocket_terminal_endpoint(
-    websocket: WebSocket, container_name: str = Path(...)
+    websocket: WebSocket,
+    container_name: str = Path(...),
 ):
-    """WebSocket endpoint for interactive terminal access to host containers."""
+    """
+    WebSocket endpoint for interactive terminal access to host containers.
+
+    Provides direct shell access to environment containers running on the host.
+    """
     await terminal_websocket_endpoint(websocket, container_name=container_name)
 
 
-# WebSocket endpoint for task/VPS terminal (proxied to runner)
 @app.websocket("/task/{task_id}/terminal")
-async def websocket_task_terminal_proxy(websocket: WebSocket, task_id: int = Path(...)):
-    """WebSocket proxy for task/VPS terminal access on remote runners."""
+async def websocket_task_terminal_proxy(
+    websocket: WebSocket,
+    task_id: int = Path(...),
+):
+    """
+    WebSocket proxy for task/VPS terminal access on remote runners.
+
+    Proxies terminal requests from clients to the appropriate runner node.
+    """
     await task_terminal_proxy_endpoint(websocket, task_id=task_id)
 
 
+# =============================================================================
+# Lifecycle Events
+# =============================================================================
+
+
 async def startup_event():
-    """Initialize database and start background tasks."""
-    logger.debug(f"startup_event called, config.DB_FILE={config.DB_FILE}")
-    initialize_database(config.DB_FILE)
-    logger.info("Host server starting up.")
+    """Initialize database and start background tasks on server startup."""
+    logger.info("Host server starting up")
     logger.debug(f"Database file: {config.DB_FILE}")
+
+    # Initialize database
+    initialize_database(config.DB_FILE)
 
     # Ensure container tar directory exists
     container_tar_dir = config.get_container_dir()
-    if not os.path.isdir(container_tar_dir):
-        logger.warning(
-            f"Shared directory '{container_tar_dir}' does not exist. Creating..."
-        )
-        try:
-            os.makedirs(container_tar_dir, exist_ok=True)
-            logger.info(f"Shared directory created: {container_tar_dir}")
-        except OSError as e:
-            logger.critical(
-                f"FATAL: Cannot create shared directory '{container_tar_dir}': {e}."
-            )
-            return
+    if not _ensure_container_directory(container_tar_dir):
+        return
 
-    # Clean up broken containers (missing images from failed migrations)
-    try:
-        await _cleanup_broken_containers()
-    except Exception as e:
-        logger.error(f"Failed to cleanup broken containers: {e}")
-        logger.debug(format_traceback(e))
+    # Clean up broken containers from failed migrations
+    await _cleanup_broken_containers()
 
-    # Initialize default container if needed
-    try:
-        await _ensure_default_container(container_tar_dir)
-    except Exception as e:
-        logger.error(f"Failed to initialize default container: {e}")
-        logger.debug(format_traceback(e))
+    # Initialize default container environment
+    await _ensure_default_container(container_tar_dir)
 
     # Start background tasks
-    task_monitor = asyncio.create_task(check_dead_runners())
-    task_health = asyncio.create_task(collate_health_data())
-    task_ssh = asyncio.create_task(
-        start_server(config.HOST_BIND_IP, config.HOST_SSH_PROXY_PORT)
+    _start_background_tasks()
+
+
+async def shutdown_event():
+    """Clean up resources on server shutdown."""
+    logger.info("Host server shutting down")
+
+    # Cancel all background tasks
+    for task in background_tasks:
+        task.cancel()
+
+    # Wait for tasks to complete
+    if background_tasks:
+        await asyncio.gather(*background_tasks, return_exceptions=True)
+
+    # Close database connection
+    if not db.is_closed():
+        db.close()
+
+    logger.info("Host server shut down complete")
+
+
+# Register lifecycle handlers
+app.add_event_handler("startup", startup_event)
+app.add_event_handler("shutdown", shutdown_event)
+
+
+# =============================================================================
+# Startup Helpers
+# =============================================================================
+
+
+def _ensure_container_directory(container_tar_dir: str) -> bool:
+    """
+    Ensure the container tarball directory exists.
+
+    Args:
+        container_tar_dir: Path to the container directory.
+
+    Returns:
+        True if directory exists or was created, False on failure.
+    """
+    if os.path.isdir(container_tar_dir):
+        return True
+
+    logger.warning(
+        f"Shared directory '{container_tar_dir}' does not exist, creating..."
     )
 
-    for task in [task_monitor, task_health, task_ssh]:
+    try:
+        os.makedirs(container_tar_dir, exist_ok=True)
+        logger.info(f"Created shared directory: {container_tar_dir}")
+        return True
+    except OSError as e:
+        logger.critical(f"Cannot create shared directory '{container_tar_dir}': {e}")
+        return False
+
+
+def _start_background_tasks():
+    """Start all background monitoring tasks."""
+    tasks_to_start = [
+        ("runner_monitor", check_dead_runners()),
+        ("health_collator", collate_health_data()),
+        ("ssh_proxy", start_server(config.HOST_BIND_IP, config.HOST_SSH_PROXY_PORT)),
+    ]
+
+    for name, coro in tasks_to_start:
+        task = asyncio.create_task(coro, name=name)
         background_tasks.add(task)
         task.add_done_callback(background_tasks.discard)
 
+    logger.debug(f"Started {len(tasks_to_start)} background tasks")
+
+
+# =============================================================================
+# Container Management Helpers
+# =============================================================================
+
+
+async def _cleanup_broken_containers():
+    """
+    Remove HakuRiver environment containers with missing images.
+
+    Cleans up containers left in a broken state from failed migrations
+    or operations where the image was deleted but the container remains.
+    """
+    try:
+        await asyncio.to_thread(_do_cleanup_broken_containers)
+    except Exception as e:
+        logger.error(f"Failed to cleanup broken containers: {e}")
+
 
 def _do_cleanup_broken_containers():
-    """Remove HakuRiver environment containers with missing images (blocking)."""
-    from kohakuriver.docker.naming import ENV_PREFIX
-
+    """Remove broken containers (blocking implementation)."""
     docker_manager = DockerManager()
     containers = docker_manager.list_containers(all=True)
 
@@ -127,15 +223,13 @@ def _do_cleanup_broken_containers():
         if not container.name.startswith(f"{ENV_PREFIX}-"):
             continue
 
-        # Check if image exists
+        # Check if image exists by trying to access it
         try:
-            image = container.image
-            # Try to access image properties - will fail if image is missing
-            _ = image.id
+            _ = container.image.id
         except Exception:
             # Image is missing - remove the broken container
             logger.warning(
-                f"Found broken container '{container.name}' with missing image. Removing..."
+                f"Found broken container '{container.name}' with missing image"
             )
             try:
                 container.remove(force=True)
@@ -146,151 +240,135 @@ def _do_cleanup_broken_containers():
                 )
 
 
-async def _cleanup_broken_containers():
-    """Remove HakuRiver environment containers with missing images.
-
-    This cleans up containers left in a broken state from failed migrations
-    or other operations where the image was deleted but container remains.
+async def _ensure_default_container(container_tar_dir: str):
     """
-    import asyncio
+    Ensure the default container environment exists.
 
-    await asyncio.to_thread(_do_cleanup_broken_containers)
+    Creates the default environment container and its tarball if they don't exist,
+    enabling runners to sync the base image.
+    """
+    try:
+        await asyncio.to_thread(_do_ensure_default_container, container_tar_dir)
+    except Exception as e:
+        logger.error(f"Failed to initialize default container: {e}")
 
 
 def _do_ensure_default_container(container_tar_dir: str):
-    """Ensure default container and tarball exist (blocking)."""
+    """Ensure default container and tarball exist (blocking implementation)."""
     from kohakuriver.docker import utils as docker_utils
-    from kohakuriver.docker.naming import ENV_PREFIX
 
     default_env_name = config.DEFAULT_CONTAINER_NAME
     initial_base_image = config.INITIAL_BASE_IMAGE
-
-    # Full container name with prefix
     container_name = f"{ENV_PREFIX}-{default_env_name}"
 
-    # Check if any tarball for the default container name exists
+    # Check for existing tarballs
     shared_tars = docker_utils.list_shared_container_tars(
         container_tar_dir, default_env_name
     )
 
     if shared_tars:
         logger.info(
-            f"Found existing shared tarball for default environment "
-            f"'{default_env_name}'."
+            f"Found existing tarball for default environment '{default_env_name}'"
         )
-        # Ensure the container also exists (for shell access)
-        docker_manager = DockerManager()
-        if not docker_manager.container_exists(container_name):
-            # Also check legacy name (without prefix)
-            if docker_manager.container_exists(default_env_name):
-                logger.info(
-                    f"Found legacy container '{default_env_name}' (without prefix)."
-                )
-            else:
-                logger.info(
-                    f"Environment container '{container_name}' not found. "
-                    "Creating from tarball..."
-                )
-                # Load from tarball and create container
-                latest_tar = shared_tars[0][1]
-                docker_manager.load_image(latest_tar)
-                docker_manager.create_container(
-                    image=f"kohakuriver/{default_env_name}:base",
-                    name=container_name,
-                )
-                logger.info(f"Environment container '{container_name}' created.")
+        _ensure_container_from_tarball(container_name, default_env_name, shared_tars)
         return
 
+    # No tarball exists - create from initial image
     logger.info(
-        f"No shared tarball found for default environment '{default_env_name}'. "
-        f"Creating from initial image '{initial_base_image}'."
+        f"No tarball found for '{default_env_name}', "
+        f"creating from '{initial_base_image}'"
+    )
+    _create_default_container(
+        container_name, default_env_name, initial_base_image, container_tar_dir
     )
 
+
+def _ensure_container_from_tarball(
+    container_name: str,
+    env_name: str,
+    shared_tars: list[tuple[int, str]],
+):
+    """Ensure container exists, creating from tarball if needed."""
     docker_manager = DockerManager()
 
-    # Create container from initial image with prefix
+    # Check if container already exists (with or without prefix)
+    if docker_manager.container_exists(container_name):
+        return
+
+    if docker_manager.container_exists(env_name):
+        logger.info(f"Found legacy container '{env_name}' (without prefix)")
+        return
+
+    # Create container from tarball
+    logger.info(f"Creating container '{container_name}' from tarball")
+    latest_tar = shared_tars[0][1]
+    docker_manager.load_image(latest_tar)
     docker_manager.create_container(
-        image=initial_base_image,
+        image=f"kohakuriver/{env_name}:base",
         name=container_name,
     )
+    logger.info(f"Container '{container_name}' created successfully")
 
-    # Export to tarball (tarball uses env_name without prefix)
+
+def _create_default_container(
+    container_name: str,
+    env_name: str,
+    base_image: str,
+    container_tar_dir: str,
+):
+    """Create the default container and export to tarball."""
+    docker_manager = DockerManager()
+
+    # Create container from base image
+    docker_manager.create_container(image=base_image, name=container_name)
+
+    # Export to tarball for runner sync
     tarball_path = docker_manager.create_container_tarball(
         source_container=container_name,
-        kohakuriver_name=default_env_name,
+        kohakuriver_name=env_name,
         container_tar_dir=container_tar_dir,
     )
 
     if tarball_path:
-        logger.info(
-            f"Default environment tarball created at {tarball_path}. "
-            "Runners can now sync this base image."
-        )
+        logger.info(f"Default environment tarball created at {tarball_path}")
     else:
-        logger.error(
-            f"Failed to create default environment tarball from '{initial_base_image}'."
-        )
+        logger.error(f"Failed to create tarball from '{base_image}'")
 
 
-async def _ensure_default_container(container_tar_dir: str):
-    """Ensure default container and tarball exist.
-
-    Creates the default environment container (kohakuriver-env-{name}) and its
-    tarball if they don't exist.
-    """
-    import asyncio
-
-    await asyncio.to_thread(_do_ensure_default_container, container_tar_dir)
-
-
-async def shutdown_event():
-    """Clean shutdown."""
-    # Cancel background tasks
-    for task in background_tasks:
-        task.cancel()
-
-    # Close database
-    if not db.is_closed():
-        db.close()
-
-    logger.info("Host server shut down.")
-
-
-app.add_event_handler("startup", startup_event)
-app.add_event_handler("shutdown", shutdown_event)
+# =============================================================================
+# Server Entry Points
+# =============================================================================
 
 
 def run():
     """Run the host server using uvicorn."""
     import uvicorn
 
-    from kohakuriver.models.enums import LogLevel
+    # Configure logging before starting uvicorn
+    configure_logging(config.LOG_LEVEL)
 
-    log_level = config.LOG_LEVEL
+    # Map log levels to uvicorn levels
+    uvicorn_level_map = {
+        LogLevel.FULL: "debug",
+        LogLevel.DEBUG: "debug",
+        LogLevel.INFO: "info",
+        LogLevel.WARNING: "warning",
+    }
+    uvicorn_level = uvicorn_level_map.get(config.LOG_LEVEL, "info")
 
-    # Configure HakuRiver logging
-    configure_logging(log_level)
-
-    match log_level:
-        case LogLevel.FULL:
-            uvicorn_level = "debug"
-        case LogLevel.DEBUG:
-            uvicorn_level = "debug"
-        case LogLevel.INFO:
-            uvicorn_level = "info"
-        case LogLevel.WARNING:
-            uvicorn_level = "warning"
+    logger.info(f"Starting host server on {config.HOST_BIND_IP}:{config.HOST_PORT}")
 
     uvicorn.run(
         app,
         host=config.HOST_BIND_IP,
         port=config.HOST_PORT,
         log_level=uvicorn_level,
+        log_config=None,  # Disable uvicorn's default logging config (use loguru)
     )
 
 
 def main():
-    """Entry point for KohakuEngine."""
+    """Entry point for the host server."""
     run()
 
 

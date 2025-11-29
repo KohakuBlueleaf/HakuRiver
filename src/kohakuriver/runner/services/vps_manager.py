@@ -7,18 +7,17 @@ Uses subprocess-based Docker execution (matching old behavior).
 
 import asyncio
 import datetime
-import logging
 import subprocess
 import time
 
 import docker
 
 from kohakuriver.docker.naming import (
-    image_tag,
-    vps_container_name,
-    snapshot_image_tag,
-    parse_snapshot_tag,
     SNAPSHOT_PREFIX,
+    image_tag,
+    parse_snapshot_tag,
+    snapshot_image_tag,
+    vps_container_name,
 )
 from kohakuriver.models.requests import TaskStatusUpdate
 from kohakuriver.runner.config import config
@@ -27,9 +26,9 @@ from kohakuriver.runner.services.task_executor import (
     report_status_to_host,
 )
 from kohakuriver.storage.vault import TaskStateStore
-from kohakuriver.utils.logger import format_traceback
+from kohakuriver.utils.logger import format_traceback, get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

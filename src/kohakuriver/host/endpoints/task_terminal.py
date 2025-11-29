@@ -1,17 +1,17 @@
 """WebSocket terminal proxy for task/VPS containers on remote runners."""
 
 import asyncio
-import logging
 from urllib.parse import urlparse
 
 import websockets
-from fastapi import WebSocket, WebSocketDisconnect, Path
+from fastapi import Path, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from kohakuriver.db.node import Node
 from kohakuriver.db.task import Task
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WebSocketOutputMessage(BaseModel):

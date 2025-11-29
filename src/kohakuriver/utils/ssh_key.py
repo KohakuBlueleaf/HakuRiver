@@ -1,35 +1,63 @@
+"""
+SSH key management utilities for HakuRiver.
+
+This module provides functions for reading, generating, and managing
+SSH keys used for VPS authentication.
+"""
+
 import os
 import subprocess
-import tempfile
 
-from .logger import logger
+from kohakuriver.utils.logger import get_logger
+
+log = get_logger(__name__)
+
+
+# =============================================================================
+# Public Key Reading
+# =============================================================================
 
 
 def read_public_key_file(file_path: str) -> str:
-    """Reads an SSH public key from a file."""
+    """
+    Read an SSH public key from a file.
+
+    Args:
+        file_path: Path to the public key file (supports ~ expansion).
+
+    Returns:
+        The public key string, stripped of whitespace.
+
+    Raises:
+        FileNotFoundError: If the key file does not exist.
+        IOError: If the file cannot be read.
+        ValueError: If the file is empty.
+    """
+    path = os.path.expanduser(file_path)
+
     try:
-        path = os.path.expanduser(file_path)  # Expand ~
-        with open(path, "r") as f:
+        with open(path) as f:
             key = f.read().strip()
-        if not key:
-            raise ValueError(f"Public key file '{file_path}' is empty.")
-        # Basic validation: check if it starts with "ssh-"
-        if not key.startswith("ssh-"):
-            logger.warning(
-                f"Public key in file '{file_path}' does not start with 'ssh-'. Is this a valid public key?"
-            )
-        return key
     except FileNotFoundError:
-        # Re-raise with a more specific error type
         raise FileNotFoundError(f"Public key file not found: '{file_path}'")
     except IOError as e:
-        # Re-raise with a specific error type
         raise IOError(f"Error reading public key file '{file_path}': {e}")
-    except Exception as e:
-        # Catch any other unexpected errors
-        raise Exception(
-            f"Unexpected error processing public key file '{file_path}': {e}"
+
+    if not key:
+        raise ValueError(f"Public key file '{file_path}' is empty.")
+
+    if not key.startswith("ssh-"):
+        log.warning(
+            f"Public key in '{file_path}' does not start with 'ssh-'. "
+            "Is this a valid public key?"
         )
+
+    return key
+
+
+# =============================================================================
+# Key Generation
+# =============================================================================
 
 
 def generate_ssh_keypair(
@@ -38,33 +66,58 @@ def generate_ssh_keypair(
     comment: str = "",
 ) -> tuple[str, str]:
     """
-    Generate an SSH keypair.
+    Generate an SSH keypair using ssh-keygen.
+
+    Creates a new SSH key pair at the specified location. If keys already
+    exist at that path, they will be replaced.
 
     Args:
-        private_key_path: Path to save the private key.
-        key_type: Key type (ed25519, rsa).
-        comment: Comment for the key.
+        private_key_path: Path to save the private key (public key will be
+                          saved with .pub extension).
+        key_type: Key type to generate ('ed25519' or 'rsa').
+        comment: Optional comment to embed in the key.
 
     Returns:
         Tuple of (private_key_path, public_key_string).
 
     Raises:
-        RuntimeError: If key generation fails.
+        RuntimeError: If key generation fails or ssh-keygen is not available.
     """
     private_key_path = os.path.expanduser(private_key_path)
     public_key_path = f"{private_key_path}.pub"
 
-    # Ensure parent directory exists
-    parent_dir = os.path.dirname(private_key_path)
+    _ensure_parent_directory(private_key_path)
+    _remove_existing_keys(private_key_path, public_key_path)
+    _run_ssh_keygen(private_key_path, key_type, comment)
+
+    try:
+        public_key = read_public_key_file(public_key_path)
+    except Exception as e:
+        raise RuntimeError(f"Failed to read generated public key: {e}")
+
+    _set_key_permissions(private_key_path, public_key_path)
+
+    log.info(f"Generated SSH keypair: {private_key_path}")
+
+    return private_key_path, public_key
+
+
+def _ensure_parent_directory(path: str) -> None:
+    """Ensure the parent directory of a path exists."""
+    parent_dir = os.path.dirname(path)
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
 
-    # Remove existing keys if they exist
-    for path in [private_key_path, public_key_path]:
+
+def _remove_existing_keys(private_path: str, public_path: str) -> None:
+    """Remove existing key files if they exist."""
+    for path in [private_path, public_path]:
         if os.path.exists(path):
             os.remove(path)
 
-    # Build ssh-keygen command
+
+def _run_ssh_keygen(private_key_path: str, key_type: str, comment: str) -> None:
+    """Run ssh-keygen to generate a new keypair."""
     cmd = [
         "ssh-keygen",
         "-t",
@@ -80,41 +133,39 @@ def generate_ssh_keypair(
         cmd.extend(["-C", comment])
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Failed to generate SSH key: {e.stderr}")
     except FileNotFoundError:
         raise RuntimeError("ssh-keygen not found. Please install OpenSSH.")
 
-    # Read the generated public key
-    try:
-        public_key = read_public_key_file(public_key_path)
-    except Exception as e:
-        raise RuntimeError(f"Failed to read generated public key: {e}")
 
-    # Set proper permissions
-    os.chmod(private_key_path, 0o600)
-    os.chmod(public_key_path, 0o644)
+def _set_key_permissions(private_path: str, public_path: str) -> None:
+    """Set proper file permissions for SSH keys."""
+    os.chmod(private_path, 0o600)  # Owner read/write only
+    os.chmod(public_path, 0o644)  # Owner read/write, others read
 
-    logger.info(f"Generated SSH keypair: {private_key_path}")
 
-    return private_key_path, public_key
+# =============================================================================
+# Path Utilities
+# =============================================================================
 
 
 def get_default_key_output_path(task_id: int | str) -> str:
     """
-    Get the default path for generated SSH key.
+    Get the default path for a generated SSH key.
+
+    Keys are stored in the user's .ssh directory with a kohakuriver prefix.
 
     Args:
-        task_id: Task ID for the VPS.
+        task_id: Task ID to include in the key filename.
 
     Returns:
         Path like ~/.ssh/id-kohakuriver-<task_id>
+
+    Example:
+        >>> get_default_key_output_path(12345)
+        '/home/user/.ssh/id-kohakuriver-12345'
     """
     ssh_dir = os.path.expanduser("~/.ssh")
     return os.path.join(ssh_dir, f"id-kohakuriver-{task_id}")

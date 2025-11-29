@@ -1,12 +1,31 @@
-"""Docker/container management commands."""
+"""
+Docker/container management commands.
 
+This module provides CLI commands for managing Docker containers and
+tarballs in the KohakuRiver cluster.
+
+Commands:
+    images          List KohakuRiver container images
+    delete          Delete a Docker image
+    container list  List host containers
+    container create Create a new container
+    container shell Open interactive shell in container
+    tar list        List container tarballs
+    tar create      Create tarball from container
+"""
+
+import asyncio
+import json
+import os
+import signal
+import sys
 from datetime import datetime
 from typing import Annotated
 
 import typer
 from rich.table import Table
 
-from kohakuriver.cli import client
+from kohakuriver.cli import client, config as cli_config
 from kohakuriver.cli.formatters.docker import format_image_table
 from kohakuriver.cli.output import console, format_bytes, print_error, print_success
 
@@ -256,173 +275,171 @@ def container_shell(
 
 
 async def _run_terminal_shell(container_name: str):
-    """Run interactive WebSocket terminal session with full TTY support.
+    """
+    Run interactive WebSocket terminal session with full TTY support.
 
     Supports:
-    - Arrow keys, escape sequences
-    - Ctrl+C (sent to container, not local)
-    - TUI apps like vim, htop, nano, screen
-    - Exit by typing 'exit' command in shell
+        - Arrow keys, escape sequences
+        - Ctrl+C (sent to container, not local)
+        - TUI apps like vim, htop, nano, screen
+        - Exit by typing 'exit' command in shell
     """
-    import asyncio
-    import json
-    import os
-    import signal
-    import sys
     import termios
     import tty
 
     import websockets
     from websockets.exceptions import (
         ConnectionClosed,
-        ConnectionClosedOK,
         ConnectionClosedError,
+        ConnectionClosedOK,
     )
 
-    from kohakuriver.cli import config as cli_config
-
-    # Construct WebSocket URL
-    ws_url = f"ws://{cli_config.HOST_ADDRESS}:{cli_config.HOST_PORT}/docker/host/containers/{container_name}/terminal"
-
+    ws_url = (
+        f"ws://{cli_config.HOST_ADDRESS}:{cli_config.HOST_PORT}"
+        f"/docker/host/containers/{container_name}/terminal"
+    )
     console.print(f"[dim]Connecting to {ws_url}...[/dim]")
 
-    # Save original terminal settings
-    old_settings = None
-    if sys.stdin.isatty():
-        old_settings = termios.tcgetattr(sys.stdin)
+    old_settings = termios.tcgetattr(sys.stdin) if sys.stdin.isatty() else None
 
     try:
         async with websockets.connect(ws_url) as websocket:
-            # Send initial terminal size FIRST - server waits for this before starting I/O
-            if sys.stdout.isatty():
-                try:
-                    size = os.get_terminal_size()
-                    # os.get_terminal_size() returns (columns, lines)
-                    resize_msg = {
-                        "type": "resize",
-                        "rows": size.lines,
-                        "cols": size.columns,
-                    }
-                    await websocket.send(json.dumps(resize_msg))
-                except OSError:
-                    pass
+            await _init_terminal_session(websocket)
 
-            # Wait for server acknowledgment (empty message after resize applied)
-            try:
-                await asyncio.wait_for(websocket.recv(), timeout=3.0)
-            except asyncio.TimeoutError:
-                pass
-
-            # Set terminal to raw mode for full TTY forwarding
-            # This allows arrow keys, Ctrl+C, etc. to be sent to container
             if old_settings:
                 tty.setraw(sys.stdin.fileno())
 
-            # Handle terminal resize (SIGWINCH)
             resize_queue = asyncio.Queue()
+            _setup_resize_handler(resize_queue)
 
-            def handle_resize(signum, frame):
-                if sys.stdout.isatty():
-                    try:
-                        size = os.get_terminal_size()
-                        # (columns, lines) -> (rows, cols)
-                        resize_queue.put_nowait((size.lines, size.columns))
-                    except Exception:
-                        pass
-
-            if hasattr(signal, "SIGWINCH"):
-                signal.signal(signal.SIGWINCH, handle_resize)
-
-            async def send_resize():
-                """Send resize messages from queue."""
-                try:
-                    while True:
-                        rows, cols = await resize_queue.get()
-                        msg = {"type": "resize", "rows": rows, "cols": cols}
-                        await websocket.send(json.dumps(msg))
-                except Exception:
-                    pass
-
-            async def receive_messages():
-                """Receives messages from the WebSocket and writes to stdout."""
-                try:
-                    while True:
-                        message_text = await websocket.recv()
-                        try:
-                            message = json.loads(message_text)
-                            if message.get("type") == "output" and message.get("data"):
-                                # Write directly to stdout fd (works in raw mode)
-                                os.write(
-                                    sys.stdout.fileno(),
-                                    message["data"].encode("utf-8", errors="replace"),
-                                )
-                            elif message.get("type") == "error" and message.get("data"):
-                                os.write(
-                                    sys.stdout.fileno(),
-                                    f"\r\nERROR: {message['data']}\r\n".encode(),
-                                )
-                        except json.JSONDecodeError:
-                            os.write(sys.stdout.fileno(), message_text.encode())
-                except (ConnectionClosedOK, ConnectionClosedError, ConnectionClosed):
-                    pass
-                except Exception:
-                    pass
-
-            async def send_input():
-                """Reads raw input from stdin and sends to WebSocket."""
-                try:
-                    while True:
-                        # Read raw bytes from stdin (non-blocking via asyncio)
-                        data = await asyncio.to_thread(
-                            lambda: os.read(sys.stdin.fileno(), 1024)
-                        )
-                        if not data:
-                            # EOF
-                            break
-
-                        # Send all input including Ctrl+C (\x03), arrow keys, etc.
-                        message = {
-                            "type": "input",
-                            "data": data.decode("utf-8", errors="replace"),
-                        }
-                        await websocket.send(json.dumps(message))
-                except (ConnectionClosed, ConnectionClosedOK, ConnectionClosedError):
-                    pass
-                except Exception:
-                    pass
-
-            # Run all tasks concurrently
-            tasks = [
-                asyncio.create_task(receive_messages()),
-                asyncio.create_task(send_input()),
-                asyncio.create_task(send_resize()),
-            ]
-
-            # Wait for any task to complete (connection closed, etc.)
-            done, pending = await asyncio.wait(
-                tasks, return_when=asyncio.FIRST_COMPLETED
-            )
-
-            # Cancel remaining tasks
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+            await _run_terminal_tasks(websocket, resize_queue)
 
     except OSError as e:
         print_error(f"Connection error: {e}")
     except Exception as e:
         print_error(f"WebSocket error: {e}")
     finally:
-        # Restore terminal settings
-        if old_settings:
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-        # Reset signal handler
-        if hasattr(signal, "SIGWINCH"):
-            signal.signal(signal.SIGWINCH, signal.SIG_DFL)
-        console.print("\r\n[dim]Disconnected.[/dim]")
+        _cleanup_terminal(old_settings)
+
+
+async def _init_terminal_session(websocket):
+    """Send initial terminal size and wait for server acknowledgment."""
+    if sys.stdout.isatty():
+        try:
+            size = os.get_terminal_size()
+            resize_msg = {"type": "resize", "rows": size.lines, "cols": size.columns}
+            await websocket.send(json.dumps(resize_msg))
+        except OSError:
+            pass
+
+    try:
+        await asyncio.wait_for(websocket.recv(), timeout=3.0)
+    except asyncio.TimeoutError:
+        pass
+
+
+def _setup_resize_handler(resize_queue: asyncio.Queue):
+    """Set up SIGWINCH handler for terminal resize events."""
+
+    def handle_resize(signum, frame):
+        if sys.stdout.isatty():
+            try:
+                size = os.get_terminal_size()
+                resize_queue.put_nowait((size.lines, size.columns))
+            except Exception:
+                pass
+
+    if hasattr(signal, "SIGWINCH"):
+        signal.signal(signal.SIGWINCH, handle_resize)
+
+
+async def _run_terminal_tasks(websocket, resize_queue: asyncio.Queue):
+    """Run terminal I/O tasks concurrently."""
+    tasks = [
+        asyncio.create_task(_receive_terminal_output(websocket)),
+        asyncio.create_task(_send_terminal_input(websocket)),
+        asyncio.create_task(_send_resize_events(websocket, resize_queue)),
+    ]
+
+    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+    for task in pending:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+async def _receive_terminal_output(websocket):
+    """Receive messages from WebSocket and write to stdout."""
+    from websockets.exceptions import (
+        ConnectionClosed,
+        ConnectionClosedError,
+        ConnectionClosedOK,
+    )
+
+    try:
+        while True:
+            message_text = await websocket.recv()
+            try:
+                message = json.loads(message_text)
+                match message.get("type"):
+                    case "output" if message.get("data"):
+                        os.write(
+                            sys.stdout.fileno(),
+                            message["data"].encode("utf-8", errors="replace"),
+                        )
+                    case "error" if message.get("data"):
+                        os.write(
+                            sys.stdout.fileno(),
+                            f"\r\nERROR: {message['data']}\r\n".encode(),
+                        )
+            except json.JSONDecodeError:
+                os.write(sys.stdout.fileno(), message_text.encode())
+    except (ConnectionClosedOK, ConnectionClosedError, ConnectionClosed):
+        pass
+
+
+async def _send_terminal_input(websocket):
+    """Read raw input from stdin and send to WebSocket."""
+    from websockets.exceptions import (
+        ConnectionClosed,
+        ConnectionClosedError,
+        ConnectionClosedOK,
+    )
+
+    try:
+        while True:
+            data = await asyncio.to_thread(lambda: os.read(sys.stdin.fileno(), 1024))
+            if not data:
+                break
+            message = {"type": "input", "data": data.decode("utf-8", errors="replace")}
+            await websocket.send(json.dumps(message))
+    except (ConnectionClosed, ConnectionClosedOK, ConnectionClosedError):
+        pass
+
+
+async def _send_resize_events(websocket, resize_queue: asyncio.Queue):
+    """Send terminal resize events from queue."""
+    try:
+        while True:
+            rows, cols = await resize_queue.get()
+            msg = {"type": "resize", "rows": rows, "cols": cols}
+            await websocket.send(json.dumps(msg))
+    except Exception:
+        pass
+
+
+def _cleanup_terminal(old_settings):
+    """Restore terminal settings and reset signal handler."""
+    import termios
+
+    if old_settings:
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+    if hasattr(signal, "SIGWINCH"):
+        signal.signal(signal.SIGWINCH, signal.SIG_DFL)
+    console.print("\r\n[dim]Disconnected.[/dim]")
 
 
 # =============================================================================

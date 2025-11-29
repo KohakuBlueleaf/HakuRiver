@@ -1,177 +1,246 @@
+"""
+GPU information utilities for HakuRiver.
+
+This module provides functions for querying NVIDIA GPU information using
+the pynvml library. It handles cases where GPUs are not available or
+the required libraries are not installed.
+"""
+
 from pydantic import BaseModel
+
+from kohakuriver.utils.logger import get_logger
+
+log = get_logger(__name__)
+
+
+# =============================================================================
+# Data Models
+# =============================================================================
 
 
 class GPUInfo(BaseModel):
+    """
+    Information about a single NVIDIA GPU.
+
+    All fields that may not be available (due to driver limitations or
+    hardware support) use -1 as a sentinel value.
+    """
+
     gpu_id: int
     name: str
     driver_version: str
     pci_bus_id: str
-    gpu_utilization: int
-    graphics_clock_mhz: int
-    mem_utilization: int
-    mem_clock_mhz: int
+    gpu_utilization: int  # Percentage (0-100), -1 if unavailable
+    graphics_clock_mhz: int  # -1 if unavailable
+    mem_utilization: int  # Percentage (0-100), -1 if unavailable
+    mem_clock_mhz: int  # -1 if unavailable
     memory_total_mib: float
     memory_used_mib: float
     memory_free_mib: float
-    temperature: int
-    fan_speed: int
-    power_usage_mw: int
-    power_limit_mw: int
+    temperature: int  # Celsius, -1 if unavailable
+    fan_speed: int  # Percentage (0-100), -1 if unavailable
+    power_usage_mw: int  # Milliwatts, -1 if unavailable
+    power_limit_mw: int  # Milliwatts, -1 if unavailable
 
 
-def get_gpu_info() -> list[GPUInfo]:  # Added return type hint
+# =============================================================================
+# GPU Query Functions
+# =============================================================================
+
+
+def get_gpu_info() -> list[GPUInfo]:
     """
-    Retrieves and prints information about installed NVIDIA GPUs using pynvml,
-    returning a list of Pydantic GPUInfo objects.
-    """
-    gpu_info_list: list[GPUInfo] = []
-    nvml_initialized = False  # Track if nvmlInit succeeded
+    Retrieve information about all installed NVIDIA GPUs.
 
+    Uses the pynvml library to query GPU status. Returns an empty list
+    if no GPUs are found or if the required library is not installed.
+
+    Returns:
+        List of GPUInfo objects, one per GPU. Empty list if no GPUs
+        are available or pynvml is not installed.
+
+    Note:
+        This function handles all exceptions internally and will never
+        raise. It logs warnings for non-critical errors.
+    """
     try:
         import pynvml
     except ImportError:
+        log.debug("pynvml not installed, GPU info unavailable")
         return []
+
+    gpu_info_list: list[GPUInfo] = []
+    nvml_initialized = False
 
     try:
         pynvml.nvmlInit()
         nvml_initialized = True
 
-        driver_version_bytes = pynvml.nvmlSystemGetDriverVersion()
-        driver_version = (
-            driver_version_bytes.decode("utf-8")
-            if isinstance(driver_version_bytes, bytes)
-            else driver_version_bytes
-        )
-
+        driver_version = _get_driver_version(pynvml)
         device_count = pynvml.nvmlDeviceGetCount()
 
         if device_count == 0:
+            log.debug("No NVIDIA GPUs found")
             return []
 
         for i in range(device_count):
-            temperature = -1
-            fan_speed = -1
-            power_usage_mw = -1
-            power_limit_mw = -1
-            gpu_utilization = -1
-            mem_utilization = -1
-            graphics_clock_mhz = -1
-            mem_clock_mhz = -1
-            device_name = "N/A"
-            bus_id = "N/A"
-            total_mem_mib = 0.0
-            used_mem_mib = 0.0
-            free_mem_mib = 0.0
+            gpu_info = _query_single_gpu(pynvml, i, driver_version)
+            if gpu_info:
+                gpu_info_list.append(gpu_info)
 
-            try:
-                # Get the device handle
-                handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-
-                # --- Device ID & Name ---
-                device_id = i
-                device_name_bytes = pynvml.nvmlDeviceGetName(handle)
-                device_name = (
-                    device_name_bytes.decode("utf-8")
-                    if isinstance(device_name_bytes, bytes)
-                    else device_name_bytes
-                )
-
-                # --- Other HW Specs ---
-                # PCI Info
-                pci_info = pynvml.nvmlDeviceGetPciInfo(handle)
-                bus_id_bytes = pci_info.busId
-                bus_id = (
-                    bus_id_bytes.decode("utf-8")
-                    if isinstance(bus_id_bytes, bytes)
-                    else bus_id_bytes
-                )
-
-                # Memory Info
-                mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                total_mem_mib = mem_info.total / (1024**2)
-                used_mem_mib = mem_info.used / (1024**2)
-                free_mem_mib = mem_info.free / (1024**2)
-
-                # Temperature
-                try:
-                    temperature = pynvml.nvmlDeviceGetTemperature(
-                        handle, pynvml.NVML_TEMPERATURE_GPU
-                    )
-                except pynvml.NVMLError:
-                    pass  # Keep default -1
-
-                # Fan Speed
-                try:
-                    fan_speed = pynvml.nvmlDeviceGetFanSpeed(handle)
-                except pynvml.NVMLError:
-                    pass
-
-                # Power Usage and Limit
-                try:
-                    power_usage_mw = pynvml.nvmlDeviceGetPowerUsage(handle)
-                    power_limit_mw = pynvml.nvmlDeviceGetEnforcedPowerLimit(handle)
-                except pynvml.NVMLError:
-                    pass
-
-                # Utilization Rates
-                try:
-                    utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
-                    gpu_utilization = utilization.gpu
-                    mem_utilization = utilization.memory
-                except pynvml.NVMLError:
-                    pass
-
-                # Clock Speeds
-                try:
-                    graphics_clock_mhz = pynvml.nvmlDeviceGetClockInfo(
-                        handle, pynvml.NVML_CLOCK_GRAPHICS
-                    )
-                    mem_clock_mhz = pynvml.nvmlDeviceGetClockInfo(
-                        handle, pynvml.NVML_CLOCK_MEM
-                    )
-
-                except pynvml.NVMLError:
-                    pass
-
-                # *** CORRECTED Pydantic Instantiation ***
-                gpu_data = GPUInfo(
-                    gpu_id=device_id,  # Use correct field name: gpu_id
-                    name=device_name,
-                    driver_version=driver_version,  # Pass the driver version
-                    pci_bus_id=bus_id,
-                    gpu_utilization=gpu_utilization,
-                    graphics_clock_mhz=graphics_clock_mhz,
-                    mem_utilization=mem_utilization,
-                    mem_clock_mhz=mem_clock_mhz,
-                    memory_total_mib=total_mem_mib,
-                    memory_used_mib=used_mem_mib,
-                    memory_free_mib=free_mem_mib,
-                    temperature=temperature,
-                    fan_speed=fan_speed,
-                    power_usage_mw=power_usage_mw,
-                    power_limit_mw=power_limit_mw,
-                )
-                gpu_info_list.append(gpu_data)
-
-            except pynvml.NVMLError:
-                pass
-
-    except ImportError:
-        return []
-    except pynvml.NVMLError:
+    except Exception as e:
+        log.debug(f"Failed to query GPU info: {e}")
         return []
     finally:
         if nvml_initialized:
-            try:
-                pynvml.nvmlShutdown()
-            except pynvml.NVMLError as shutdown_error:
-                print(f"WARN: Error during nvmlShutdown: {shutdown_error}")
+            _shutdown_nvml(pynvml)
 
     return gpu_info_list
 
 
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def _get_driver_version(pynvml) -> str:
+    """Get the NVIDIA driver version string."""
+    version_bytes = pynvml.nvmlSystemGetDriverVersion()
+    if isinstance(version_bytes, bytes):
+        return version_bytes.decode("utf-8")
+    return version_bytes
+
+
+def _query_single_gpu(pynvml, gpu_index: int, driver_version: str) -> GPUInfo | None:
+    """
+    Query information for a single GPU.
+
+    Args:
+        pynvml: The pynvml module.
+        gpu_index: Zero-based GPU index.
+        driver_version: NVIDIA driver version string.
+
+    Returns:
+        GPUInfo object, or None if the GPU cannot be queried.
+    """
+    try:
+        handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_index)
+
+        name = _decode_string(pynvml.nvmlDeviceGetName(handle))
+        pci_bus_id = _decode_string(pynvml.nvmlDeviceGetPciInfo(handle).busId)
+        memory = _get_memory_info(pynvml, handle)
+        utilization = _get_utilization(pynvml, handle)
+        clocks = _get_clock_info(pynvml, handle)
+        thermal = _get_thermal_info(pynvml, handle)
+        power = _get_power_info(pynvml, handle)
+
+        return GPUInfo(
+            gpu_id=gpu_index,
+            name=name,
+            driver_version=driver_version,
+            pci_bus_id=pci_bus_id,
+            memory_total_mib=memory["total"],
+            memory_used_mib=memory["used"],
+            memory_free_mib=memory["free"],
+            gpu_utilization=utilization["gpu"],
+            mem_utilization=utilization["memory"],
+            graphics_clock_mhz=clocks["graphics"],
+            mem_clock_mhz=clocks["memory"],
+            temperature=thermal["temperature"],
+            fan_speed=thermal["fan_speed"],
+            power_usage_mw=power["usage"],
+            power_limit_mw=power["limit"],
+        )
+
+    except Exception as e:
+        log.debug(f"Failed to query GPU {gpu_index}: {e}")
+        return None
+
+
+def _decode_string(value: bytes | str) -> str:
+    """Decode bytes to string if needed."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    return value
+
+
+def _get_memory_info(pynvml, handle) -> dict[str, float]:
+    """Get GPU memory information in MiB."""
+    mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+    return {
+        "total": mem_info.total / (1024**2),
+        "used": mem_info.used / (1024**2),
+        "free": mem_info.free / (1024**2),
+    }
+
+
+def _get_utilization(pynvml, handle) -> dict[str, int]:
+    """Get GPU and memory utilization percentages."""
+    try:
+        util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+        return {"gpu": util.gpu, "memory": util.memory}
+    except pynvml.NVMLError:
+        return {"gpu": -1, "memory": -1}
+
+
+def _get_clock_info(pynvml, handle) -> dict[str, int]:
+    """Get GPU clock speeds in MHz."""
+    try:
+        return {
+            "graphics": pynvml.nvmlDeviceGetClockInfo(
+                handle, pynvml.NVML_CLOCK_GRAPHICS
+            ),
+            "memory": pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_MEM),
+        }
+    except pynvml.NVMLError:
+        return {"graphics": -1, "memory": -1}
+
+
+def _get_thermal_info(pynvml, handle) -> dict[str, int]:
+    """Get GPU temperature and fan speed."""
+    temperature = -1
+    fan_speed = -1
+
+    try:
+        temperature = pynvml.nvmlDeviceGetTemperature(
+            handle, pynvml.NVML_TEMPERATURE_GPU
+        )
+    except pynvml.NVMLError:
+        pass
+
+    try:
+        fan_speed = pynvml.nvmlDeviceGetFanSpeed(handle)
+    except pynvml.NVMLError:
+        pass
+
+    return {"temperature": temperature, "fan_speed": fan_speed}
+
+
+def _get_power_info(pynvml, handle) -> dict[str, int]:
+    """Get GPU power usage and limit in milliwatts."""
+    try:
+        return {
+            "usage": pynvml.nvmlDeviceGetPowerUsage(handle),
+            "limit": pynvml.nvmlDeviceGetEnforcedPowerLimit(handle),
+        }
+    except pynvml.NVMLError:
+        return {"usage": -1, "limit": -1}
+
+
+def _shutdown_nvml(pynvml) -> None:
+    """Safely shutdown NVML."""
+    try:
+        pynvml.nvmlShutdown()
+    except pynvml.NVMLError as e:
+        log.warning(f"Error during nvmlShutdown: {e}")
+
+
+# =============================================================================
+# Main (for testing)
+# =============================================================================
+
+
 if __name__ == "__main__":
-    # No need for json.dumps, Pydantic models have built-in methods
     gpu_info_results = get_gpu_info()
 
     print("\nGPU Information:")

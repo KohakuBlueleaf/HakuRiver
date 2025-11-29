@@ -9,21 +9,21 @@ All Docker operations are wrapped in asyncio.to_thread to prevent blocking.
 
 import asyncio
 import datetime
-import logging
 import subprocess
 
 from kohakuriver.docker.client import DockerManager
 from kohakuriver.docker.naming import (
     TASK_PREFIX,
     VPS_PREFIX,
-    is_kohakuriver_container,
     extract_task_id_from_name,
+    is_kohakuriver_container,
 )
 from kohakuriver.models.requests import TaskStatusUpdate
 from kohakuriver.runner.services.task_executor import report_status_to_host
 from kohakuriver.storage.vault import TaskStateStore
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _find_ssh_port(container_name: str) -> int:

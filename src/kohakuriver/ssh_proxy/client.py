@@ -5,12 +5,12 @@ Client-side proxy that connects local SSH client to VPS through the host proxy.
 """
 
 import asyncio
-import logging
 import socket
 
 from kohakuriver.ssh_proxy.bind_connection import bind_reader_writer
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ClientProxy:

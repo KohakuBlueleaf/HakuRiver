@@ -6,17 +6,17 @@ Matches old core/runner.py behavior for compatibility.
 """
 
 import asyncio
-import logging
 from typing import Callable
 
 import httpx
 
-from kohakuriver.models.requests import HeartbeatRequest, HeartbeatKilledTaskInfo
+from kohakuriver.models.requests import HeartbeatKilledTaskInfo, HeartbeatRequest
 from kohakuriver.runner.config import config
 from kohakuriver.runner.services.resource_monitor import get_gpu_stats, get_system_stats
 from kohakuriver.storage.vault import TaskStateStore
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # List of killed tasks pending report to host
 killed_tasks_pending_report: list[HeartbeatKilledTaskInfo] = []

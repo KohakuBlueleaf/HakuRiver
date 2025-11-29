@@ -7,7 +7,6 @@ All Docker operations are wrapped in asyncio.to_thread to prevent blocking.
 """
 
 import asyncio
-import logging
 import os
 
 from fastapi import APIRouter, HTTPException
@@ -15,8 +14,9 @@ from fastapi import APIRouter, HTTPException
 from kohakuriver.docker import utils as docker_utils
 from kohakuriver.docker.client import DockerManager
 from kohakuriver.runner.config import config
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 

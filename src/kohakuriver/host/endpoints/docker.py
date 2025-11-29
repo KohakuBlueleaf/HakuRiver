@@ -9,9 +9,12 @@ All Docker operations are wrapped in asyncio.to_thread to prevent blocking.
 """
 
 import asyncio
-import logging
 import os
+import re
+from collections import defaultdict
 
+import docker
+import psutil
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -19,8 +22,9 @@ from pydantic import BaseModel
 from kohakuriver.docker.client import DockerManager
 from kohakuriver.docker.naming import ENV_PREFIX, is_kohakuriver_container
 from kohakuriver.host.config import config
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 
@@ -135,9 +139,6 @@ def _get_resource_limits() -> dict:
 
     Returns kwargs dict with nano_cpus and mem_limit based on config percentages.
     """
-    import os
-    import psutil
-
     limits = {}
 
     # CPU limit: nano_cpus = cores * 1e9
@@ -329,9 +330,6 @@ async def list_tarballs():
         - latest_tarball: Filename of latest tarball
         - all_versions: List of all versions sorted by timestamp (newest first)
     """
-    import re
-    from collections import defaultdict
-
     container_dir = config.get_container_dir()
 
     if not os.path.isdir(container_dir):
@@ -523,8 +521,6 @@ def _do_migrate_container(old_name: str, new_name: str) -> dict:
     Returns:
         Result dict with migration info
     """
-    import docker
-
     # No timeout - large containers can take a very long time
     client = docker.from_env(timeout=None)
 

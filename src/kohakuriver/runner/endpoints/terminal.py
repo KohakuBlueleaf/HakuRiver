@@ -2,17 +2,18 @@
 
 import asyncio
 import json
-import logging
 
 import docker
-from docker.errors import NotFound as DockerNotFound, APIError as DockerAPIError
-from fastapi import WebSocket, WebSocketDisconnect, Path
+from docker.errors import APIError as DockerAPIError
+from docker.errors import NotFound as DockerNotFound
+from fastapi import Path, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from kohakuriver.docker.naming import task_container_name, vps_container_name
 from kohakuriver.storage.vault import TaskStateStore
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Module-level dependencies (set by app on startup)
 _task_store: TaskStateStore | None = None

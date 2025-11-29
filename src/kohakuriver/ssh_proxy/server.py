@@ -5,14 +5,14 @@ Handles incoming VPS SSH connections and routes them to the correct runner.
 """
 
 import asyncio
-import logging
 import re
 
 from kohakuriver.db.node import Node
 from kohakuriver.db.task import Task
 from kohakuriver.ssh_proxy.bind_connection import bind_reader_writer
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Protocol constants
 REQUEST_TUNNEL_PREFIX = b"REQUEST_TUNNEL "

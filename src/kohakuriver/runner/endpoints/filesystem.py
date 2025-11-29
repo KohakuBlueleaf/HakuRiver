@@ -10,27 +10,28 @@ Includes WebSocket endpoint for real-time file system change notifications.
 import asyncio
 import base64
 import json
-import logging
 import os
 import shlex
 from datetime import datetime
 from typing import Literal
 
 import docker
-from docker.errors import NotFound as DockerNotFound, APIError as DockerAPIError
+from docker.errors import APIError as DockerAPIError
+from docker.errors import NotFound as DockerNotFound
 from fastapi import (
     APIRouter,
     HTTPException,
-    Query,
     Path,
+    Query,
     WebSocket,
     WebSocketDisconnect,
 )
 from pydantic import BaseModel, Field
 
 from kohakuriver.storage.vault import TaskStateStore
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

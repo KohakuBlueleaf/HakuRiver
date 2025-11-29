@@ -4,13 +4,13 @@ NUMA topology detection.
 Detects NUMA nodes and their CPU/memory assignments.
 """
 
-import logging
 import re
 import subprocess
 
 from kohakuriver.runner.config import config
+from kohakuriver.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def detect_numa_topology() -> dict | None:
