@@ -4,7 +4,6 @@ Task execution endpoints.
 Handles task execution, control, and status requests.
 """
 
-import asyncio
 import os
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException

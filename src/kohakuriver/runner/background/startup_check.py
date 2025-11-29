@@ -13,7 +13,6 @@ import subprocess
 
 from kohakuriver.docker.client import DockerManager
 from kohakuriver.docker.naming import (
-    TASK_PREFIX,
     VPS_PREFIX,
     extract_task_id_from_name,
     is_kohakuriver_container,

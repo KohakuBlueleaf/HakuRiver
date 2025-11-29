@@ -8,8 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from kohakuriver.cli import client
-from kohakuriver.cli.formatters.node import format_cluster_summary
-from kohakuriver.cli.output import console, format_bytes, format_status
+from kohakuriver.cli.output import console, format_status
 
 
 def create_dashboard_layout() -> Layout:

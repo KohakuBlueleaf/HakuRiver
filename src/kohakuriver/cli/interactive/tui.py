@@ -77,8 +77,6 @@ class InputReader:
     def read_key(self, timeout: float = 0.1) -> str | None:
         """Read a key with proper escape sequence handling."""
         import select
-        import termios
-        import tty
 
         # Check if input available
         if not select.select([sys.stdin], [], [], timeout)[0]:
@@ -1621,7 +1619,6 @@ class TUIApp:
 
     def run(self) -> None:
         """Run the TUI application."""
-        import select
         import termios
         import tty
 

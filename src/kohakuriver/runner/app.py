@@ -20,7 +20,7 @@ from kohakuriver.runner.endpoints import docker, filesystem, tasks, terminal, vp
 from kohakuriver.runner.numa.detector import detect_numa_topology
 from kohakuriver.runner.services.resource_monitor import get_gpu_stats, get_total_cores
 from kohakuriver.storage.vault import TaskStateStore
-from kohakuriver.utils.logger import configure_logging, format_traceback, get_logger
+from kohakuriver.utils.logger import configure_logging, get_logger
 
 logger = get_logger(__name__)
 

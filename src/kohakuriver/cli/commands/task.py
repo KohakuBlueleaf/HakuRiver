@@ -1,7 +1,5 @@
 """Task management commands."""
 
-import json
-import sys
 from typing import Annotated
 
 import typer

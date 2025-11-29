@@ -288,11 +288,6 @@ async def _run_terminal_shell(container_name: str):
     import tty
 
     import websockets
-    from websockets.exceptions import (
-        ConnectionClosed,
-        ConnectionClosedError,
-        ConnectionClosedOK,
-    )
 
     ws_url = (
         f"ws://{cli_config.HOST_ADDRESS}:{cli_config.HOST_PORT}"

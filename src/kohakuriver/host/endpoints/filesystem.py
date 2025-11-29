@@ -15,7 +15,6 @@ from fastapi import (
     HTTPException,
     Path,
     Query,
-    Request,
     WebSocket,
     WebSocketDisconnect,
 )

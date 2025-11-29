@@ -8,7 +8,6 @@ If no --config is specified, automatically loads ~/.kohakuriver/runner_config.py
 """
 
 import os
-import sys
 from typing import Annotated
 
 import typer

@@ -9,7 +9,6 @@ from docker.errors import NotFound as DockerNotFound
 from fastapi import Path, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from kohakuriver.docker.naming import task_container_name, vps_container_name
 from kohakuriver.storage.vault import TaskStateStore
 from kohakuriver.utils.logger import get_logger
 

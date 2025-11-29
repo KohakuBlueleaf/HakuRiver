@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from kohakuriver.docker.client import DockerManager
-from kohakuriver.docker.naming import ENV_PREFIX, is_kohakuriver_container
+from kohakuriver.docker.naming import ENV_PREFIX
 from kohakuriver.host.config import config
 from kohakuriver.utils.logger import get_logger
 

@@ -6,7 +6,7 @@ Handles VPS creation, control, and snapshot requests.
 
 import os
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from kohakuriver.models.requests import VPSCreateRequest
@@ -160,7 +160,7 @@ async def resume_vps_endpoint(task_id: int):
 class CreateSnapshotRequest(BaseModel):
     """Request model for creating a snapshot."""
 
-    message: Optional[str] = None
+    message: str | None = None
 
 
 @router.get("/vps/snapshots/{task_id}")
@@ -184,7 +184,7 @@ async def list_snapshots_endpoint(task_id: int):
 @router.post("/vps/snapshots/{task_id}")
 async def create_snapshot_endpoint(
     task_id: int,
-    request: Optional[CreateSnapshotRequest] = None,
+    request: CreateSnapshotRequest | None = None,
 ):
     """
     Create a snapshot of the current VPS state.

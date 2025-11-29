@@ -12,7 +12,6 @@ import json
 import os
 
 import docker
-from docker.errors import APIError as DockerAPIError
 from docker.errors import NotFound as DockerNotFound
 from fastapi import APIRouter, HTTPException, Path, Query
 from pydantic import BaseModel

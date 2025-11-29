@@ -9,7 +9,6 @@ Includes WebSocket endpoint for real-time file system change notifications.
 
 import asyncio
 import base64
-import json
 import os
 import shlex
 from datetime import datetime
@@ -26,7 +25,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from kohakuriver.storage.vault import TaskStateStore
 from kohakuriver.utils.logger import get_logger

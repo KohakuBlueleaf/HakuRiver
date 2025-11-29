@@ -7,7 +7,6 @@ All Docker operations are wrapped in asyncio.to_thread to prevent blocking.
 """
 
 import asyncio
-import os
 
 from fastapi import APIRouter, HTTPException
 
