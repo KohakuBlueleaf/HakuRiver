@@ -77,7 +77,9 @@ def run(
             print("WARNING: Failed to load default config, using built-in defaults.")
     else:
         print("No config file specified and no default config found.")
-        print(f"Using built-in defaults. Run 'kohakuriver init config --host' to generate config.")
+        print(
+            f"Using built-in defaults. Run 'kohakuriver init config --host' to generate config."
+        )
 
     # Run the server
     try:

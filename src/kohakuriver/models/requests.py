@@ -105,10 +105,11 @@ class TaskExecuteRequest(BaseModel):
 class VPSSubmission(BaseModel):
     """VPS submission request (host API).
 
-    Supports three SSH key modes:
-    - none: No SSH key, passwordless root login (uses task_id as implicit auth)
-    - upload: User provides their public key (default behavior)
-    - generate: Server generates keypair, returns private key
+    Supports four SSH key modes:
+    - disabled: No SSH server at all, TTY-only mode (default, faster startup)
+    - none: SSH with passwordless root login
+    - upload: SSH with user-provided public key
+    - generate: SSH with server-generated keypair (returns private key)
     """
 
     required_cores: int = 1
@@ -117,7 +118,7 @@ class VPSSubmission(BaseModel):
     target_hostname: str | None = None
     target_numa_node_id: int | None = None
     container_name: str | None = None
-    ssh_key_mode: str = "upload"  # "none", "upload", or "generate"
+    ssh_key_mode: str = "disabled"  # "disabled", "none", "upload", or "generate"
     ssh_public_key: str | None = None  # Required if ssh_key_mode is "upload"
 
 
@@ -130,7 +131,7 @@ class VPSCreateRequest(BaseModel):
     required_memory_bytes: int | None = None
     target_numa_node_id: int | None = None
     container_name: str
-    ssh_key_mode: str = "upload"  # "none", "upload", or "generate"
+    ssh_key_mode: str = "disabled"  # "disabled", "none", "upload", or "generate"
     ssh_public_key: str | None = None  # Required if ssh_key_mode is "upload"
     ssh_port: int
 

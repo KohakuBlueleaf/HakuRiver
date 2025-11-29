@@ -1,0 +1,264 @@
+"""
+Filesystem proxy endpoints for task/VPS containers.
+
+Proxies filesystem REST API requests from the host to the appropriate runner.
+"""
+
+import asyncio
+import logging
+from urllib.parse import urlparse, urlencode
+
+import httpx
+from fastapi import APIRouter, HTTPException, Query, Path, Request
+from fastapi.responses import Response
+from pydantic import BaseModel
+
+from kohakuriver.db.node import Node
+from kohakuriver.db.task import Task
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+# Timeout for proxied requests (filesystem operations can be slow for large files)
+PROXY_TIMEOUT = 60.0
+
+
+# =============================================================================
+# Request Models (same as runner)
+# =============================================================================
+
+
+class WriteFileRequest(BaseModel):
+    """Request for file write."""
+
+    path: str
+    content: str
+    encoding: str = "utf-8"
+    create_parents: bool = True
+
+
+class MkdirRequest(BaseModel):
+    """Request for creating directory."""
+
+    path: str
+    parents: bool = True
+
+
+class RenameRequest(BaseModel):
+    """Request for rename/move operation."""
+
+    source: str
+    destination: str
+    overwrite: bool = False
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+async def _get_runner_url(task_id: int) -> str:
+    """
+    Get the runner URL for a task.
+
+    Returns the base URL of the runner hosting the task.
+    Raises HTTPException on error.
+    """
+    # Look up task in database
+    task = await asyncio.to_thread(Task.get_or_none, Task.task_id == task_id)
+
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found.")
+
+    # Validate task type and status
+    if task.task_type not in ("vps", "command"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task {task_id} is not a container task (type: {task.task_type}).",
+        )
+
+    if task.status != "running":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task is not running (status: {task.status}).",
+        )
+
+    # Get runner node
+    if not task.assigned_node:
+        raise HTTPException(
+            status_code=500, detail=f"Task {task_id} has no assigned node."
+        )
+
+    node = await asyncio.to_thread(
+        Node.get_or_none, Node.hostname == task.assigned_node
+    )
+
+    if not node:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Runner node '{task.assigned_node}' not found.",
+        )
+
+    if node.status != "online":
+        raise HTTPException(
+            status_code=503,
+            detail=f"Runner node '{task.assigned_node}' is not online (status: {node.status}).",
+        )
+
+    return node.url
+
+
+async def _proxy_get(
+    task_id: int, endpoint: str, params: dict | None = None
+) -> Response:
+    """Proxy a GET request to the runner."""
+    runner_url = await _get_runner_url(task_id)
+
+    url = f"{runner_url}/fs/{task_id}/{endpoint}"
+    if params:
+        url += "?" + urlencode(params)
+
+    logger.debug(f"Proxying GET to {url}")
+
+    try:
+        async with httpx.AsyncClient(timeout=PROXY_TIMEOUT) as client:
+            response = await client.get(url)
+
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type=response.headers.get("content-type"),
+            )
+    except httpx.RequestError as e:
+        logger.error(f"Failed to proxy request to runner: {e}")
+        raise HTTPException(status_code=502, detail=f"Failed to connect to runner: {e}")
+
+
+async def _proxy_post(
+    task_id: int, endpoint: str, json_body: dict | None = None
+) -> Response:
+    """Proxy a POST request to the runner."""
+    runner_url = await _get_runner_url(task_id)
+
+    url = f"{runner_url}/fs/{task_id}/{endpoint}"
+
+    logger.debug(f"Proxying POST to {url}")
+
+    try:
+        async with httpx.AsyncClient(timeout=PROXY_TIMEOUT) as client:
+            response = await client.post(url, json=json_body)
+
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type=response.headers.get("content-type"),
+            )
+    except httpx.RequestError as e:
+        logger.error(f"Failed to proxy request to runner: {e}")
+        raise HTTPException(status_code=502, detail=f"Failed to connect to runner: {e}")
+
+
+async def _proxy_delete(
+    task_id: int, endpoint: str, params: dict | None = None
+) -> Response:
+    """Proxy a DELETE request to the runner."""
+    runner_url = await _get_runner_url(task_id)
+
+    url = f"{runner_url}/fs/{task_id}/{endpoint}"
+    if params:
+        url += "?" + urlencode(params)
+
+    logger.debug(f"Proxying DELETE to {url}")
+
+    try:
+        async with httpx.AsyncClient(timeout=PROXY_TIMEOUT) as client:
+            response = await client.delete(url)
+
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type=response.headers.get("content-type"),
+            )
+    except httpx.RequestError as e:
+        logger.error(f"Failed to proxy request to runner: {e}")
+        raise HTTPException(status_code=502, detail=f"Failed to connect to runner: {e}")
+
+
+# =============================================================================
+# REST Proxy Endpoints
+# =============================================================================
+
+
+@router.get("/fs/{task_id}/list")
+async def list_directory(
+    task_id: int = Path(..., description="Task ID"),
+    path: str = Query("/", description="Directory path to list"),
+    show_hidden: bool = Query(False, description="Include hidden files"),
+):
+    """List contents of a directory inside the container (proxied to runner)."""
+    params = {"path": path, "show_hidden": str(show_hidden).lower()}
+    return await _proxy_get(task_id, "list", params)
+
+
+@router.get("/fs/{task_id}/read")
+async def read_file(
+    task_id: int = Path(..., description="Task ID"),
+    path: str = Query(..., description="File path to read"),
+    encoding: str = Query("utf-8", description="Output encoding"),
+    limit: int = Query(10485760, description="Max bytes to read"),
+):
+    """Read contents of a file inside the container (proxied to runner)."""
+    params = {"path": path, "encoding": encoding, "limit": str(limit)}
+    return await _proxy_get(task_id, "read", params)
+
+
+@router.post("/fs/{task_id}/write")
+async def write_file(
+    task_id: int = Path(..., description="Task ID"),
+    request: WriteFileRequest = ...,
+):
+    """Write contents to a file inside the container (proxied to runner)."""
+    return await _proxy_post(task_id, "write", request.model_dump())
+
+
+@router.post("/fs/{task_id}/mkdir")
+async def create_directory(
+    task_id: int = Path(..., description="Task ID"),
+    request: MkdirRequest = ...,
+):
+    """Create a directory inside the container (proxied to runner)."""
+    return await _proxy_post(task_id, "mkdir", request.model_dump())
+
+
+@router.post("/fs/{task_id}/rename")
+async def rename_item(
+    task_id: int = Path(..., description="Task ID"),
+    request: RenameRequest = ...,
+):
+    """Rename or move a file/directory inside the container (proxied to runner)."""
+    return await _proxy_post(task_id, "rename", request.model_dump())
+
+
+@router.delete("/fs/{task_id}/delete")
+async def delete_item(
+    task_id: int = Path(..., description="Task ID"),
+    path: str = Query(..., description="Path to delete"),
+    recursive: bool = Query(False, description="Delete directories recursively"),
+):
+    """Delete a file or directory inside the container (proxied to runner)."""
+    params = {"path": path, "recursive": str(recursive).lower()}
+    return await _proxy_delete(task_id, "delete", params)
+
+
+@router.get("/fs/{task_id}/stat")
+async def stat_file(
+    task_id: int = Path(..., description="Task ID"),
+    path: str = Query(..., description="Path to stat"),
+):
+    """Get file/directory metadata inside the container (proxied to runner)."""
+    params = {"path": path}
+    return await _proxy_get(task_id, "stat", params)

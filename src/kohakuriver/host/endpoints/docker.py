@@ -130,6 +130,34 @@ async def list_host_containers():
         raise HTTPException(status_code=500, detail=f"Error listing containers: {e}")
 
 
+def _get_resource_limits() -> dict:
+    """Calculate resource limits for env containers.
+
+    Returns kwargs dict with nano_cpus and mem_limit based on config percentages.
+    """
+    import os
+    import psutil
+
+    limits = {}
+
+    # CPU limit: nano_cpus = cores * 1e9
+    # e.g., 0.25 of 8 cores = 2 cores = 2e9 nano_cpus
+    cpu_count = os.cpu_count() or 1
+    cpu_limit = config.ENV_CONTAINER_CPU_LIMIT
+    if 0 < cpu_limit < 1:
+        nano_cpus = int(cpu_count * cpu_limit * 1e9)
+        limits["nano_cpus"] = nano_cpus
+
+    # Memory limit in bytes
+    mem_limit = config.ENV_CONTAINER_MEM_LIMIT
+    if 0 < mem_limit < 1:
+        total_mem = psutil.virtual_memory().total
+        mem_bytes = int(total_mem * mem_limit)
+        limits["mem_limit"] = mem_bytes
+
+    return limits
+
+
 def _do_create_host_container(image_name: str, container_name: str) -> dict:
     """Create container (blocking, run in executor)."""
     docker_manager = DockerManager()
@@ -138,17 +166,25 @@ def _do_create_host_container(image_name: str, container_name: str) -> dict:
     if docker_manager.container_exists(container_name):
         raise ValueError(f"Container '{container_name}' already exists.")
 
+    # Get resource limits
+    resource_limits = _get_resource_limits()
+
     # Create container (runs with sleep infinity)
     container = docker_manager.create_container(
         image=image_name,
         name=container_name,
         command="sleep infinity",
+        **resource_limits,
     )
 
     return {
         "container_id": container.short_id,
         "container_name": container_name,
         "status": container.status,
+        "resource_limits": {
+            "cpu_limit": config.ENV_CONTAINER_CPU_LIMIT,
+            "mem_limit": config.ENV_CONTAINER_MEM_LIMIT,
+        },
     }
 
 

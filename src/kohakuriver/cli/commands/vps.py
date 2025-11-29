@@ -78,29 +78,37 @@ def create_vps(
         list[str] | None,
         typer.Option("--mount", help="Additional mounts (repeatable)"),
     ] = None,
-    # SSH key options (mutually exclusive)
+    # SSH options (mutually exclusive)
+    ssh: Annotated[
+        bool,
+        typer.Option("--ssh", help="Enable SSH server (default: disabled, TTY-only)"),
+    ] = False,
     no_ssh_key: Annotated[
         bool,
-        typer.Option("--no-ssh-key", help="Passwordless root login"),
+        typer.Option("--no-ssh-key", help="SSH with passwordless root login"),
     ] = False,
     gen_ssh_key: Annotated[
         bool,
-        typer.Option("--gen-ssh-key", help="Generate new SSH keypair"),
+        typer.Option("--gen-ssh-key", help="SSH with generated keypair"),
     ] = False,
     public_key_file: Annotated[
         str | None,
-        typer.Option("--public-key-file", help="Path to public key file"),
+        typer.Option("--public-key-file", help="SSH with public key from file"),
     ] = None,
     public_key_string: Annotated[
         str | None,
-        typer.Option("--public-key-string", help="Public key as string"),
+        typer.Option("--public-key-string", help="SSH with public key string"),
     ] = None,
     key_out_file: Annotated[
         str | None,
         typer.Option("--key-out-file", help="Output path for generated key"),
     ] = None,
 ):
-    """Create a new VPS instance."""
+    """Create a new VPS instance.
+
+    By default, VPS is created without SSH (TTY-only mode, faster startup).
+    Use --ssh or one of the SSH key options to enable SSH server.
+    """
     from kohakuriver.utils.cli import parse_memory_string
     from kohakuriver.utils.ssh_key import (
         get_default_key_output_path,
@@ -108,7 +116,7 @@ def create_vps(
     )
 
     try:
-        # Validate mutually exclusive options
+        # Validate mutually exclusive SSH options
         ssh_options = sum(
             [no_ssh_key, gen_ssh_key, bool(public_key_file), bool(public_key_string)]
         )
@@ -119,8 +127,14 @@ def create_vps(
             )
             raise typer.Exit(1)
 
+        # --ssh flag without specific key options implies try default keys or generate
+        if ssh and ssh_options == 0:
+            # Treat --ssh as "enable SSH with default key or generate"
+            gen_ssh_key = True
+            ssh_options = 1
+
         # Determine SSH key mode
-        ssh_key_mode = "upload"
+        ssh_key_mode = "disabled"  # Default: no SSH, TTY-only
         public_key = None
 
         if no_ssh_key:
@@ -133,27 +147,7 @@ def create_vps(
         elif public_key_file:
             ssh_key_mode = "upload"
             public_key = read_public_key_file(public_key_file)
-        else:
-            # Try default key locations
-            default_keys = [
-                os.path.expanduser("~/.ssh/id_ed25519.pub"),
-                os.path.expanduser("~/.ssh/id_rsa.pub"),
-            ]
-            for key_path in default_keys:
-                if os.path.exists(key_path):
-                    try:
-                        public_key = read_public_key_file(key_path)
-                        console.print(f"[dim]Using default key: {key_path}[/dim]")
-                        break
-                    except Exception:
-                        continue
-
-            if not public_key:
-                print_error(
-                    "No SSH key found. Use --no-ssh-key, --gen-ssh-key, "
-                    "--public-key-file, or --public-key-string."
-                )
-                raise typer.Exit(1)
+        # If no SSH option specified, keep disabled (TTY-only mode)
 
         # Parse memory
         memory_bytes = None
@@ -297,7 +291,10 @@ def connect_vps(
         typer.Option("--key", "-i", help="SSH private key file"),
     ] = None,
 ):
-    """SSH connect to a VPS instance."""
+    """SSH connect to a VPS instance.
+
+    For VPS created without SSH (TTY-only mode), use 'kohakuriver terminal <task_id>' instead.
+    """
     import subprocess
 
     from kohakuriver.utils.ssh_key import get_default_key_output_path
@@ -315,7 +312,10 @@ def connect_vps(
 
         ssh_port = vps.get("ssh_port")
         if not ssh_port:
-            print_error("VPS has no SSH port assigned.")
+            print_error(
+                "VPS has no SSH port (TTY-only mode).\n"
+                f"Use 'kohakuriver terminal {task_id}' to connect via TTY instead."
+            )
             raise typer.Exit(1)
 
         node = vps.get("assigned_node")

@@ -15,7 +15,15 @@ from kohakuriver.docker.client import DockerManager
 from kohakuriver.host.config import config
 from kohakuriver.host.background.health import collate_health_data, health_datas
 from kohakuriver.host.background.runner_monitor import check_dead_runners
-from kohakuriver.host.endpoints import docker, health, nodes, tasks, vps
+from kohakuriver.host.endpoints import (
+    docker,
+    filesystem,
+    health,
+    nodes,
+    tasks,
+    vps,
+    container_filesystem,
+)
 from kohakuriver.host.endpoints.docker_terminal import terminal_websocket_endpoint
 from kohakuriver.host.endpoints.task_terminal import task_terminal_proxy_endpoint
 from kohakuriver.ssh_proxy.server import start_server
@@ -39,6 +47,8 @@ app.include_router(nodes.router, tags=["Nodes"])
 app.include_router(vps.router, tags=["VPS"])
 app.include_router(docker.router, prefix="/docker", tags=["Docker"])
 app.include_router(health.router, tags=["Health"])
+app.include_router(filesystem.router, tags=["Filesystem"])
+app.include_router(container_filesystem.router, tags=["Container Filesystem"])
 
 
 # WebSocket endpoint for Docker container terminal (host-side env containers)

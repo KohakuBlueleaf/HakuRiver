@@ -298,10 +298,14 @@ def init_config(
             for config_type, path in generated:
                 if config_type == "host":
                     console.print(f"  kohakuriver.host --config {path}")
-                    console.print(f"  [dim]Or auto-loaded if at ~/.kohakuriver/host_config.py[/dim]")
+                    console.print(
+                        f"  [dim]Or auto-loaded if at ~/.kohakuriver/host_config.py[/dim]"
+                    )
                 elif config_type == "runner":
                     console.print(f"  kohakuriver.runner --config {path}")
-                    console.print(f"  [dim]Or auto-loaded if at ~/.kohakuriver/runner_config.py[/dim]")
+                    console.print(
+                        f"  [dim]Or auto-loaded if at ~/.kohakuriver/runner_config.py[/dim]"
+                    )
     else:
         # Show instructions
         console.print("[bold]KohakuRiver Configuration[/bold]")
@@ -357,7 +361,9 @@ def init_service(
     ] = "/mnt/cluster-share",
     no_install: Annotated[
         bool,
-        typer.Option("--no-install", help="Only generate files, don't register with systemd"),
+        typer.Option(
+            "--no-install", help="Only generate files, don't register with systemd"
+        ),
     ] = False,
 ):
     """Create and register systemd service files.
@@ -379,6 +385,7 @@ def init_service(
 
     # Use temp directory for service files
     import tempfile
+
     output_dir = tempfile.mkdtemp() if not no_install else "."
 
     if no_install:
@@ -477,6 +484,7 @@ WantedBy=multi-user.target
 
     # Cleanup temp files
     import shutil
+
     if output_dir != ".":
         shutil.rmtree(output_dir, ignore_errors=True)
 

@@ -26,8 +26,13 @@ from kohakuriver.storage.vault import TaskStateStore
 logger = logging.getLogger(__name__)
 
 
-def _find_ssh_port(container_name: str) -> int | None:
-    """Find the mapped SSH port for a container."""
+def _find_ssh_port(container_name: str) -> int:
+    """
+    Find the mapped SSH port for a container.
+
+    Returns:
+        SSH port number, or 0 if not found (VPS will still work via TTY).
+    """
     try:
         result = subprocess.run(
             ["docker", "port", container_name, "22"],
@@ -39,11 +44,15 @@ def _find_ssh_port(container_name: str) -> int | None:
         port_mapping = result.stdout.splitlines()[0].strip()
         return int(port_mapping.split(":")[1])
     except subprocess.CalledProcessError:
-        logger.error(f"Failed to find SSH port for container '{container_name}'")
-        return None
+        logger.warning(
+            f"SSH port not available for container '{container_name}'. VPS will work via TTY only."
+        )
+        return 0
     except (IndexError, ValueError) as e:
-        logger.error(f"Failed to parse SSH port: {e}")
-        return None
+        logger.warning(
+            f"Failed to parse SSH port for '{container_name}': {e}. VPS will work via TTY only."
+        )
+        return 0
 
 
 def _get_running_containers() -> tuple[list, set[str]]:
@@ -110,47 +119,17 @@ async def startup_check(task_store: TaskStateStore):
             # For VPS containers, recover the SSH port
             if container_name.startswith(VPS_PREFIX):
                 ssh_port = _find_ssh_port(container_name)
-                if ssh_port:
+                if ssh_port > 0:
                     logger.info(
                         f"VPS container {container_name} for task {task_id} recovered, "
                         f"SSH port: {ssh_port}"
                     )
-                    # Port might have changed after restart, update in store
-                    # (The store doesn't track SSH port, but we log it for monitoring)
                 else:
-                    # VPS without SSH port is broken - stop it
-                    logger.error(
+                    # VPS without SSH port - still usable via TTY
+                    logger.warning(
                         f"VPS container {container_name} for task {task_id} has no SSH port. "
-                        "Stopping container."
+                        "VPS will work via TTY only."
                     )
-                    try:
-                        subprocess.run(
-                            ["docker", "stop", container_name],
-                            check=True,
-                            capture_output=True,
-                            timeout=60,
-                        )
-                        subprocess.run(
-                            ["docker", "rm", container_name],
-                            check=True,
-                            capture_output=True,
-                            timeout=60,
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to stop broken VPS container: {e}")
-
-                    await report_status_to_host(
-                        TaskStatusUpdate(
-                            task_id=task_id,
-                            status="stopped",
-                            exit_code=-1,
-                            message="VPS lost SSH port binding after restart.",
-                            completed_at=datetime.datetime.now(),
-                        )
-                    )
-
-                    task_store.remove_task(task_id)
-                    continue
 
             logger.info(
                 f"Container {container_name} for task {task_id} is still running."
@@ -177,47 +156,37 @@ async def startup_check(task_store: TaskStateStore):
         if task_data is None:
             # Orphan container - check if it's a VPS
             if container.name.startswith(VPS_PREFIX):
-                # Try to recover VPS
+                # Try to recover VPS - it can work without SSH port via TTY
                 ssh_port = _find_ssh_port(container.name)
-                if ssh_port:
+                if ssh_port > 0:
                     logger.info(
                         f"Recovering orphan VPS container {container.name} "
                         f"(task_id={task_id}), SSH port: {ssh_port}"
                     )
-                    # Add back to tracking
-                    task_store.add_task(
-                        task_id=task_id,
-                        container_name=container.name,
-                        allocated_cores=None,
-                        allocated_gpus=None,
-                        numa_node=None,
-                    )
-                    # Report running status to host with SSH port
-                    await report_status_to_host(
-                        TaskStatusUpdate(
-                            task_id=task_id,
-                            status="running",
-                            message=f"VPS recovered after runner restart",
-                            ssh_port=ssh_port,
-                        )
-                    )
                 else:
-                    # VPS without SSH port - clean up
-                    logger.warning(
-                        f"Orphan VPS container {container.name} has no SSH port. "
-                        "Cleaning up."
+                    logger.info(
+                        f"Recovering orphan VPS container {container.name} "
+                        f"(task_id={task_id}), no SSH port (TTY-only mode)"
                     )
-                    try:
-                        await asyncio.to_thread(
-                            _stop_and_remove_container, container.name, 10
-                        )
-                        logger.info(
-                            f"Successfully cleaned up broken VPS {container.name}"
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to cleanup broken VPS {container.name}: {e}"
-                        )
+
+                # Add back to tracking (works with or without SSH)
+                task_store.add_task(
+                    task_id=task_id,
+                    container_name=container.name,
+                    allocated_cores=None,
+                    allocated_gpus=None,
+                    numa_node=None,
+                )
+                # Report running status to host with SSH port (0 means no SSH)
+                await report_status_to_host(
+                    TaskStatusUpdate(
+                        task_id=task_id,
+                        status="running",
+                        message=f"VPS recovered after runner restart"
+                        + ("" if ssh_port > 0 else " (TTY-only, no SSH)"),
+                        ssh_port=ssh_port if ssh_port > 0 else None,
+                    )
+                )
             else:
                 # Regular task container - clean up
                 logger.warning(

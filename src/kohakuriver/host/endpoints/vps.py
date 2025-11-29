@@ -3,10 +3,11 @@ VPS (Virtual Private Server) endpoints.
 
 Handles VPS container creation and management.
 
-Supports three SSH key modes:
-- none: No SSH key, passwordless root login
-- upload: User provides their public key
-- generate: Server generates keypair, returns private key to CLI
+Supports four SSH key modes:
+- disabled: No SSH server at all, TTY-only mode (default, faster startup)
+- none: SSH with passwordless root login
+- upload: SSH with user-provided public key
+- generate: SSH with server-generated keypair (returns private key to CLI)
 """
 
 import asyncio
@@ -183,11 +184,11 @@ async def submit_vps(submission: VPSSubmission):
     )
 
     # Validate SSH key mode
-    ssh_key_mode = submission.ssh_key_mode or "upload"
-    if ssh_key_mode not in ("none", "upload", "generate"):
+    ssh_key_mode = submission.ssh_key_mode or "disabled"
+    if ssh_key_mode not in ("disabled", "none", "upload", "generate"):
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid ssh_key_mode: {ssh_key_mode}. Must be 'none', 'upload', or 'generate'.",
+            detail=f"Invalid ssh_key_mode: {ssh_key_mode}. Must be 'disabled', 'none', 'upload', or 'generate'.",
         )
 
     # Validate public key is provided for upload mode
@@ -224,6 +225,11 @@ async def submit_vps(submission: VPSSubmission):
     ssh_private_key = None
 
     match ssh_key_mode:
+        case "disabled":
+            # No SSH server at all - TTY-only mode
+            ssh_public_key = None
+            logger.info(f"VPS {task_id}: SSH disabled (TTY-only mode)")
+
         case "none":
             # No SSH key - passwordless root
             ssh_public_key = None

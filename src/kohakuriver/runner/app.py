@@ -17,7 +17,7 @@ from kohakuriver.docker.client import DockerManager
 from kohakuriver.runner.config import config
 from kohakuriver.runner.background.heartbeat import send_heartbeat
 from kohakuriver.runner.background.startup_check import startup_check
-from kohakuriver.runner.endpoints import docker, tasks, terminal, vps
+from kohakuriver.runner.endpoints import docker, filesystem, tasks, terminal, vps
 from kohakuriver.runner.numa.detector import detect_numa_topology
 from kohakuriver.runner.services.resource_monitor import get_gpu_stats, get_total_cores
 from kohakuriver.storage.vault import TaskStateStore
@@ -43,6 +43,7 @@ app = FastAPI(
 app.include_router(tasks.router, tags=["Tasks"])
 app.include_router(vps.router, tags=["VPS"])
 app.include_router(docker.router, tags=["Docker"])
+app.include_router(filesystem.router, tags=["Filesystem"])
 
 
 # WebSocket endpoint for task/VPS terminal access
@@ -176,6 +177,7 @@ async def startup_event():
     tasks.set_dependencies(task_store, numa_topology)
     vps.set_dependencies(task_store)
     terminal.set_dependencies(task_store)
+    filesystem.set_dependencies(task_store)
 
     # Detect NUMA topology
     logger.info("Detecting NUMA topology...")

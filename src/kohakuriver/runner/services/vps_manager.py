@@ -44,6 +44,25 @@ def _detect_package_manager(image_name: str) -> str:
         return "apt"
 
 
+def _get_ssh_install_cmd(pkg_manager: str) -> str:
+    """Get the SSH installation command for a package manager."""
+    match pkg_manager:
+        case "apk":
+            return "apk update && apk add --no-cache openssh"
+        case "apt":
+            return "apt update && apt install -y openssh-server"
+        case "dnf":
+            return "dnf install -y openssh-server"
+        case "yum":
+            return "yum install -y openssh-server"
+        case "zypper":
+            return "zypper refresh && zypper install -y openssh"
+        case "pacman":
+            return "pacman -Syu --noconfirm openssh"
+        case _:
+            return "apt update && apt install -y openssh-server"
+
+
 def _build_vps_docker_command(
     docker_image_tag: str,
     task_id: int,
@@ -79,8 +98,9 @@ def _build_vps_docker_command(
     # Container name
     docker_cmd.extend(["--name", vps_container_name(task_id)])
 
-    # SSH port mapping - use 0 to let Docker assign random port
-    docker_cmd.extend(["-p", "0:22"])
+    # SSH port mapping - only if SSH is enabled
+    if ssh_key_mode != "disabled":
+        docker_cmd.extend(["-p", "0:22"])
 
     # Privileged mode or CAP_SYS_NICE
     if privileged:
@@ -121,37 +141,23 @@ def _build_vps_docker_command(
         id_string = ",".join(map(str, gpu_ids))
         docker_cmd.extend(["--gpus", f'"device={id_string}"'])
 
-    # Detect package manager and build SSH setup command
-    pkg_manager = _detect_package_manager(docker_image_tag)
-
-    match pkg_manager:
-        case "apk":
-            setup_cmd = "apk update && apk add --no-cache openssh"
-        case "apt":
-            setup_cmd = "apt update && apt install -y openssh-server"
-        case "dnf":
-            setup_cmd = "dnf install -y openssh-server"
-        case "yum":
-            setup_cmd = "yum install -y openssh-server"
-        case "zypper":
-            setup_cmd = "zypper refresh && zypper install -y openssh"
-        case "pacman":
-            setup_cmd = "pacman -Syu --noconfirm openssh"
-        case _:
-            setup_cmd = "apt update && apt install -y openssh-server"
-
-    # SSH setup based on key mode
-    setup_cmd += " && ssh-keygen -A && "
-
+    # Build setup command based on SSH key mode
     match ssh_key_mode:
+        case "disabled":
+            # No SSH at all - just run a shell that stays alive (TTY-only mode)
+            # Use tail -f /dev/null to keep container running, users connect via docker exec
+            setup_cmd = "tail -f /dev/null"
+            logger.info(f"VPS {task_id}: Configured for TTY-only mode (no SSH)")
+
         case "none":
             # No SSH key mode - enable password-less root login
-            # Allow empty password and permit root login without password
+            pkg_manager = _detect_package_manager(docker_image_tag)
+            setup_cmd = _get_ssh_install_cmd(pkg_manager)
+            setup_cmd += " && ssh-keygen -A && "
             setup_cmd += (
                 "echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config && "
                 "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "
                 "echo 'PermitEmptyPasswords yes' >> /etc/ssh/sshd_config && "
-                # Remove root password (allow empty password login)
                 "passwd -d root && "
                 "mkdir -p /run/sshd && "
                 "chmod 0755 /run/sshd && "
@@ -166,6 +172,9 @@ def _build_vps_docker_command(
             if not ssh_public_key:
                 raise ValueError(f"ssh_public_key required for mode '{ssh_key_mode}'")
 
+            pkg_manager = _detect_package_manager(docker_image_tag)
+            setup_cmd = _get_ssh_install_cmd(pkg_manager)
+            setup_cmd += " && ssh-keygen -A && "
             setup_cmd += (
                 "echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config && "
                 "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "
@@ -190,24 +199,58 @@ def _build_vps_docker_command(
     return docker_cmd
 
 
-def _find_ssh_port(container_name: str) -> int | None:
-    """Find the mapped SSH port for a container."""
-    try:
-        result = subprocess.run(
-            ["docker", "port", container_name, "22"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        # Parse: "0.0.0.0:32792\n[::]:32792\n"
-        port_mapping = result.stdout.splitlines()[0].strip()
-        return int(port_mapping.split(":")[1])
-    except subprocess.CalledProcessError:
-        logger.error(f"Failed to find SSH port for container '{container_name}'")
-        return None
-    except (IndexError, ValueError) as e:
-        logger.error(f"Failed to parse SSH port: {e}")
-        return None
+async def _find_ssh_port(
+    container_name: str, retries: int = 5, delay: float = 0.5
+) -> int:
+    """
+    Find the mapped SSH port for a container.
+
+    Args:
+        container_name: Docker container name.
+        retries: Number of retry attempts.
+        delay: Delay between retries in seconds.
+
+    Returns:
+        SSH port number, or 0 if not found (VPS will still work via TTY).
+    """
+    for attempt in range(retries):
+        try:
+            result = subprocess.run(
+                ["docker", "port", container_name, "22"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            # Parse: "0.0.0.0:32792\n[::]:32792\n"
+            port_mapping = result.stdout.splitlines()[0].strip()
+            port = int(port_mapping.split(":")[1])
+            logger.debug(
+                f"Found SSH port {port} for container '{container_name}' on attempt {attempt + 1}"
+            )
+            return port
+        except subprocess.CalledProcessError:
+            if attempt < retries - 1:
+                logger.debug(
+                    f"SSH port not ready for '{container_name}', retrying ({attempt + 1}/{retries})..."
+                )
+                await asyncio.sleep(delay)
+            else:
+                logger.warning(
+                    f"Failed to find SSH port for container '{container_name}' after {retries} attempts. VPS will work via TTY only."
+                )
+                return 0
+        except (IndexError, ValueError) as e:
+            if attempt < retries - 1:
+                logger.debug(
+                    f"Failed to parse SSH port: {e}, retrying ({attempt + 1}/{retries})..."
+                )
+                await asyncio.sleep(delay)
+            else:
+                logger.warning(
+                    f"Failed to parse SSH port for '{container_name}': {e}. VPS will work via TTY only."
+                )
+                return 0
+    return 0
 
 
 async def create_vps(
@@ -338,25 +381,21 @@ async def create_vps(
                 "error": error_message,
             }
 
-        # Find the actual SSH port (might differ if 0 was requested)
+        # Find the actual SSH port (only if SSH is enabled)
         container_name_full = vps_container_name(task_id)
-        actual_ssh_port = _find_ssh_port(container_name_full)
 
-        if not actual_ssh_port:
-            error_message = "Failed to find SSH port after container started"
-            logger.error(f"VPS {task_id}: {error_message}")
-            await report_status_to_host(
-                TaskStatusUpdate(
-                    task_id=task_id,
-                    status="failed",
-                    message=error_message,
-                    completed_at=datetime.datetime.now(),
+        if ssh_key_mode == "disabled":
+            # No SSH - TTY-only mode
+            actual_ssh_port = 0
+            logger.info(f"VPS {task_id}: TTY-only mode, no SSH port")
+        else:
+            # Find SSH port - returns 0 if not found
+            actual_ssh_port = await _find_ssh_port(container_name_full)
+            if actual_ssh_port == 0:
+                logger.warning(
+                    f"VPS {task_id}: SSH port not available, but VPS is running. "
+                    "TTY terminal access will still work."
                 )
-            )
-            return {
-                "success": False,
-                "error": error_message,
-            }
 
         # Store VPS state
         task_store.add_task(

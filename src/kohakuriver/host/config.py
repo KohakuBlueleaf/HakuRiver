@@ -38,6 +38,11 @@ class HostConfig:
     ADDITIONAL_MOUNTS: list[str] = field(default_factory=list)
     DEFAULT_WORKING_DIR: str = "/shared"
 
+    # Environment Container Resource Limits (for env setup containers on host)
+    # Expressed as percentage of total system resources (0.0-1.0, default 0.25 = 25%)
+    ENV_CONTAINER_CPU_LIMIT: float = 0.25
+    ENV_CONTAINER_MEM_LIMIT: float = 0.25
+
     # Logging Configuration
     LOG_LEVEL: LogLevel = LogLevel.INFO
 
