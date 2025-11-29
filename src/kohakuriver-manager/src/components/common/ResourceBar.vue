@@ -59,7 +59,7 @@ const barColor = computed(() => {
       <span>{{ label }}</span>
       <span v-if="showPercent">{{ percent.toFixed(1) }}%</span>
     </div>
-    <div :class="barHeight" class="bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+    <div :class="barHeight" class="bg-app-inset rounded-full overflow-hidden">
       <div
         :class="[barColor, barHeight]"
         class="rounded-full transition-all duration-300"

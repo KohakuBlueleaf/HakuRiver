@@ -15,6 +15,23 @@ const menuItems = [
   { path: '/stats', icon: 'i-carbon-chart-line', label: 'Statistics' },
 ]
 
+const themeOptions = [
+  { value: 'light', icon: 'i-carbon-sun' },
+  { value: 'dark', icon: 'i-carbon-moon' },
+  { value: 'system', icon: 'i-carbon-laptop' },
+]
+
+const currentThemeIcon = computed(() => {
+  const option = themeOptions.find((o) => o.value === uiStore.theme)
+  return option?.icon || 'i-carbon-laptop'
+})
+
+function cycleTheme() {
+  const currentIndex = themeOptions.findIndex((o) => o.value === uiStore.theme)
+  const nextIndex = (currentIndex + 1) % themeOptions.length
+  uiStore.setTheme(themeOptions[nextIndex].value)
+}
+
 const isActive = (path) => {
   if (path === '/') return route.path === '/'
   return route.path.startsWith(path)
@@ -26,6 +43,10 @@ function navigateTo(path) {
   if (uiStore.isMobile) {
     uiStore.closeMobileMenu()
   }
+}
+
+function refresh() {
+  router.go(0)
 }
 </script>
 
@@ -41,7 +62,7 @@ function navigateTo(path) {
 
   <!-- Sidebar -->
   <aside
-    class="fixed left-0 top-0 h-screen bg-gray-900 text-gray-100 transition-all duration-300 z-50 flex flex-col"
+    class="fixed left-0 top-0 h-screen bg-app-sidebar text-gray-100 transition-all duration-300 z-50 flex flex-col"
     :class="[
       uiStore.isMobile
         ? uiStore.mobileMenuOpen
@@ -80,11 +101,34 @@ function navigateTo(path) {
       </ul>
     </nav>
 
-    <!-- Footer - Only show on desktop -->
-    <div v-if="!uiStore.isMobile" class="p-3 border-t border-gray-800">
+    <!-- Footer -->
+    <div class="p-3 border-t border-gray-800 space-y-2">
+      <!-- Action buttons row -->
+      <div class="flex items-center justify-center gap-2">
+        <!-- Theme toggle -->
+        <button
+          @click="cycleTheme"
+          class="flex items-center justify-center w-9 h-9 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+          title="Toggle theme"
+        >
+          <span :class="currentThemeIcon" class="text-lg"></span>
+        </button>
+
+        <!-- Refresh -->
+        <button
+          @click="refresh"
+          class="flex items-center justify-center w-9 h-9 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+          title="Refresh page"
+        >
+          <span class="i-carbon-renew text-lg"></span>
+        </button>
+      </div>
+
+      <!-- Collapse button - Desktop only -->
       <button
+        v-if="!uiStore.isMobile"
         @click="uiStore.toggleSidebar"
-        class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+        class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
       >
         <span
           :class="uiStore.sidebarCollapsed ? 'i-carbon-chevron-right' : 'i-carbon-chevron-left'"

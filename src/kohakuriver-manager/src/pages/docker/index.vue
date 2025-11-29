@@ -3,6 +3,7 @@ import { useDockerStore } from '@/stores/docker'
 import { formatRelativeTime, formatBytes } from '@/utils/format'
 import { usePolling } from '@/composables/usePolling'
 import { useNotification } from '@/composables/useNotification'
+import IdeContent from '@/components/ide/IdeContent.vue'
 
 const dockerStore = useDockerStore()
 const notify = useNotification()
@@ -12,10 +13,12 @@ const activeTab = ref('containers')
 
 // Dialogs
 const createContainerDialogVisible = ref(false)
-const terminalDialogVisible = ref(false)
 const selectedContainer = ref(null)
 const createTarballDialogVisible = ref(false)
 const selectedTarballContainer = ref(null)
+
+// IDE Modal state
+const ideModalVisible = ref(false)
 
 // Create container form
 const createContainerForm = ref({
@@ -76,9 +79,14 @@ async function handleDeleteContainer(name) {
   }
 }
 
-function openTerminal(containerName) {
+function openIde(containerName) {
   selectedContainer.value = containerName
-  terminalDialogVisible.value = true
+  ideModalVisible.value = true
+}
+
+function closeIde() {
+  ideModalVisible.value = false
+  selectedContainer.value = null
 }
 
 function openCreateTarball(containerName) {
@@ -230,10 +238,10 @@ const expandedTags = ref(new Set())
 
               <!-- Actions -->
               <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-2">
-                <!-- Terminal (only for running containers) -->
-                <el-tooltip v-if="container.status === 'running'" content="Open Terminal">
-                  <el-button size="small" type="primary" @click="openTerminal(container.name)">
-                    <span class="i-carbon-terminal mr-1"></span> Terminal
+                <!-- IDE (only for running containers) -->
+                <el-tooltip v-if="container.status === 'running'" content="Open IDE">
+                  <el-button size="small" type="primary" @click="openIde(container.name)">
+                    <span class="i-carbon-code mr-1"></span> IDE
                   </el-button>
                 </el-tooltip>
 
@@ -244,14 +252,14 @@ const expandedTags = ref(new Set())
                   </el-button>
                 </el-tooltip>
                 <el-tooltip v-else content="Stop">
-                  <el-button size="small" @click="handleStopContainer(container.name)">
+                  <el-button size="small" type="warning" @click="handleStopContainer(container.name)">
                     <span class="i-carbon-stop"></span>
                   </el-button>
                 </el-tooltip>
 
                 <!-- Create Tarball -->
                 <el-tooltip content="Create Tarball">
-                  <el-button size="small" @click="openCreateTarball(container.name)">
+                  <el-button size="small" type="info" @click="openCreateTarball(container.name)">
                     <span class="i-carbon-archive"></span>
                   </el-button>
                 </el-tooltip>
@@ -346,13 +354,22 @@ const expandedTags = ref(new Set())
       </template>
     </el-dialog>
 
-    <!-- Terminal Dialog -->
-    <TerminalModal
-      v-model:visible="terminalDialogVisible"
-      :container-name="selectedContainer"
-      :title="`Container: ${selectedContainer}`"
-      type="container"
-    />
+    <!-- IDE Modal -->
+    <teleport to="body">
+      <div v-if="ideModalVisible" class="ide-modal-overlay" @click.self="closeIde">
+        <div class="ide-modal">
+          <IdeContent
+            v-if="selectedContainer"
+            :task-id="selectedContainer"
+            :container-name="selectedContainer"
+            type="container"
+            file-tree-mode="container"
+            :title="`Container: ${parseContainerName(selectedContainer).displayName}`"
+            @close="closeIde"
+          />
+        </div>
+      </div>
+    </teleport>
 
     <!-- Create Tarball Dialog -->
     <el-dialog v-model="createTarballDialogVisible" title="Create Tarball" width="400px">
@@ -371,3 +388,46 @@ const expandedTags = ref(new Set())
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+/* IDE Modal Styles */
+.ide-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 2.5vh 2.5vw;
+}
+
+.ide-modal {
+  width: 95vw;
+  height: 95vh;
+  max-width: 100%;
+  max-height: 100%;
+  background: var(--el-bg-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ide-modal-overlay {
+    padding: 1vh 1vw;
+  }
+
+  .ide-modal {
+    width: 98vw;
+    height: 98vh;
+    border-radius: 4px;
+  }
+}
+</style>

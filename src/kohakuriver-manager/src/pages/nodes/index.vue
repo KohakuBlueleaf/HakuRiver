@@ -140,7 +140,7 @@ function getGpuSummary(gpuInfo) {
               <div
                 v-for="(cores, numaId) in node.numa_topology"
                 :key="numaId"
-                class="text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded"
+                class="text-xs bg-app-surface p-2 rounded"
               >
                 <span class="font-medium">NUMA {{ numaId }}:</span>
                 {{ cores.length }} cores ({{ cores.slice(0, 5).join(', ') }}{{ cores.length > 5 ? '...' : '' }})
@@ -155,7 +155,7 @@ function getGpuSummary(gpuInfo) {
               <div
                 v-for="(gpu, idx) in node.gpu_info"
                 :key="idx"
-                class="text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded"
+                class="text-xs bg-app-surface p-2 rounded"
               >
                 <div class="font-medium">{{ gpu.name || `GPU ${idx}` }}</div>
                 <div v-if="gpu.memory_total" class="text-muted">

@@ -6,6 +6,7 @@ import { formatDate, formatRelativeTime, formatBytes, formatTaskId } from '@/uti
 import { usePolling } from '@/composables/usePolling'
 import { useNotification } from '@/composables/useNotification'
 import { SSH_KEY_MODES } from '@/utils/constants'
+import IdeContent from '@/components/ide/IdeContent.vue'
 
 const vpsStore = useVpsStore()
 const clusterStore = useClusterStore()
@@ -15,10 +16,12 @@ const notify = useNotification()
 // Filter
 const showAll = ref(false)
 
+// IDE Modal state
+const ideModalVisible = ref(false)
+const ideTaskId = ref(null)
+
 // Dialogs
 const createDialogVisible = ref(false)
-const terminalDialogVisible = ref(false)
-const selectedVpsId = ref(null)
 const sshInfoDialogVisible = ref(false)
 const selectedVps = ref(null)
 
@@ -29,7 +32,7 @@ const createForm = ref({
   container_name: null,
   target_hostname: null,
   target_numa_node_id: null,
-  ssh_key_mode: 'generate',
+  ssh_key_mode: 'disabled', // Default to TTY-only mode (no SSH)
   ssh_public_key: '',
   privileged: false,
   gpuFeatureEnabled: false,
@@ -157,7 +160,7 @@ function resetCreateForm() {
     container_name: null,
     target_hostname: null,
     target_numa_node_id: null,
-    ssh_key_mode: 'generate',
+    ssh_key_mode: 'disabled', // Default to TTY-only mode
     ssh_public_key: '',
     privileged: false,
     gpuFeatureEnabled: false,
@@ -211,9 +214,15 @@ async function handleResume(taskId) {
   }
 }
 
-function openTerminal(taskId) {
-  selectedVpsId.value = taskId
-  terminalDialogVisible.value = true
+function openIde(taskId) {
+  ideTaskId.value = taskId
+  ideModalVisible.value = true
+}
+
+function closeIde() {
+  console.log('VPS page: closeIde called')
+  ideModalVisible.value = false
+  ideTaskId.value = null
 }
 
 function showSshInfo(vps) {
@@ -270,163 +279,184 @@ function copyVpsId(taskId) {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h2 class="page-title mb-0">VPS Instances</h2>
-        <p class="text-muted">{{ vpsStore.runningVps.length }} running, {{ vpsStore.activeVps.length }} active</p>
+  <div class="vps-page">
+    <!-- Main Content -->
+    <div class="vps-content space-y-6">
+      <!-- Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="page-title mb-0">VPS Instances</h2>
+          <p class="text-muted">{{ vpsStore.runningVps.length }} running, {{ vpsStore.activeVps.length }} active</p>
+        </div>
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <el-switch v-model="showAll" active-text="Show all" inactive-text="Active only" />
+          <el-button type="primary" @click="createDialogVisible = true" class="w-full sm:w-auto">
+            <span class="i-carbon-add mr-2"></span> Create VPS
+          </el-button>
+        </div>
       </div>
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <el-switch v-model="showAll" active-text="Show all" inactive-text="Active only" />
-        <el-button type="primary" @click="createDialogVisible = true" class="w-full sm:w-auto">
-          <span class="i-carbon-add mr-2"></span> Create VPS
-        </el-button>
+
+      <!-- VPS Cards -->
+      <div v-if="vpsStore.loading && vpsStore.vpsList.length === 0" class="text-center py-12">
+        <el-icon class="is-loading text-4xl text-blue-500"><i class="i-carbon-renew"></i></el-icon>
       </div>
-    </div>
 
-    <!-- VPS Cards -->
-    <div v-if="vpsStore.loading && vpsStore.vpsList.length === 0" class="text-center py-12">
-      <el-icon class="is-loading text-4xl text-blue-500"><i class="i-carbon-renew"></i></el-icon>
-    </div>
+      <EmptyState
+        v-else-if="vpsStore.vpsList.length === 0"
+        icon="i-carbon-virtual-machine"
+        title="No VPS instances"
+        description="Create a new VPS to get started."
+      >
+        <template #action>
+          <el-button type="primary" @click="createDialogVisible = true">Create VPS</el-button>
+        </template>
+      </EmptyState>
 
-    <EmptyState
-      v-else-if="vpsStore.vpsList.length === 0"
-      icon="i-carbon-virtual-machine"
-      title="No VPS instances"
-      description="Create a new VPS to get started."
-    >
-      <template #action>
-        <el-button type="primary" @click="createDialogVisible = true">Create VPS</el-button>
-      </template>
-    </EmptyState>
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div v-for="vps in vpsStore.vpsList" :key="vps.task_id" class="card flex flex-col">
+          <!-- Header with full ID -->
+          <div class="flex items-start justify-between gap-2 mb-4">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+              <span class="i-carbon-virtual-machine text-2xl text-blue-500 flex-shrink-0"></span>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <h3 class="font-mono text-sm font-semibold truncate" :title="vps.task_id">
+                    {{ vps.task_id }}
+                  </h3>
+                  <el-tooltip content="Copy VPS ID" placement="top">
+                    <button
+                      @click="copyVpsId(vps.task_id)"
+                      class="text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0"
+                    >
+                      <span class="i-carbon-copy text-sm"></span>
+                    </button>
+                  </el-tooltip>
+                </div>
+                <p class="text-xs text-muted truncate">{{ getNodeHostname(vps.assigned_node) }}</p>
+              </div>
+            </div>
+            <StatusBadge :status="vps.status" class="flex-shrink-0" />
+          </div>
 
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      <div v-for="vps in vpsStore.vpsList" :key="vps.task_id" class="card flex flex-col">
-        <!-- Header with full ID -->
-        <div class="flex items-start justify-between gap-2 mb-4">
-          <div class="flex items-center gap-2 min-w-0 flex-1">
-            <span class="i-carbon-virtual-machine text-2xl text-blue-500 flex-shrink-0"></span>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <h3 class="font-mono text-sm font-semibold truncate" :title="vps.task_id">
-                  {{ vps.task_id }}
-                </h3>
-                <el-tooltip content="Copy VPS ID" placement="top">
-                  <button
-                    @click="copyVpsId(vps.task_id)"
-                    class="text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0"
-                  >
-                    <span class="i-carbon-copy text-sm"></span>
-                  </button>
+          <!-- Info -->
+          <div class="space-y-2 text-sm flex-1">
+            <div class="flex justify-between">
+              <span class="text-muted">CPU Cores</span>
+              <span>{{ vps.required_cores }}</span>
+            </div>
+            <div v-if="vps.required_memory_bytes" class="flex justify-between">
+              <span class="text-muted">Memory</span>
+              <span>{{ formatBytes(vps.required_memory_bytes) }}</span>
+            </div>
+            <div v-if="vps.ssh_port" class="flex justify-between">
+              <span class="text-muted">SSH Port</span>
+              <span class="font-mono">{{ vps.ssh_port }}</span>
+            </div>
+            <div v-if="vps.container_name" class="flex justify-between gap-2">
+              <span class="text-muted flex-shrink-0">Container</span>
+              <span class="truncate" :title="vps.container_name">{{ vps.container_name }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-muted">Created</span>
+              <span>{{ formatRelativeTime(vps.submitted_at) }}</span>
+            </div>
+          </div>
+
+          <!-- Actions - Aligned grid layout -->
+          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <!-- Running state buttons -->
+            <div v-if="vps.status === 'running'" class="flex flex-col gap-2">
+              <!-- Primary actions row -->
+              <div class="flex gap-2">
+                <el-tooltip content="Open IDE (Terminal + Files)" placement="top">
+                  <el-button size="small" type="primary" @click="openIde(vps.task_id)" class="flex-1">
+                    <span class="i-carbon-terminal mr-1"></span>
+                    IDE
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip v-if="vps.ssh_port" content="SSH Connection Info" placement="top">
+                  <el-button size="small" type="info" @click="showSshInfo(vps)" class="flex-1">
+                    <span class="i-carbon-connect mr-1"></span>
+                    SSH Info
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip v-else content="Copy Terminal Command" placement="top">
+                  <el-button size="small" type="info" @click="copyTerminalCommand(vps)" class="flex-1">
+                    <span class="i-carbon-copy mr-1"></span> Copy CMD
+                  </el-button>
                 </el-tooltip>
               </div>
-              <p class="text-xs text-muted truncate">{{ getNodeHostname(vps.assigned_node) }}</p>
-            </div>
-          </div>
-          <StatusBadge :status="vps.status" class="flex-shrink-0" />
-        </div>
 
-        <!-- Info -->
-        <div class="space-y-2 text-sm flex-1">
-          <div class="flex justify-between">
-            <span class="text-muted">CPU Cores</span>
-            <span>{{ vps.required_cores }}</span>
-          </div>
-          <div v-if="vps.required_memory_bytes" class="flex justify-between">
-            <span class="text-muted">Memory</span>
-            <span>{{ formatBytes(vps.required_memory_bytes) }}</span>
-          </div>
-          <div v-if="vps.ssh_port" class="flex justify-between">
-            <span class="text-muted">SSH Port</span>
-            <span class="font-mono">{{ vps.ssh_port }}</span>
-          </div>
-          <div v-if="vps.container_name" class="flex justify-between gap-2">
-            <span class="text-muted flex-shrink-0">Container</span>
-            <span class="truncate" :title="vps.container_name">{{ vps.container_name }}</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-muted">Created</span>
-            <span>{{ formatRelativeTime(vps.submitted_at) }}</span>
-          </div>
-        </div>
+              <!-- Copy commands row (only when SSH is enabled) -->
+              <div v-if="vps.ssh_port" class="flex gap-2">
+                <el-tooltip content="Copy SSH Command" placement="top">
+                  <el-button size="small" type="info" @click="copySshCommand(vps)" class="flex-1">
+                    <span class="i-carbon-terminal mr-1"></span> SSH
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="Copy Terminal Command" placement="top">
+                  <el-button size="small" type="info" @click="copyTerminalCommand(vps)" class="flex-1">
+                    <span class="i-carbon-copy mr-1"></span> Terminal
+                  </el-button>
+                </el-tooltip>
+              </div>
 
-        <!-- Actions - Aligned grid layout -->
-        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <!-- Running state buttons -->
-          <div v-if="vps.status === 'running'" class="flex flex-col gap-2">
-            <!-- Primary actions row - 2 columns -->
-            <div class="flex gap-2">
-              <el-tooltip content="Open Terminal" placement="top">
-                <el-button size="small" type="primary" @click="openTerminal(vps.task_id)" class="flex-1">
-                  <span class="i-carbon-terminal mr-1"></span>
-                  Terminal
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="SSH Connection Info" placement="top">
-                <el-button size="small" @click="showSshInfo(vps)" class="flex-1">
-                  <span class="i-carbon-connect mr-1"></span>
-                  SSH Info
-                </el-button>
-              </el-tooltip>
+              <!-- Control buttons row -->
+              <div class="flex gap-2">
+                <el-tooltip content="Pause" placement="top">
+                  <el-button size="small" type="info" @click="handlePause(vps.task_id)" class="flex-1">
+                    <span class="i-carbon-pause"></span>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="Restart" placement="top">
+                  <el-button size="small" type="warning" @click="handleRestart(vps.task_id)" class="flex-1">
+                    <span class="i-carbon-restart"></span>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="Stop" placement="top">
+                  <el-button size="small" type="danger" @click="handleStop(vps.task_id)" class="flex-1">
+                    <span class="i-carbon-stop"></span>
+                  </el-button>
+                </el-tooltip>
+              </div>
             </div>
 
-            <!-- Control buttons row - 4 equal buttons -->
-            <!-- Copy commands row -->
-            <div class="flex gap-2">
-              <el-tooltip content="Copy SSH Command" placement="top">
-                <el-button size="small" @click="copySshCommand(vps)" class="flex-1">
-                  <span class="i-carbon-terminal mr-1"></span> SSH
+            <!-- Paused state buttons -->
+            <div v-else-if="vps.status === 'paused'" class="grid grid-cols-2 gap-2">
+              <el-tooltip content="Resume VPS" placement="top">
+                <el-button size="small" type="success" @click="handleResume(vps.task_id)" class="w-full">
+                  <span class="i-carbon-play mr-1"></span> Resume
                 </el-button>
               </el-tooltip>
-              <el-tooltip content="Copy Terminal Command" placement="top">
-                <el-button size="small" @click="copyTerminalCommand(vps)" class="flex-1">
-                  <span class="i-carbon-copy mr-1"></span> Terminal
+              <el-tooltip content="Stop VPS" placement="top">
+                <el-button size="small" type="danger" @click="handleStop(vps.task_id)" class="w-full">
+                  <span class="i-carbon-stop mr-1"></span> Stop
                 </el-button>
               </el-tooltip>
             </div>
 
-            <!-- Control buttons row -->
-            <div class="flex gap-2">
-              <el-tooltip content="Pause" placement="top">
-                <el-button size="small" @click="handlePause(vps.task_id)" class="flex-1">
-                  <span class="i-carbon-pause"></span>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="Restart" placement="top">
-                <el-button size="small" type="warning" @click="handleRestart(vps.task_id)" class="flex-1">
-                  <span class="i-carbon-restart"></span>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="Stop" placement="top">
-                <el-button size="small" type="danger" @click="handleStop(vps.task_id)" class="flex-1">
-                  <span class="i-carbon-stop"></span>
-                </el-button>
-              </el-tooltip>
+            <!-- Pending/Other states -->
+            <div v-else-if="vps.status === 'pending'" class="text-center text-muted text-sm py-2">
+              Waiting for assignment...
             </div>
-          </div>
-
-          <!-- Paused state buttons -->
-          <div v-else-if="vps.status === 'paused'" class="grid grid-cols-2 gap-2">
-            <el-tooltip content="Resume VPS" placement="top">
-              <el-button size="small" type="success" @click="handleResume(vps.task_id)" class="w-full">
-                <span class="i-carbon-play mr-1"></span> Resume
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="Stop VPS" placement="top">
-              <el-button size="small" type="danger" @click="handleStop(vps.task_id)" class="w-full">
-                <span class="i-carbon-stop mr-1"></span> Stop
-              </el-button>
-            </el-tooltip>
-          </div>
-
-          <!-- Pending/Other states -->
-          <div v-else-if="vps.status === 'pending'" class="text-center text-muted text-sm py-2">
-            Waiting for assignment...
           </div>
         </div>
       </div>
     </div>
+
+    <!-- IDE Modal -->
+    <teleport to="body">
+      <div v-if="ideModalVisible" class="ide-modal-overlay" @click.self="closeIde">
+        <div class="ide-modal">
+          <IdeContent
+            v-if="ideTaskId"
+            :task-id="ideTaskId"
+            type="task"
+            @close="closeIde"
+          />
+        </div>
+      </div>
+    </teleport>
 
     <!-- Create Dialog -->
     <el-dialog v-model="createDialogVisible" title="Create VPS" width="600px" destroy-on-close>
@@ -514,12 +544,30 @@ function copyVpsId(taskId) {
           />
         </el-form-item>
 
-        <el-form-item label="SSH Key Mode" required>
+        <el-form-item label="SSH Mode">
           <el-radio-group v-model="createForm.ssh_key_mode" class="flex flex-wrap gap-x-4 gap-y-2">
+            <el-radio value="disabled">
+              <span>Disabled</span>
+              <span class="text-xs text-gray-400 ml-1">(TTY only)</span>
+            </el-radio>
             <el-radio value="generate">Generate key</el-radio>
             <el-radio value="upload">Upload key</el-radio>
-            <el-radio value="none">No key</el-radio>
+            <el-radio value="none">No key (passwordless)</el-radio>
           </el-radio-group>
+          <div class="text-xs text-gray-500 mt-1">
+            <span v-if="createForm.ssh_key_mode === 'disabled'">
+              No SSH server. Access via web terminal only (faster startup).
+            </span>
+            <span v-else-if="createForm.ssh_key_mode === 'generate'">
+              Generate an SSH key pair. You'll download the private key after creation.
+            </span>
+            <span v-else-if="createForm.ssh_key_mode === 'upload'">
+              Use your own SSH public key for authentication.
+            </span>
+            <span v-else-if="createForm.ssh_key_mode === 'none'">
+              SSH with empty password (less secure, use for testing only).
+            </span>
+          </div>
         </el-form-item>
 
         <el-form-item v-if="createForm.ssh_key_mode === 'upload'" label="Public Key">
@@ -546,22 +594,14 @@ function copyVpsId(taskId) {
       </template>
     </el-dialog>
 
-    <!-- Terminal Dialog -->
-    <TerminalModal
-      v-model:visible="terminalDialogVisible"
-      :task-id="selectedVpsId"
-      :title="`VPS #${selectedVpsId} Terminal`"
-      type="task"
-    />
-
     <!-- SSH Info Dialog -->
     <el-dialog v-model="sshInfoDialogVisible" title="Connection Info" width="500px">
       <div v-if="selectedVps" class="space-y-4">
-        <div class="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+        <div class="p-4 bg-app-surface rounded-lg">
           <p class="text-sm text-muted mb-2">SSH Command (via proxy):</p>
           <code class="text-sm font-mono break-all"> kohakuriver ssh connect {{ selectedVps.task_id }} </code>
         </div>
-        <div class="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+        <div class="p-4 bg-app-surface rounded-lg">
           <p class="text-sm text-muted mb-2">Terminal Command:</p>
           <code class="text-sm font-mono break-all"> kohakuriver connect {{ selectedVps.task_id }} </code>
         </div>
@@ -605,7 +645,7 @@ function copyVpsId(taskId) {
 
         <div v-if="generatedKeyResult?.ssh_public_key">
           <p class="text-sm font-medium mb-2">Public Key:</p>
-          <div class="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg font-mono text-xs overflow-auto break-all">
+          <div class="p-3 bg-app-surface rounded-lg font-mono text-xs overflow-auto break-all">
             {{ generatedKeyResult?.ssh_public_key }}
           </div>
         </div>
@@ -676,5 +716,56 @@ function copyVpsId(taskId) {
 :deep(.el-checkbox.is-bordered) {
   padding: 8px 10px !important;
   height: auto !important;
+}
+
+/* VPS Page Styles */
+.vps-page {
+  height: 100%;
+  overflow: auto;
+}
+
+.vps-content {
+  padding: 0;
+}
+
+/* IDE Modal Styles */
+.ide-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 2.5vh 2.5vw;
+}
+
+.ide-modal {
+  width: 95vw;
+  height: 95vh;
+  max-width: 100%;
+  max-height: 100%;
+  background: var(--el-bg-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ide-modal-overlay {
+    padding: 1vh 1vw;
+  }
+
+  .ide-modal {
+    width: 98vw;
+    height: 98vh;
+    border-radius: 4px;
+  }
 }
 </style>

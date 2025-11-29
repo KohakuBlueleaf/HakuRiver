@@ -55,9 +55,10 @@ export const STATUS_BADGE_CLASS = {
 
 // SSH key modes
 export const SSH_KEY_MODES = {
-  NONE: 'none',
-  UPLOAD: 'upload',
-  GENERATE: 'generate',
+  DISABLED: 'disabled', // No SSH, TTY-only mode (default)
+  NONE: 'none', // SSH with passwordless root login
+  UPLOAD: 'upload', // SSH with uploaded public key
+  GENERATE: 'generate', // SSH with generated key pair
 }
 
 // Active statuses (for filtering)

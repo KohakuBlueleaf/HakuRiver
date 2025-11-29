@@ -34,13 +34,21 @@ export default defineConfig({
     }),
   ],
   shortcuts: {
+    // App-level backgrounds (for consistent theming with custom colors)
+    'bg-app-page': 'bg-app-page dark:bg-app-page-dark',         // Main page background
+    'bg-app-sidebar': 'bg-app-sidebar dark:bg-app-sidebar-dark', // Sidebar
+    'bg-app-card': 'bg-app-card dark:bg-app-card-dark',         // Cards
+    'bg-app-surface': 'bg-app-surface dark:bg-app-surface-dark', // Surfaces inside cards
+    'bg-app-header': 'bg-app-card dark:bg-app-page-dark',       // Header
+    'bg-app-inset': 'bg-app-inset dark:bg-app-inset-dark',     // Inset elements (progress bars, panels)
+
     // Layout
     'page-container': 'p-6 max-w-full min-h-screen',
     'page-title': 'text-2xl font-bold mb-6 text-gray-800 dark:text-white',
     'section-title': 'text-lg font-semibold mb-4 text-gray-700 dark:text-gray-200',
 
     // Cards
-    'card': 'bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border border-gray-200 dark:border-gray-700',
+    'card': 'bg-app-card rounded-lg shadow-md p-4 border border-gray-200 dark:border-gray-600',
     'card-hover': 'card hover:shadow-lg transition-shadow duration-200',
     'card-header': 'flex items-center justify-between mb-4',
     'card-title': 'font-semibold text-gray-800 dark:text-gray-200',
@@ -78,8 +86,8 @@ export default defineConfig({
     // Table
     'table-container': 'overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700',
     'table': 'w-full text-sm text-left text-gray-700 dark:text-gray-300',
-    'table-header': 'bg-gray-50 dark:bg-gray-800 text-xs uppercase tracking-wider',
-    'table-row': 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors',
+    'table-header': 'bg-app-surface text-xs uppercase tracking-wider',
+    'table-row': 'border-b border-gray-200 dark:border-gray-700 hover:bg-app-surface transition-colors',
     'table-cell': 'px-4 py-3',
 
     // Forms
@@ -100,7 +108,7 @@ export default defineConfig({
     'divider': 'border-t border-gray-200 dark:border-gray-700',
 
     // Progress bar
-    'progress-bar': 'h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden',
+    'progress-bar': 'h-2 bg-app-inset rounded-full overflow-hidden',
     'progress-fill': 'h-full bg-blue-500 rounded-full transition-all duration-300',
 
     // Terminal
@@ -121,11 +129,42 @@ export default defineConfig({
         800: '#1e40af',
         900: '#1e3a8a',
       },
+      // Custom app colors for distinct UI layers (flat naming for UnoCSS)
+      // Light mode: white cards on light gray page - use DARKER inset colors
+      'app-sidebar': '#1e293b',      // slate-800 - darkest
+      'app-page': '#f1f5f9',         // slate-100 - main background
+      'app-card': '#ffffff',         // white - cards
+      'app-surface': '#f1f5f9',      // slate-100 - surfaces inside cards (darker than card)
+      'app-inset': '#e2e8f0',        // slate-200 - inset elements (progress bg, panels)
+      // Dark mode: dark cards on darker page - use BRIGHTER inset colors for contrast
+      'app-sidebar-dark': '#0f172a',  // slate-900
+      'app-page-dark': '#1e293b',     // slate-800
+      'app-card-dark': '#334155',     // slate-700
+      'app-surface-dark': '#475569',  // slate-600 - surfaces inside cards (brighter than card)
+      'app-inset-dark': '#64748b',    // slate-500 - inset elements (brighter for contrast)
     },
   },
   safelist: [
     // Ensure status colors are always available
     'bg-green-500', 'bg-yellow-500', 'bg-red-500', 'bg-blue-500', 'bg-gray-500',
     'text-green-500', 'text-yellow-500', 'text-red-500', 'text-blue-500', 'text-gray-500',
+    // File tree icon colors
+    'text-amber-500', 'text-cyan-500', 'text-yellow-500', 'text-blue-400', 'text-blue-500',
+    'text-green-500', 'text-orange-500', 'text-pink-500', 'text-gray-300', 'text-gray-400',
+    'text-purple-400',
+    // File icons (for dynamic file tree icons)
+    'i-carbon-document-blank', 'i-carbon-folder', 'i-carbon-folder-open', 'i-carbon-link',
+    'i-carbon-help', 'i-carbon-logo-javascript', 'i-carbon-typescript', 'i-carbon-logo-python',
+    'i-carbon-logo-vue', 'i-carbon-json', 'i-carbon-document', 'i-carbon-code',
+    'i-carbon-table-split', 'i-carbon-html', 'i-carbon-css', 'i-carbon-terminal',
+    'i-carbon-settings', 'i-carbon-logo-github', 'i-carbon-container-software',
+    'i-carbon-image', 'i-carbon-zip', 'i-carbon-application', 'i-carbon-data-base',
+    'i-carbon-build-tool', 'i-carbon-package', 'i-carbon-locked', 'i-carbon-report',
+    'i-carbon-document-pdf', 'i-carbon-spreadsheet', 'i-carbon-presentation-file',
+    'i-carbon-video', 'i-carbon-music', 'i-carbon-book', 'i-carbon-license',
+    'i-carbon-list-numbered',
+    // Context menu icons
+    'i-carbon-document-add', 'i-carbon-folder-add', 'i-carbon-edit',
+    'i-carbon-trash-can', 'i-carbon-copy', 'i-carbon-refresh',
   ],
 })

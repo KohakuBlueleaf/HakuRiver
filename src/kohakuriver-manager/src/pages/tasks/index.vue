@@ -482,26 +482,26 @@ function getNodeName(node) {
 
               <!-- Basic Info Grid -->
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div class="p-4 bg-app-surface rounded-lg">
                   <div class="text-sm text-muted mb-1">Task ID</div>
                   <div class="font-mono text-sm break-all">{{ selectedTask.task_id }}</div>
                 </div>
-                <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div class="p-4 bg-app-surface rounded-lg">
                   <div class="text-sm text-muted mb-1">Type</div>
                   <div>{{ selectedTask.task_type || 'command' }}</div>
                 </div>
-                <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div class="p-4 bg-app-surface rounded-lg">
                   <div class="text-sm text-muted mb-1">Node</div>
                   <div>{{ getNodeName(selectedTask.assigned_node) }}</div>
                 </div>
-                <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div class="p-4 bg-app-surface rounded-lg">
                   <div class="text-sm text-muted mb-1">Container</div>
                   <div>{{ selectedTask.container_name || '-' }}</div>
                 </div>
               </div>
 
               <!-- Command Section -->
-              <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div class="p-4 bg-app-surface rounded-lg">
                 <div class="text-sm text-muted mb-2">Command</div>
                 <div class="font-mono text-sm bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto">
                   {{ selectedTask.command }}
@@ -511,17 +511,17 @@ function getNodeName(node) {
 
               <!-- Resources Grid -->
               <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
+                <div class="p-4 bg-app-surface rounded-lg text-center">
                   <div class="text-2xl font-bold text-blue-500">{{ selectedTask.required_cores }}</div>
                   <div class="text-sm text-muted">CPU Cores</div>
                 </div>
-                <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
+                <div class="p-4 bg-app-surface rounded-lg text-center">
                   <div class="text-2xl font-bold text-green-500">
                     {{ selectedTask.required_memory_bytes ? formatBytes(selectedTask.required_memory_bytes) : '-' }}
                   </div>
                   <div class="text-sm text-muted">Memory</div>
                 </div>
-                <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
+                <div class="p-4 bg-app-surface rounded-lg text-center">
                   <div class="text-2xl font-bold text-yellow-500">
                     {{ formatRequiredGpus(selectedTask.required_gpus) }}
                   </div>
@@ -529,7 +529,7 @@ function getNodeName(node) {
                 </div>
                 <div
                   v-if="selectedTask.exit_code !== null && selectedTask.exit_code !== undefined"
-                  class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center"
+                  class="p-4 bg-app-surface rounded-lg text-center"
                 >
                   <div
                     class="text-2xl font-bold"
@@ -542,7 +542,7 @@ function getNodeName(node) {
               </div>
 
               <!-- Timing Section -->
-              <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div class="p-4 bg-app-surface rounded-lg">
                 <div class="text-sm text-muted mb-3">Timing</div>
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                   <div>
@@ -565,7 +565,7 @@ function getNodeName(node) {
               <!-- Environment Variables -->
               <div
                 v-if="selectedTask.env_vars && Object.keys(selectedTask.env_vars).length > 0"
-                class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                class="p-4 bg-app-surface rounded-lg"
               >
                 <div class="text-sm text-muted mb-2">Environment Variables</div>
                 <div class="font-mono text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto">

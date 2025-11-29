@@ -166,8 +166,16 @@ export function useTerminal() {
 
   function dispose() {
     disconnect()
-    terminal.value?.dispose()
-    terminal.value = null
+    if (terminal.value) {
+      try {
+        terminal.value.dispose()
+      } catch (e) {
+        // Ignore dispose errors - addon may not be fully loaded
+        console.warn('Terminal dispose warning:', e.message)
+      }
+      terminal.value = null
+    }
+    fitAddon.value = null
   }
 
   function clear() {

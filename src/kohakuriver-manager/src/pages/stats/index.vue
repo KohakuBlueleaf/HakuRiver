@@ -256,7 +256,7 @@ const gpuStats = computed(() => {
     <div v-if="gpuStats.length > 0" class="card">
       <h3 class="card-title mb-4">GPU Overview</h3>
       <div class="grid-cards">
-        <div v-for="(gpu, idx) in gpuStats" :key="idx" class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+        <div v-for="(gpu, idx) in gpuStats" :key="idx" class="p-4 bg-app-surface rounded-lg">
           <div class="flex items-center gap-3 mb-3">
             <span class="i-carbon-cube text-xl text-yellow-500"></span>
             <div>

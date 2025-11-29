@@ -122,7 +122,7 @@ const stats = computed(() => [
           <div
             v-for="task in tasksStore.runningTasks.slice(0, 5)"
             :key="task.task_id"
-            class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+            class="flex items-center justify-between p-3 bg-app-surface rounded-lg"
           >
             <div class="min-w-0 flex-1">
               <div class="font-medium text-sm truncate">{{ task.command }}</div>
@@ -149,7 +149,7 @@ const stats = computed(() => [
           <div
             v-for="vps in vpsStore.runningVps.slice(0, 5)"
             :key="vps.task_id"
-            class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+            class="flex items-center justify-between p-3 bg-app-surface rounded-lg"
           >
             <div class="min-w-0 flex-1">
               <div class="font-medium text-sm">VPS #{{ vps.task_id }}</div>

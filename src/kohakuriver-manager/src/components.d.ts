@@ -11,6 +11,8 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    EditorPane: typeof import('./components/ide/editor/EditorPane.vue')['default']
+    EditorTabs: typeof import('./components/ide/editor/EditorTabs.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElButtonGroup: typeof import('element-plus/es')['ElButtonGroup']
@@ -19,6 +21,7 @@ declare module 'vue' {
     ElCollapse: typeof import('element-plus/es')['ElCollapse']
     ElCollapseItem: typeof import('element-plus/es')['ElCollapseItem']
     ElDialog: typeof import('element-plus/es')['ElDialog']
+    ElDivider: typeof import('element-plus/es')['ElDivider']
     ElDropdown: typeof import('element-plus/es')['ElDropdown']
     ElDropdownItem: typeof import('element-plus/es')['ElDropdownItem']
     ElDropdownMenu: typeof import('element-plus/es')['ElDropdownMenu']
@@ -40,12 +43,21 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
     EmptyState: typeof import('./components/common/EmptyState.vue')['default']
+    FileTree: typeof import('./components/ide/file-tree/FileTree.vue')['default']
+    FileTreeNode: typeof import('./components/ide/file-tree/FileTreeNode.vue')['default']
     GlobalLoading: typeof import('./components/common/GlobalLoading.vue')['default']
+    IdeContent: typeof import('./components/ide/IdeContent.vue')['default']
+    IdeLayout: typeof import('./components/ide/IdeLayout.vue')['default']
+    IdeModal: typeof import('./components/ide/IdeModal.vue')['default']
+    IdeStatusBar: typeof import('./components/ide/common/IdeStatusBar.vue')['default']
+    MonacoEditor: typeof import('./components/ide/editor/MonacoEditor.vue')['default']
     ResourceBar: typeof import('./components/common/ResourceBar.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SplitPane: typeof import('./components/ide/common/SplitPane.vue')['default']
     StatusBadge: typeof import('./components/common/StatusBadge.vue')['default']
     TerminalModal: typeof import('./components/terminal/TerminalModal.vue')['default']
+    TerminalPane: typeof import('./components/ide/terminal/TerminalPane.vue')['default']
     TheHeader: typeof import('./components/layout/TheHeader.vue')['default']
     TheSidebar: typeof import('./components/layout/TheSidebar.vue')['default']
   }

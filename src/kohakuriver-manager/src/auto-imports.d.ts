@@ -7,6 +7,8 @@
 export {}
 declare global {
   const EffectScope: typeof import('vue').EffectScope
+  const ElMessage: typeof import('element-plus/es').ElMessage
+  const ElMessageBox: typeof import('element-plus/es').ElMessageBox
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const asyncComputed: typeof import('@vueuse/core').asyncComputed
   const autoResetRef: typeof import('@vueuse/core').autoResetRef
@@ -142,6 +144,7 @@ declare global {
   const useAsyncQueue: typeof import('@vueuse/core').useAsyncQueue
   const useAsyncState: typeof import('@vueuse/core').useAsyncState
   const useAttrs: typeof import('vue').useAttrs
+  const useAutoSave: typeof import('./composables/useAutoSave.js').useAutoSave
   const useBase64: typeof import('@vueuse/core').useBase64
   const useBattery: typeof import('@vueuse/core').useBattery
   const useBluetooth: typeof import('@vueuse/core').useBluetooth
@@ -188,6 +191,7 @@ declare global {
   const useFavicon: typeof import('@vueuse/core').useFavicon
   const useFetch: typeof import('@vueuse/core').useFetch
   const useFileDialog: typeof import('@vueuse/core').useFileDialog
+  const useFileSystem: typeof import('./composables/useFileSystem.js').useFileSystem
   const useFileSystemAccess: typeof import('@vueuse/core').useFileSystemAccess
   const useFocus: typeof import('@vueuse/core').useFocus
   const useFocusWithin: typeof import('@vueuse/core').useFocusWithin
@@ -196,6 +200,7 @@ declare global {
   const useGamepad: typeof import('@vueuse/core').useGamepad
   const useGeolocation: typeof import('@vueuse/core').useGeolocation
   const useId: typeof import('vue').useId
+  const useIdeStore: typeof import('./stores/ide.js').useIdeStore
   const useIdle: typeof import('@vueuse/core').useIdle
   const useImage: typeof import('@vueuse/core').useImage
   const useInfiniteScroll: typeof import('@vueuse/core').useInfiniteScroll
@@ -292,6 +297,7 @@ declare global {
   const useVModels: typeof import('@vueuse/core').useVModels
   const useVibrate: typeof import('@vueuse/core').useVibrate
   const useVirtualList: typeof import('@vueuse/core').useVirtualList
+  const useVpsConnectionsStore: typeof import('./stores/vpsConnections.js').useVpsConnectionsStore
   const useVpsStore: typeof import('./stores/vps.js').useVpsStore
   const useWakeLock: typeof import('@vueuse/core').useWakeLock
   const useWebNotification: typeof import('@vueuse/core').useWebNotification
