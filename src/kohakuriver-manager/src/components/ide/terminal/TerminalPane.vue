@@ -348,8 +348,7 @@ defineExpose({
 /* Terminal container uses absolute positioning to fill the wrapper without affecting layout */
 .terminal-container {
   position: absolute;
-  inset: 0;
-  padding: 8px;
+  inset: 8px; /* Use inset for padding instead of padding property */
   overflow: hidden;
 }
 
@@ -361,5 +360,11 @@ defineExpose({
 
 .terminal-container :deep(.xterm-viewport) {
   overflow-y: auto !important;
+}
+
+/* Ensure xterm-screen doesn't exceed container bounds */
+.terminal-container :deep(.xterm-screen) {
+  width: 100% !important;
+  height: 100% !important;
 }
 </style>

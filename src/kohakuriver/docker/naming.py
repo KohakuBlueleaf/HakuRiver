@@ -5,6 +5,7 @@ KOHAKURIVER_PREFIX: str = "kohakuriver"
 TASK_PREFIX: str = f"{KOHAKURIVER_PREFIX}-task"
 VPS_PREFIX: str = f"{KOHAKURIVER_PREFIX}-vps"
 ENV_PREFIX: str = f"{KOHAKURIVER_PREFIX}-env"
+SNAPSHOT_PREFIX: str = f"{KOHAKURIVER_PREFIX}-snapshot"
 
 # Docker label keys
 LABEL_MANAGED: str = "kohakuriver.managed"
@@ -31,6 +32,44 @@ def env_container_name(env_name: str) -> str:
 def image_tag(env_name: str, tag: str = "base") -> str:
     """Generate image tag for an environment."""
     return f"{KOHAKURIVER_PREFIX}/{env_name}:{tag}"
+
+
+def snapshot_image_tag(task_id: int, timestamp: int) -> str:
+    """
+    Generate image tag for a VPS snapshot.
+
+    Args:
+        task_id: VPS task ID.
+        timestamp: Unix timestamp when snapshot was created.
+
+    Returns:
+        Image tag like "kohakuriver-snapshot/vps-12345:1234567890"
+    """
+    return f"{SNAPSHOT_PREFIX}/vps-{task_id}:{timestamp}"
+
+
+def parse_snapshot_tag(tag: str) -> tuple[int, int] | None:
+    """
+    Parse a snapshot image tag to extract task_id and timestamp.
+
+    Args:
+        tag: Image tag like "kohakuriver-snapshot/vps-12345:1234567890"
+
+    Returns:
+        Tuple of (task_id, timestamp) or None if not a valid snapshot tag.
+    """
+    prefix = f"{SNAPSHOT_PREFIX}/vps-"
+    if not tag.startswith(prefix):
+        return None
+
+    try:
+        rest = tag[len(prefix):]
+        if ":" not in rest:
+            return None
+        task_id_str, timestamp_str = rest.split(":", 1)
+        return int(task_id_str), int(timestamp_str)
+    except (ValueError, IndexError):
+        return None
 
 
 def parse_image_tag(full_tag: str) -> tuple[str, str, str]:

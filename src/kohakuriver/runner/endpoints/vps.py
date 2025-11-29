@@ -1,13 +1,15 @@
 """
 VPS management endpoints.
 
-Handles VPS creation and control requests.
+Handles VPS creation, control, and snapshot requests.
 """
 
 import logging
 import os
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from kohakuriver.models.requests import VPSCreateRequest
 from kohakuriver.runner.config import config
@@ -16,6 +18,12 @@ from kohakuriver.runner.services.vps_manager import (
     pause_vps,
     resume_vps,
     stop_vps,
+    # Snapshot functions
+    list_snapshots,
+    create_snapshot,
+    delete_snapshot,
+    delete_all_snapshots,
+    get_latest_snapshot,
 )
 
 logger = logging.getLogger(__name__)
@@ -144,3 +152,111 @@ async def resume_vps_endpoint(task_id: int):
         )
 
     return {"message": f"VPS {task_id} resumed."}
+
+
+# =============================================================================
+# Snapshot Endpoints
+# =============================================================================
+
+
+class CreateSnapshotRequest(BaseModel):
+    """Request model for creating a snapshot."""
+
+    message: Optional[str] = None
+
+
+@router.get("/vps/snapshots/{task_id}")
+async def list_snapshots_endpoint(task_id: int):
+    """
+    List all snapshots for a VPS.
+
+    Note: This works even if the VPS is not currently running,
+    as snapshots are stored as Docker images.
+    """
+    logger.info(f"Listing snapshots for VPS {task_id}")
+
+    snapshots = list_snapshots(task_id)
+    return {
+        "task_id": task_id,
+        "snapshots": snapshots,
+        "count": len(snapshots),
+    }
+
+
+@router.post("/vps/snapshots/{task_id}")
+async def create_snapshot_endpoint(
+    task_id: int,
+    request: Optional[CreateSnapshotRequest] = None,
+):
+    """
+    Create a snapshot of the current VPS state.
+
+    The VPS must be running to create a snapshot.
+    """
+    logger.info(f"Creating snapshot for VPS {task_id}")
+
+    if not task_store or not task_store.get_task(task_id):
+        logger.warning(f"Snapshot request for VPS {task_id} which is not running")
+        raise HTTPException(
+            status_code=404,
+            detail=f"VPS {task_id} is not running on this node.",
+        )
+
+    message = request.message if request else None
+    snapshot_tag = create_snapshot(task_id, message=message or "")
+
+    if not snapshot_tag:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create snapshot for VPS {task_id}.",
+        )
+
+    return {
+        "message": f"Snapshot created for VPS {task_id}",
+        "tag": snapshot_tag,
+    }
+
+
+@router.delete("/vps/snapshots/{task_id}/{timestamp}")
+async def delete_snapshot_endpoint(task_id: int, timestamp: int):
+    """Delete a specific snapshot by timestamp."""
+    logger.info(f"Deleting snapshot {timestamp} for VPS {task_id}")
+
+    success = delete_snapshot(task_id, timestamp)
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Snapshot not found or failed to delete.",
+        )
+
+    return {"message": f"Snapshot {timestamp} deleted for VPS {task_id}"}
+
+
+@router.delete("/vps/snapshots/{task_id}")
+async def delete_all_snapshots_endpoint(task_id: int):
+    """Delete all snapshots for a VPS."""
+    logger.info(f"Deleting all snapshots for VPS {task_id}")
+
+    count = delete_all_snapshots(task_id)
+    return {
+        "message": f"Deleted {count} snapshot(s) for VPS {task_id}",
+        "deleted_count": count,
+    }
+
+
+@router.get("/vps/snapshots/{task_id}/latest")
+async def get_latest_snapshot_endpoint(task_id: int):
+    """Get the latest snapshot for a VPS."""
+    logger.info(f"Getting latest snapshot for VPS {task_id}")
+
+    tag = get_latest_snapshot(task_id)
+    if not tag:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No snapshots found for VPS {task_id}.",
+        )
+
+    return {
+        "task_id": task_id,
+        "tag": tag,
+    }

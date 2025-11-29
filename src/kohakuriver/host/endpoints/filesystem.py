@@ -5,11 +5,13 @@ Proxies filesystem REST API requests from the host to the appropriate runner.
 """
 
 import asyncio
+import json
 import logging
 from urllib.parse import urlparse, urlencode
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Path, Request
+import websockets
+from fastapi import APIRouter, HTTPException, Query, Path, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -262,3 +264,116 @@ async def stat_file(
     """Get file/directory metadata inside the container (proxied to runner)."""
     params = {"path": path}
     return await _proxy_get(task_id, "stat", params)
+
+
+# =============================================================================
+# WebSocket Proxy Endpoint for File Watching
+# =============================================================================
+
+
+@router.websocket("/fs/{task_id}/watch")
+async def watch_filesystem(
+    websocket: WebSocket,
+    task_id: int,
+    paths: str = Query("/shared,/local_temp", description="Comma-separated paths to watch"),
+):
+    """
+    WebSocket proxy for real-time filesystem change notifications.
+
+    Proxies the connection to the runner hosting the task.
+    """
+    await websocket.accept()
+
+    # Get runner URL
+    try:
+        runner_url = await _get_runner_url(task_id)
+    except HTTPException as e:
+        await websocket.send_json({
+            "type": "error",
+            "message": e.detail
+        })
+        await websocket.close()
+        return
+
+    # Convert HTTP URL to WebSocket URL
+    parsed = urlparse(runner_url)
+    ws_scheme = "wss" if parsed.scheme == "https" else "ws"
+    runner_ws_url = f"{ws_scheme}://{parsed.netloc}/fs/{task_id}/watch?paths={paths}"
+
+    logger.info(f"[FS Watch Proxy] Connecting to runner: {runner_ws_url}")
+
+    try:
+        async with websockets.connect(runner_ws_url) as runner_ws:
+            # Create tasks for bidirectional message passing
+            stop_event = asyncio.Event()
+
+            async def client_to_runner():
+                """Forward messages from client to runner."""
+                try:
+                    while not stop_event.is_set():
+                        try:
+                            message = await asyncio.wait_for(
+                                websocket.receive_json(),
+                                timeout=1.0
+                            )
+                            await runner_ws.send(json.dumps(message))
+                        except asyncio.TimeoutError:
+                            continue
+                except WebSocketDisconnect:
+                    pass
+                finally:
+                    stop_event.set()
+
+            async def runner_to_client():
+                """Forward messages from runner to client."""
+                try:
+                    while not stop_event.is_set():
+                        try:
+                            message = await asyncio.wait_for(
+                                runner_ws.recv(),
+                                timeout=1.0
+                            )
+                            data = json.loads(message)
+                            await websocket.send_json(data)
+                        except asyncio.TimeoutError:
+                            continue
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+                except Exception as e:
+                    logger.error(f"[FS Watch Proxy] Error forwarding to client: {e}")
+                finally:
+                    stop_event.set()
+
+            # Run both tasks
+            client_task = asyncio.create_task(client_to_runner())
+            runner_task = asyncio.create_task(runner_to_client())
+
+            await asyncio.wait(
+                [client_task, runner_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+
+            # Cancel remaining tasks
+            stop_event.set()
+            for task in [client_task, runner_task]:
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+
+    except websockets.exceptions.WebSocketException as e:
+        logger.error(f"[FS Watch Proxy] Failed to connect to runner: {e}")
+        await websocket.send_json({
+            "type": "error",
+            "message": f"Failed to connect to runner: {e}"
+        })
+    except Exception as e:
+        logger.error(f"[FS Watch Proxy] Unexpected error: {e}")
+        await websocket.send_json({
+            "type": "error",
+            "message": f"Proxy error: {e}"
+        })
+
+    logger.info(f"[FS Watch Proxy] Connection closed for task {task_id}")

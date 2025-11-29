@@ -62,3 +62,17 @@ tasks_privileged = false
 # Optional list of additional host directories to mount into the container.
 # Each entry should be "host_path:container_path".
 additional_mounts = []
+
+[snapshots]
+# Enable automatic snapshots when stopping VPS containers.
+# This preserves the VPS state as a Docker image that can be restored later.
+auto_snapshot_on_stop = true
+
+# Maximum number of snapshots to keep per VPS.
+# Older snapshots beyond this limit are automatically deleted.
+# Set to 0 for unlimited (not recommended due to disk space).
+max_snapshots_per_vps = 3
+
+# Whether to automatically restore from the latest snapshot when recreating a VPS.
+# If false, VPS always starts fresh from the base image.
+auto_restore_on_create = true

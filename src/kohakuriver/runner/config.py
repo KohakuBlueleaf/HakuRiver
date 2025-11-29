@@ -42,6 +42,11 @@ class RunnerConfig:
     ADDITIONAL_MOUNTS: list[str] = field(default_factory=list)
     DOCKER_IMAGE_SYNC_TIMEOUT: int = 600  # 10 minutes for large image syncs (10-30GB)
 
+    # Snapshot Configuration
+    AUTO_SNAPSHOT_ON_STOP: bool = True
+    MAX_SNAPSHOTS_PER_VPS: int = 3
+    AUTO_RESTORE_ON_CREATE: bool = True
+
     # Logging Configuration
     LOG_LEVEL: LogLevel = LogLevel.INFO
 

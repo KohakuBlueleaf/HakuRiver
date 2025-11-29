@@ -9,6 +9,7 @@ declare global {
   const EffectScope: typeof import('vue').EffectScope
   const ElMessage: typeof import('element-plus/es').ElMessage
   const ElMessageBox: typeof import('element-plus/es').ElMessageBox
+  const FileChangeEvent: typeof import('./composables/useFileWatcher.js').FileChangeEvent
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const asyncComputed: typeof import('@vueuse/core').asyncComputed
   const autoResetRef: typeof import('@vueuse/core').autoResetRef
@@ -193,6 +194,7 @@ declare global {
   const useFileDialog: typeof import('@vueuse/core').useFileDialog
   const useFileSystem: typeof import('./composables/useFileSystem.js').useFileSystem
   const useFileSystemAccess: typeof import('@vueuse/core').useFileSystemAccess
+  const useFileWatcher: typeof import('./composables/useFileWatcher.js').useFileWatcher
   const useFocus: typeof import('@vueuse/core').useFocus
   const useFocusWithin: typeof import('@vueuse/core').useFocusWithin
   const useFps: typeof import('@vueuse/core').useFps

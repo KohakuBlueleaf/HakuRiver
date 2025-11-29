@@ -12,6 +12,7 @@
 
 import { useIdeStore } from '@/stores/ide'
 import { useFileSystem } from '@/composables/useFileSystem'
+import { useFileWatcher, FileChangeEvent } from '@/composables/useFileWatcher'
 import FileTreeNode from './FileTreeNode.vue'
 
 const props = defineProps({
@@ -36,6 +37,7 @@ const emit = defineEmits(['file-select', 'file-open', 'refresh'])
 
 const ideStore = useIdeStore()
 const fs = useFileSystem()
+const fileWatcher = useFileWatcher()
 
 // Context menu state
 const contextMenuVisible = ref(false)
@@ -440,11 +442,119 @@ async function copyPath(path) {
   }
 }
 
+// ============================================
+// File Watcher Integration
+// ============================================
+
+/**
+ * Handle file change event from watcher.
+ */
+function handleFileChange(change) {
+  const { event, path, isDir } = change
+
+  // Get parent directory
+  const parentPath = path.substring(0, path.lastIndexOf('/')) || '/'
+
+  // Find which section this path belongs to
+  const section = sections.value.find(
+    (s) => path === s.path || path.startsWith(s.path + '/') || s.path === '/'
+  )
+
+  if (!section) return
+
+  console.log('[FileTree] File change:', event, path, isDir ? '(dir)' : '')
+
+  // Invalidate cache for the parent directory
+  directoryCache.value.delete(parentPath)
+
+  // Also invalidate cache for the file/directory itself if it's a directory
+  if (isDir) {
+    directoryCache.value.delete(path)
+  }
+
+  // Reload the parent directory if it's currently visible
+  // Check if parent path is in expanded state or is a section root
+  const isParentVisible =
+    parentPath === section.path ||
+    ideStore.isExpanded(parentPath)
+
+  if (isParentVisible) {
+    // Debounce reloads to avoid hammering the server
+    debouncedReloadPath(parentPath, section.path)
+  }
+
+  // Emit refresh event
+  emit('refresh', { event, path, isDir, parentPath })
+}
+
+// Debounce reload to batch rapid changes
+let reloadTimeout = null
+const pendingReloads = new Set()
+
+function debouncedReloadPath(parentPath, sectionPath) {
+  pendingReloads.add(parentPath)
+
+  if (reloadTimeout) {
+    clearTimeout(reloadTimeout)
+  }
+
+  reloadTimeout = setTimeout(async () => {
+    const pathsToReload = new Set(pendingReloads)
+    pendingReloads.clear()
+    reloadTimeout = null
+
+    for (const path of pathsToReload) {
+      try {
+        // Reload the directory
+        directoryCache.value.delete(path)
+
+        if (path === sectionPath) {
+          // Reload section root
+          await loadSection(sectionPath)
+        } else {
+          // Reload subdirectory
+          await loadDirectory(path)
+        }
+      } catch (e) {
+        console.error('[FileTree] Failed to reload path:', path, e)
+      }
+    }
+  }, 300) // 300ms debounce
+}
+
+/**
+ * Start file watcher when connected.
+ */
+function startFileWatcher() {
+  if (!ideStore.taskId) return
+
+  // Get paths to watch based on mode
+  const watchPaths = props.mode === 'container'
+    ? ['/']
+    : ['/shared', '/local_temp']
+
+  console.log('[FileTree] Starting file watcher for paths:', watchPaths)
+
+  // Register change handler
+  fileWatcher.onChange(handleFileChange)
+
+  // Connect to watcher
+  fileWatcher.connect(ideStore.taskId, watchPaths)
+}
+
+/**
+ * Stop file watcher.
+ */
+function stopFileWatcher() {
+  fileWatcher.disconnect()
+}
+
 // Load when connected
 onMounted(() => {
   initSectionExpanded()
   if (ideStore.connected && ideStore.taskId) {
     loadAllSections()
+    startFileWatcher()
   }
 })
 
@@ -454,8 +564,10 @@ watch(
   (connected) => {
     if (connected && ideStore.taskId) {
       loadAllSections()
+      startFileWatcher()
     } else {
-      // Disconnected - clear tree
+      // Disconnected - clear tree and stop watcher
+      stopFileWatcher()
       for (const section of sections.value) {
         sectionEntries.value[section.path] = []
         sectionErrors.value[section.path] = null
@@ -466,12 +578,21 @@ watch(
   { immediate: false }
 )
 
+// Cleanup on unmount
+onBeforeUnmount(() => {
+  stopFileWatcher()
+  if (reloadTimeout) {
+    clearTimeout(reloadTimeout)
+  }
+})
+
 // Expose methods for parent components
 defineExpose({
   loadDirectory,
   refreshSection,
   refreshAll,
   getChildren,
+  fileWatcher,
 })
 </script>
 
@@ -480,6 +601,23 @@ defineExpose({
     <!-- Header -->
     <div class="file-tree-header">
       <span class="file-tree-title">Files</span>
+      <!-- File watcher status indicator -->
+      <el-tooltip
+        :content="fileWatcher.connected.value
+          ? `Auto-sync: ${fileWatcher.watchMethod.value || 'active'}`
+          : fileWatcher.connecting.value
+            ? 'Connecting...'
+            : 'Auto-sync offline'"
+        placement="bottom"
+      >
+        <span
+          class="watcher-indicator"
+          :class="{
+            connected: fileWatcher.connected.value,
+            connecting: fileWatcher.connecting.value,
+          }"
+        />
+      </el-tooltip>
       <div class="file-tree-actions">
         <el-tooltip content="New File" placement="bottom">
           <el-button
@@ -736,6 +874,30 @@ defineExpose({
 .file-tree-actions {
   display: flex;
   gap: 4px;
+}
+
+.watcher-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--el-color-danger);
+  margin-left: 6px;
+  flex-shrink: 0;
+  transition: background-color 0.3s;
+}
+
+.watcher-indicator.connected {
+  background: var(--el-color-success);
+}
+
+.watcher-indicator.connecting {
+  background: var(--el-color-warning);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .file-tree-content {
