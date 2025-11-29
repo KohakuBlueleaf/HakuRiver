@@ -28,6 +28,7 @@ dependencies = [
     "rich>=13.0.0",
     "loguru>=0.7.0",
     "textual>=0.85.0",
+    "pyte>=0.8.0",
 ]
 
 [project.optional-dependencies]
