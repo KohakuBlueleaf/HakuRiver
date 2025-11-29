@@ -1,7 +1,20 @@
 <script setup>
+/**
+ * Compute Nodes Page
+ *
+ * Displays cluster nodes with their resource utilization and status.
+ * Features:
+ * - Cards/Table view toggle
+ * - CPU, memory, GPU resource monitoring
+ * - NUMA topology visualization
+ * - Temperature monitoring
+ */
+
 import { useClusterStore } from '@/stores/cluster'
-import { formatBytes, formatPercent, formatRelativeTime } from '@/utils/format'
+
 import { usePolling } from '@/composables/usePolling'
+
+import { formatBytes, formatPercent, formatRelativeTime } from '@/utils/format'
 
 const clusterStore = useClusterStore()
 

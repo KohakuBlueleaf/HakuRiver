@@ -1,8 +1,23 @@
 <script setup>
-import { useClusterStore } from '@/stores/cluster'
-import { formatBytes, formatPercent } from '@/utils/format'
-import { usePolling } from '@/composables/usePolling'
+/**
+ * Statistics Page
+ *
+ * Provides real-time monitoring charts and statistics.
+ * Features:
+ * - Time-series charts for CPU and memory usage
+ * - Node comparison bar chart
+ * - GPU statistics overview
+ * - Memory details table per node
+ * - 2-second polling interval for live updates
+ */
+
 import Plotly from 'plotly.js-dist-min'
+
+import { useClusterStore } from '@/stores/cluster'
+
+import { usePolling } from '@/composables/usePolling'
+
+import { formatBytes, formatPercent } from '@/utils/format'
 
 const clusterStore = useClusterStore()
 

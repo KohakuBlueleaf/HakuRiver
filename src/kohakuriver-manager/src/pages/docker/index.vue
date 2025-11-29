@@ -1,9 +1,23 @@
 <script setup>
+/**
+ * Docker Management Page
+ *
+ * Provides interface for managing Docker containers and tarballs.
+ * Features:
+ * - Create/start/stop/delete containers
+ * - IDE integration for container access
+ * - Tarball creation and management for environment distribution
+ */
+
 import { useDockerStore } from '@/stores/docker'
-import { formatRelativeTime, formatBytes } from '@/utils/format'
-import { usePolling } from '@/composables/usePolling'
+
 import { useNotification } from '@/composables/useNotification'
+import { usePolling } from '@/composables/usePolling'
+
+import { formatBytes, formatRelativeTime } from '@/utils/format'
+
 import IdeContent from '@/components/ide/IdeContent.vue'
+import IdeOverlay from '@/components/ide/IdeOverlay.vue'
 
 const dockerStore = useDockerStore()
 const notify = useNotification()
@@ -438,23 +452,18 @@ const expandedTags = ref(new Set())
     </el-dialog>
 
     <!-- IDE Modal -->
-    <teleport to="body">
-      <div
-        v-if="ideModalVisible"
-        class="ide-modal-overlay"
-        @click.self="closeIde">
-        <div class="ide-modal">
-          <IdeContent
-            v-if="selectedContainer"
-            :task-id="selectedContainer"
-            :container-name="selectedContainer"
-            type="container"
-            file-tree-mode="container"
-            :title="`Container: ${parseContainerName(selectedContainer).displayName}`"
-            @close="closeIde" />
-        </div>
-      </div>
-    </teleport>
+    <IdeOverlay
+      :visible="ideModalVisible"
+      @close="closeIde">
+      <IdeContent
+        v-if="selectedContainer"
+        :task-id="selectedContainer"
+        :container-name="selectedContainer"
+        type="container"
+        file-tree-mode="container"
+        :title="`Container: ${parseContainerName(selectedContainer).displayName}`"
+        @close="closeIde" />
+    </IdeOverlay>
 
     <!-- Create Tarball Dialog -->
     <el-dialog
@@ -483,44 +492,5 @@ const expandedTags = ref(new Set())
 </template>
 
 <style scoped>
-/* IDE Modal Styles */
-.ide-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  padding: 2.5vh 2.5vw;
-}
-
-.ide-modal {
-  width: 95vw;
-  height: 95vh;
-  max-width: 100%;
-  max-height: 100%;
-  background: var(--el-bg-color);
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .ide-modal-overlay {
-    padding: 1vh 1vw;
-  }
-
-  .ide-modal {
-    width: 98vw;
-    height: 98vh;
-    border-radius: 4px;
-  }
-}
+/* Docker page has no additional custom styles - using shared components */
 </style>

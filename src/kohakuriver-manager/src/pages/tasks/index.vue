@@ -1,11 +1,25 @@
 <script setup>
-import { useTasksStore } from '@/stores/tasks'
+/**
+ * Task Management Page
+ *
+ * Provides interface for submitting and managing command tasks.
+ * Features:
+ * - Task submission with command, arguments, and resource requirements
+ * - Real-time task status monitoring with polling
+ * - Filtering by status and search
+ * - Task detail view with logs (stdout/stderr)
+ * - Task control (pause, resume, kill, restart, delete)
+ */
+
 import { useClusterStore } from '@/stores/cluster'
 import { useDockerStore } from '@/stores/docker'
-import { formatDate, formatRelativeTime, formatBytes, formatTaskId, formatRequiredGpus } from '@/utils/format'
-import { usePolling } from '@/composables/usePolling'
+import { useTasksStore } from '@/stores/tasks'
+
 import { useNotification } from '@/composables/useNotification'
+import { usePolling } from '@/composables/usePolling'
+
 import { ACTIVE_STATUSES } from '@/utils/constants'
+import { formatBytes, formatDate, formatRelativeTime, formatRequiredGpus, formatTaskId } from '@/utils/format'
 
 const tasksStore = useTasksStore()
 const clusterStore = useClusterStore()

@@ -1,6 +1,18 @@
+/**
+ * Tasks Store - Manages task state and operations.
+ *
+ * Provides:
+ * - Task list with filtering by status
+ * - Task submission and lifecycle operations (kill, pause, resume, restart)
+ * - Task logs retrieval (stdout/stderr)
+ * - Computed properties for running, pending, and completed tasks
+ */
+
 import { defineStore } from 'pinia'
-import { tasksAPI } from '@/utils/api'
+
 import { useLoadingStore } from '@/stores/loading'
+
+import { tasksAPI } from '@/utils/api'
 
 export const useTasksStore = defineStore('tasks', () => {
   const loadingStore = useLoadingStore()

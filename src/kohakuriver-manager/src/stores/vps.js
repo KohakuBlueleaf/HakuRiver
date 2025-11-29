@@ -1,6 +1,17 @@
+/**
+ * VPS Store - Manages VPS instance state and lifecycle operations.
+ *
+ * Provides:
+ * - VPS list with active/running filters
+ * - VPS lifecycle operations (create, stop, restart, pause, resume)
+ * - Loading state tracking with global loading indicator
+ */
+
 import { defineStore } from 'pinia'
-import { vpsAPI } from '@/utils/api'
+
 import { useLoadingStore } from '@/stores/loading'
+
+import { vpsAPI } from '@/utils/api'
 
 export const useVpsStore = defineStore('vps', () => {
   const loadingStore = useLoadingStore()

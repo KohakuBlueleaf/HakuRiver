@@ -1,15 +1,16 @@
 <script setup>
 /**
- * IdeModal - Main IDE modal component.
+ * IdeModal - Standalone IDE modal wrapper component.
  *
- * Replaces the TerminalModal with a full VSCode-like IDE experience.
+ * Provides two modes of operation:
+ * 1. Full IDE mode (with taskId) - includes IdeLayout with file tree, editor, terminal
+ * 2. Wrapper mode (slot) - wraps IdeContent for custom embedding
  *
  * Features:
- * - Full-screen modal
- * - File browser
- * - Monaco editor with tabs
- * - Integrated terminal
- * - Configurable layout
+ * - Responsive modal overlay with 95vh/95vw sizing
+ * - Click-outside to close (optional)
+ * - Keyboard shortcuts (Escape to close)
+ * - Smooth transition animations
  */
 
 import { useIdeStore } from '@/stores/ide'
@@ -57,30 +58,24 @@ const props = defineProps({
 const emit = defineEmits(['update:visible', 'close'])
 
 const ideStore = useIdeStore()
-
-// Layout ref
 const layoutRef = ref(null)
 
-// Computed visibility for v-model
 const dialogVisible = computed({
   get: () => props.visible,
   set: (value) => emit('update:visible', value),
 })
 
 /**
- * Handle dialog close request.
+ * Handle dialog close request with unsaved changes check.
  */
 function handleClose() {
-  // Check for unsaved changes
   if (ideStore.hasUnsavedChanges) {
     ElMessageBox.confirm('You have unsaved changes. Close anyway?', 'Unsaved Changes', {
       confirmButtonText: 'Close',
       cancelButtonText: 'Cancel',
       type: 'warning',
     })
-      .then(() => {
-        closeDialog()
-      })
+      .then(() => closeDialog())
       .catch(() => {})
   } else {
     closeDialog()
@@ -88,7 +83,7 @@ function handleClose() {
 }
 
 /**
- * Close the dialog.
+ * Close the dialog and emit events.
  */
 function closeDialog() {
   dialogVisible.value = false
@@ -96,20 +91,16 @@ function closeDialog() {
 }
 
 /**
- * Handle dialog opened.
+ * Handle dialog opened - focus editor.
  */
 function handleOpened() {
-  // Focus editor after open
-  nextTick(() => {
-    layoutRef.value?.focusEditor()
-  })
+  nextTick(() => layoutRef.value?.focusEditor())
 }
 
 /**
- * Handle dialog closed.
+ * Handle dialog closed - reset store state.
  */
 function handleClosed() {
-  // Reset store state
   ideStore.$reset()
 }
 </script>
@@ -209,7 +200,11 @@ function handleClosed() {
 </template>
 
 <style scoped>
-/* Force fullscreen dialog to use fixed positioning and explicit dimensions */
+/* =============================================================================
+ * IDE Modal - Full-screen dialog styling
+ * ============================================================================= */
+
+/* Force fullscreen dialog to use fixed positioning */
 .ide-dialog :deep(.el-overlay) {
   position: fixed !important;
   inset: 0 !important;
@@ -240,13 +235,17 @@ function handleClosed() {
   flex: 1 1 auto !important;
   padding: 0 !important;
   overflow: hidden !important;
-  min-height: 0 !important; /* Critical for flex child containment */
+  min-height: 0 !important;
 }
 
 .ide-dialog :deep(.el-dialog__footer) {
   padding: 0 !important;
   flex: 0 0 auto !important;
 }
+
+/* =============================================================================
+ * IDE Header
+ * ============================================================================= */
 
 .ide-header {
   display: flex;
@@ -275,6 +274,10 @@ function handleClosed() {
   align-items: center;
   gap: 4px;
 }
+
+/* =============================================================================
+ * IDE Content
+ * ============================================================================= */
 
 .ide-content {
   width: 100%;

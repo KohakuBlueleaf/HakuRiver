@@ -1,9 +1,23 @@
 <script setup>
+/**
+ * Dashboard Page (Home)
+ *
+ * Provides overview of the KohakuRiver cluster status.
+ * Features:
+ * - Stats overview (nodes, cores, memory, GPUs)
+ * - Resource usage (CPU and memory averages)
+ * - Running tasks preview
+ * - Active VPS instances preview
+ * - Node list with resource bars
+ */
+
 import { useClusterStore } from '@/stores/cluster'
 import { useTasksStore } from '@/stores/tasks'
 import { useVpsStore } from '@/stores/vps'
-import { formatBytes, formatPercent } from '@/utils/format'
+
 import { usePolling } from '@/composables/usePolling'
+
+import { formatBytes, formatPercent } from '@/utils/format'
 
 const clusterStore = useClusterStore()
 const tasksStore = useTasksStore()

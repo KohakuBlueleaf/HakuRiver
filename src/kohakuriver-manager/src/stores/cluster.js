@@ -1,4 +1,14 @@
+/**
+ * Cluster Store - Manages cluster node state and aggregated metrics.
+ *
+ * Provides:
+ * - Node list with status, resources, and GPU info
+ * - Aggregated cluster metrics (total cores, memory, GPUs)
+ * - Health monitoring
+ */
+
 import { defineStore } from 'pinia'
+
 import { nodesAPI } from '@/utils/api'
 
 export const useClusterStore = defineStore('cluster', () => {

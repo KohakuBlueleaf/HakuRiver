@@ -1,12 +1,26 @@
 <script setup>
-import { useVpsStore } from '@/stores/vps'
+/**
+ * VPS Management Page
+ *
+ * Provides interface for creating, managing, and connecting to VPS instances.
+ * Features include:
+ * - VPS creation with SSH key modes and GPU selection
+ * - Real-time status monitoring via polling
+ * - IDE integration for terminal and file access
+ * - SSH connection info and command copying
+ */
+
 import { useClusterStore } from '@/stores/cluster'
 import { useDockerStore } from '@/stores/docker'
-import { formatDate, formatRelativeTime, formatBytes, formatTaskId } from '@/utils/format'
-import { usePolling } from '@/composables/usePolling'
+import { useVpsStore } from '@/stores/vps'
+
 import { useNotification } from '@/composables/useNotification'
-import { SSH_KEY_MODES } from '@/utils/constants'
+import { usePolling } from '@/composables/usePolling'
+
+import { formatBytes, formatRelativeTime } from '@/utils/format'
+
 import IdeContent from '@/components/ide/IdeContent.vue'
+import IdeOverlay from '@/components/ide/IdeOverlay.vue'
 
 const vpsStore = useVpsStore()
 const clusterStore = useClusterStore()
@@ -552,20 +566,15 @@ function copyVpsId(taskId) {
     </div>
 
     <!-- IDE Modal -->
-    <teleport to="body">
-      <div
-        v-if="ideModalVisible"
-        class="ide-modal-overlay"
-        @click.self="closeIde">
-        <div class="ide-modal">
-          <IdeContent
-            v-if="ideTaskId"
-            :task-id="ideTaskId"
-            type="task"
-            @close="closeIde" />
-        </div>
-      </div>
-    </teleport>
+    <IdeOverlay
+      :visible="ideModalVisible"
+      @close="closeIde">
+      <IdeContent
+        v-if="ideTaskId"
+        :task-id="ideTaskId"
+        type="task"
+        @close="closeIde" />
+    </IdeOverlay>
 
     <!-- Create Dialog -->
     <el-dialog
@@ -898,7 +907,10 @@ function copyVpsId(taskId) {
   height: auto !important;
 }
 
-/* VPS Page Styles */
+/* =============================================================================
+ * VPS Page Layout
+ * ============================================================================= */
+
 .vps-page {
   height: 100%;
   overflow: auto;
@@ -906,46 +918,5 @@ function copyVpsId(taskId) {
 
 .vps-content {
   padding: 0;
-}
-
-/* IDE Modal Styles */
-.ide-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  padding: 2.5vh 2.5vw;
-}
-
-.ide-modal {
-  width: 95vw;
-  height: 95vh;
-  max-width: 100%;
-  max-height: 100%;
-  background: var(--el-bg-color);
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .ide-modal-overlay {
-    padding: 1vh 1vw;
-  }
-
-  .ide-modal {
-    width: 98vw;
-    height: 98vh;
-    border-radius: 4px;
-  }
 }
 </style>

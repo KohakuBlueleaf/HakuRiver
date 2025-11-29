@@ -1,7 +1,20 @@
 <script setup>
+/**
+ * GPU Overview Page
+ *
+ * Displays cluster-wide GPU monitoring with detailed metrics.
+ * Features:
+ * - Aggregate statistics (total GPUs, avg utilization, power usage)
+ * - Per-GPU cards with utilization, memory, temperature, power
+ * - Table view for compact display
+ * - Real-time polling for live updates
+ */
+
 import { useClusterStore } from '@/stores/cluster'
-import { formatPercent } from '@/utils/format'
+
 import { usePolling } from '@/composables/usePolling'
+
+import { formatPercent } from '@/utils/format'
 
 const clusterStore = useClusterStore()
 

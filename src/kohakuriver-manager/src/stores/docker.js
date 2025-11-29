@@ -1,6 +1,18 @@
+/**
+ * Docker Store - Manages Docker containers and tarballs state.
+ *
+ * Provides:
+ * - Container CRUD operations (create, start, stop, delete)
+ * - Tarball management for environment distribution
+ * - Image listing
+ * - Loading state tracking with global loading indicator
+ */
+
 import { defineStore } from 'pinia'
-import { dockerAPI } from '@/utils/api'
+
 import { useLoadingStore } from '@/stores/loading'
+
+import { dockerAPI } from '@/utils/api'
 
 export const useDockerStore = defineStore('docker', () => {
   const loadingStore = useLoadingStore()
