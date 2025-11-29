@@ -116,7 +116,7 @@ async def startup_check(task_store: TaskStateStore):
 
         else:
             # Container is still running
-            # For VPS containers, recover the SSH port
+            # For VPS containers, recover the SSH port and report to host
             if container_name.startswith(VPS_PREFIX):
                 ssh_port = _find_ssh_port(container_name)
                 if ssh_port > 0:
@@ -130,6 +130,26 @@ async def startup_check(task_store: TaskStateStore):
                         f"VPS container {container_name} for task {task_id} has no SSH port. "
                         "VPS will work via TTY only."
                     )
+
+                # Report running status to host (host may have marked as "lost" during downtime)
+                recovery_message = f"VPS recovered after runner restart" + (
+                    "" if ssh_port > 0 else " (TTY-only, no SSH)"
+                )
+                logger.info(
+                    f"[VPS Recovery] Reporting tracked VPS {task_id} as 'running' to host. "
+                    f"Message: {recovery_message}"
+                )
+                await report_status_to_host(
+                    TaskStatusUpdate(
+                        task_id=task_id,
+                        status="running",
+                        message=recovery_message,
+                        ssh_port=ssh_port if ssh_port > 0 else None,
+                    )
+                )
+                logger.info(
+                    f"[VPS Recovery] Successfully reported tracked VPS {task_id} recovery to host."
+                )
 
             logger.info(
                 f"Container {container_name} for task {task_id} is still running."
@@ -177,15 +197,28 @@ async def startup_check(task_store: TaskStateStore):
                     allocated_gpus=None,
                     numa_node=None,
                 )
+                logger.debug(
+                    f"[VPS Recovery] Added VPS {task_id} back to local task store."
+                )
+
                 # Report running status to host with SSH port (0 means no SSH)
+                recovery_message = f"VPS recovered after runner restart" + (
+                    "" if ssh_port > 0 else " (TTY-only, no SSH)"
+                )
+                logger.info(
+                    f"[VPS Recovery] Reporting VPS {task_id} as 'running' to host. "
+                    f"Message: {recovery_message}"
+                )
                 await report_status_to_host(
                     TaskStatusUpdate(
                         task_id=task_id,
                         status="running",
-                        message=f"VPS recovered after runner restart"
-                        + ("" if ssh_port > 0 else " (TTY-only, no SSH)"),
+                        message=recovery_message,
                         ssh_port=ssh_port if ssh_port > 0 else None,
                     )
+                )
+                logger.info(
+                    f"[VPS Recovery] Successfully reported VPS {task_id} recovery to host."
                 )
             else:
                 # Regular task container - clean up

@@ -297,14 +297,27 @@ def update_task_status(
 
     logger.debug(f"  Found task, current status={task.status}, type={task.task_type}")
 
-    # Prevent overwriting final states
+    # Prevent overwriting final states (with special case for VPS recovery)
     final_states = ["completed", "failed", "killed", "killed_oom", "lost", "stopped"]
     if task.status in final_states and status not in final_states:
-        logger.warning(
-            f"Ignoring status update '{status}' for task {task_id} "
-            f"which is already in final state '{task.status}'."
-        )
-        return False
+        # Special case: Allow VPS tasks to recover from "lost" state
+        # This happens when a runner restarts and finds running VPS containers
+        if task.task_type == "vps" and task.status == "lost" and status == "running":
+            logger.info(
+                f"[VPS Recovery] VPS {task_id} recovering from 'lost' to 'running'. "
+                f"Runner likely restarted and found the container still running."
+            )
+            if message:
+                logger.info(f"[VPS Recovery] Recovery message: {message}")
+        else:
+            logger.warning(
+                f"Ignoring status update '{status}' for task {task_id} "
+                f"which is already in final state '{task.status}'."
+            )
+            return False
+
+    # Check if recovering from lost state
+    is_recovering = task.status == "lost" and status == "running"
 
     logger.debug(f"  Updating status from '{task.status}' to '{status}'")
     task.status = status
@@ -315,7 +328,13 @@ def update_task_status(
         task.started_at = started_at
         logger.info(f"Task {task_id} started at {started_at}")
 
-    if completed_at:
+    # Clear completed_at when recovering from lost state
+    if is_recovering:
+        task.completed_at = None
+        logger.info(
+            f"[VPS Recovery] Cleared completed_at for VPS {task_id}, task is now active again."
+        )
+    elif completed_at:
         task.completed_at = completed_at
     elif status in final_states and not task.completed_at:
         task.completed_at = datetime.datetime.now()

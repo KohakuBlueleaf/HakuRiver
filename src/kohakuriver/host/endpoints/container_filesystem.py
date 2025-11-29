@@ -414,7 +414,8 @@ async def list_directory(
         result = await asyncio.to_thread(
             _do_list_directory, container_name, path, show_hidden
         )
-        return result
+        # Return in same format as task filesystem API
+        return {"path": path, "entries": result, "parent": None}
     except HTTPException:
         raise
     except Exception as e:

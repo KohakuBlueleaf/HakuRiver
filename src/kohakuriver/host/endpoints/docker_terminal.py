@@ -193,6 +193,12 @@ async def terminal_websocket_endpoint(
             raise RuntimeError("Failed to get raw socket from exec_start")
 
         raw_socket = socket_stream._sock
+        # Set socket timeout so recv() doesn't block forever
+        # This allows the thread to check for cancellation periodically
+        raw_socket.settimeout(1.0)
+        logger.debug(
+            f"Socket timeout set to 1.0s for container '{actual_container_name}' (enables clean shutdown)."
+        )
         logger.info(
             f"Exec instance started, socket obtained for container '{actual_container_name}'."
         )
@@ -223,9 +229,12 @@ async def terminal_websocket_endpoint(
         )
 
         # 6. Define I/O handling coroutines
+        # Flag to signal output task to stop
+        stop_output = asyncio.Event()
+
         async def handle_output():
             """Reads from container socket and sends to WebSocket."""
-            while True:
+            while not stop_output.is_set():
                 try:
                     output = await asyncio.to_thread(raw_socket.recv, 4096)
                     if not output:
@@ -239,16 +248,24 @@ async def terminal_websocket_endpoint(
                         ).model_dump()
                     )
                 except TimeoutError:
-                    logger.debug(
-                        f"Timeout while reading from container socket for '{actual_container_name}'."
-                    )
+                    # Socket timeout - check if we should stop and continue
                     continue
+                except OSError as e:
+                    # Socket closed or other OS error
+                    if stop_output.is_set():
+                        break  # Expected during cleanup
+                    logger.info(
+                        f"Container socket error (output) for '{actual_container_name}': {e}."
+                    )
+                    break
                 except BrokenPipeError as e:
                     logger.info(
                         f"Container socket error (output) for '{actual_container_name}': {e}."
                     )
                     break
                 except Exception as e:
+                    if stop_output.is_set():
+                        break  # Expected during cleanup
                     logger.error(
                         f"Error reading from container or sending to WebSocket for '{actual_container_name}': {e}",
                         exc_info=True,
@@ -322,6 +339,23 @@ async def terminal_websocket_endpoint(
         _, pending = await asyncio.wait(
             [input_task, output_task], return_when=asyncio.FIRST_COMPLETED
         )
+
+        # Signal stop and close socket BEFORE cancelling tasks
+        # This allows the blocking recv() to exit gracefully
+        logger.debug(
+            f"Signaling terminal shutdown for container '{actual_container_name}'."
+        )
+        stop_output.set()
+        if socket_stream and hasattr(socket_stream, "_sock") and socket_stream._sock:
+            try:
+                socket_stream._sock.close()
+                logger.debug(
+                    f"Closed exec socket early for clean task cancellation (container '{actual_container_name}')."
+                )
+            except Exception as e:
+                logger.debug(
+                    f"Error closing exec socket early for container '{actual_container_name}': {e}"
+                )
 
         for task in pending:
             task.cancel()
