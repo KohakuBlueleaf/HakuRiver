@@ -261,8 +261,10 @@ def build_docker_run_command(
 
     # Mount directories
     # shared_data subdirectory is mounted as /shared inside container
+    # logs directory is mounted as /kohakuriver-logs for task output
     mount_dirs = [
         f"{config.SHARED_DIR}/shared_data:/shared",
+        f"{config.SHARED_DIR}/logs:/kohakuriver-logs",
         f"{config.LOCAL_TEMP_DIR}:/local_temp",
     ]
     for mount_spec in config.ADDITIONAL_MOUNTS:
@@ -440,9 +442,10 @@ async def execute_task(
     )
 
     # Convert host paths to container paths for stdout/stderr
-    # Host path: /Yamiyoru/cluster-share/logs/... -> Container path: /shared/logs/...
-    container_stdout_path = stdout_path.replace(config.SHARED_DIR, "/shared", 1)
-    container_stderr_path = stderr_path.replace(config.SHARED_DIR, "/shared", 1)
+    # Host path: {SHARED_DIR}/logs/... -> Container path: /kohakuriver-logs/...
+    logs_dir = os.path.join(config.SHARED_DIR, "logs")
+    container_stdout_path = stdout_path.replace(logs_dir, "/kohakuriver-logs", 1)
+    container_stderr_path = stderr_path.replace(logs_dir, "/kohakuriver-logs", 1)
     logger.debug(f"[Task {task_id}] Container stdout path: {container_stdout_path}")
     logger.debug(f"[Task {task_id}] Container stderr path: {container_stderr_path}")
 

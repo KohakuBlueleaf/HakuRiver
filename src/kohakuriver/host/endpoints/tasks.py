@@ -671,14 +671,14 @@ async def send_command_to_task(task_id: int, command: str):
 # =============================================================================
 
 
-@router.get("/task/{task_id}/stdout", response_class=PlainTextResponse)
-async def get_task_stdout(task_id: int, lines: int = 100):
+@router.get("/tasks/{task_id}/stdout", response_class=PlainTextResponse)
+async def get_task_stdout(task_id: int, lines: int | None = None):
     """
     Get stdout output from a task.
 
     Args:
         task_id: Task ID.
-        lines: Number of lines to return (from end of file).
+        lines: Number of lines to return (from end of file). If None, return all.
 
     Returns:
         Plain text stdout content.
@@ -686,14 +686,14 @@ async def get_task_stdout(task_id: int, lines: int = 100):
     return await _get_task_output(task_id, "stdout", lines)
 
 
-@router.get("/task/{task_id}/stderr", response_class=PlainTextResponse)
-async def get_task_stderr(task_id: int, lines: int = 100):
+@router.get("/tasks/{task_id}/stderr", response_class=PlainTextResponse)
+async def get_task_stderr(task_id: int, lines: int | None = None):
     """
     Get stderr output from a task.
 
     Args:
         task_id: Task ID.
-        lines: Number of lines to return (from end of file).
+        lines: Number of lines to return (from end of file). If None, return all.
 
     Returns:
         Plain text stderr content.
@@ -701,7 +701,7 @@ async def get_task_stderr(task_id: int, lines: int = 100):
     return await _get_task_output(task_id, "stderr", lines)
 
 
-async def _get_task_output(task_id: int, output_type: str, lines: int) -> str:
+async def _get_task_output(task_id: int, output_type: str, lines: int | None) -> str:
     """Helper to get task stdout or stderr."""
     task = Task.get_or_none(Task.task_id == task_id)
     if not task:
@@ -714,15 +714,21 @@ async def _get_task_output(task_id: int, output_type: str, lines: int) -> str:
         )
 
     output_path = task.stdout_path if output_type == "stdout" else task.stderr_path
+    logger.info(f"Reading {output_type} for task {task_id} from: {output_path}")
 
     if not output_path or not os.path.exists(output_path):
-        logger.debug(f"{output_type} file not found: {output_path}")
+        logger.warning(f"{output_type} file not found: {output_path}")
         return ""
 
     try:
         with open(output_path) as f:
-            content = f.readlines()[-lines:]
-        return "".join(content)
+            if lines is not None:
+                content = f.readlines()[-lines:]
+                result = "".join(content)
+            else:
+                result = f.read()
+        logger.info(f"{output_type} for task {task_id}: {len(result)} chars")
+        return result
     except Exception as e:
         logger.error(f"Error reading {output_type} for task {task_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error reading {output_type}.")

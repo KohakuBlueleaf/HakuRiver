@@ -57,13 +57,21 @@ def terminal_main(
     if ctx.invoked_subcommand is not None:
         return
 
-    # Launch TUI
+    # Launch TUI (using new Textual-based dashboard)
     try:
-        from kohakuriver.cli.interactive.tui import run_tui
+        from kohakuriver.cli.tui.dashboard import DashboardApp
 
-        run_tui(refresh_rate=refresh)
+        app = DashboardApp(
+            host=cli_config.HOST_ADDRESS,
+            port=cli_config.HOST_PORT,
+            refresh_rate=refresh,
+        )
+        app.run()
     except KeyboardInterrupt:
         console.print("\n[dim]Goodbye![/dim]")
+    except ImportError as e:
+        print_error(f"TUI requires textual: pip install textual ({e})")
+        raise typer.Exit(1)
     except Exception as e:
         print_error(f"TUI error: {e}")
         raise typer.Exit(1)

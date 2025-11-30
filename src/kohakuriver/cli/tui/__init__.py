@@ -1,12 +1,12 @@
 """
-TUI IDE module for KohakuRiver.
+TUI module for KohakuRiver.
 
-Provides a terminal-based IDE interface with:
-- File tree browser
-- Code editor with syntax highlighting
-- Terminal emulator via WebSocket
+Provides terminal-based interfaces:
+- IDE: File tree browser, code editor, terminal emulator
+- Dashboard: Cluster management with modal dialogs
 """
 
 from kohakuriver.cli.tui.ide import IdeApp
+from kohakuriver.cli.tui.dashboard import DashboardApp
 
-__all__ = ["IdeApp"]
+__all__ = ["IdeApp", "DashboardApp"]
