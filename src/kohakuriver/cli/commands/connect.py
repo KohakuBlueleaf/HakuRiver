@@ -343,10 +343,7 @@ async def _run_terminal_session(task_id: str):
             # Cancel remaining tasks
             for task in pending:
                 task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+            await asyncio.gather(*pending, return_exceptions=True)
 
     except OSError as e:
         print_error(f"Connection error: {e}")

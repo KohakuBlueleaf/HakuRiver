@@ -98,7 +98,7 @@ async def stop_vps_endpoint(task_id: int):
             detail=f"VPS {task_id} not found.",
         )
 
-    success = stop_vps(task_id, task_store)
+    success = await stop_vps(task_id, task_store)
     if not success:
         raise HTTPException(
             status_code=500,
@@ -120,7 +120,7 @@ async def pause_vps_endpoint(task_id: int):
             detail=f"VPS {task_id} not found.",
         )
 
-    success = pause_vps(task_id, task_store)
+    success = await pause_vps(task_id, task_store)
     if not success:
         raise HTTPException(
             status_code=500,
@@ -142,7 +142,7 @@ async def resume_vps_endpoint(task_id: int):
             detail=f"VPS {task_id} not found.",
         )
 
-    success = resume_vps(task_id, task_store)
+    success = await resume_vps(task_id, task_store)
     if not success:
         raise HTTPException(
             status_code=500,

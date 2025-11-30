@@ -163,10 +163,7 @@ async def task_terminal_proxy_endpoint(
         # Cancel pending tasks
         for task in pending:
             task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        await asyncio.gather(*pending, return_exceptions=True)
 
         logger.info(f"Terminal proxy session ended for task {task_id}")
 

@@ -360,10 +360,7 @@ async def _run_terminal_tasks(websocket, resize_queue: asyncio.Queue):
 
     for task in pending:
         task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    await asyncio.gather(*pending, return_exceptions=True)
 
 
 async def _receive_terminal_output(websocket):

@@ -252,14 +252,9 @@ async def terminal_websocket_endpoint(
                     # Socket timeout - check if we should stop and continue
                     continue
                 except OSError as e:
-                    # Socket closed or other OS error
+                    # Socket closed or other OS error (includes BrokenPipeError)
                     if stop_output.is_set():
                         break  # Expected during cleanup
-                    logger.info(
-                        f"Container socket error (output) for '{actual_container_name}': {e}."
-                    )
-                    break
-                except BrokenPipeError as e:
                     logger.info(
                         f"Container socket error (output) for '{actual_container_name}': {e}."
                     )
@@ -360,17 +355,14 @@ async def terminal_websocket_endpoint(
 
         for task in pending:
             task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass  # Expected when cancelling tasks
-            except Exception as e:
-                logger.debug(f"Task error during cleanup: {e}")
+        # Wait for all cancelled tasks to complete, ignoring their exceptions
+        await asyncio.gather(*pending, return_exceptions=True)
 
         logger.info(f"I/O tasks finished for container '{actual_container_name}'.")
 
     except asyncio.CancelledError:
         logger.info(f"Terminal session cancelled for container '{container_name}'.")
+        raise
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected cleanly for container '{container_name}'.")
     except DockerAPIError as e:

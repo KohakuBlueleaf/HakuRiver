@@ -358,13 +358,11 @@ async def watch_filesystem(
 
             # Cancel remaining tasks
             stop_event.set()
-            for task in [client_task, runner_task]:
-                if not task.done():
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
+            tasks_to_cancel = [t for t in [client_task, runner_task] if not t.done()]
+            for task in tasks_to_cancel:
+                task.cancel()
+            if tasks_to_cancel:
+                await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
 
     except websockets.exceptions.WebSocketException as e:
         logger.error(f"[FS Watch Proxy] Failed to connect to runner: {e}")
